@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import subprocess
+import sys
 import tempfile
 import tkinter as tk
 import urllib.error
@@ -84,10 +86,16 @@ def _download_and_run_updater(url: str) -> None:
     filename = Path(parsed.path).name or "LTS-Updater.exe"
     target_path = Path(tempfile.gettempdir()) / filename
     _download_file(url, target_path)
-    if hasattr(os, "startfile"):
-        os.startfile(str(target_path))
-        return
-    raise RuntimeError("Updater can only run on Windows.")
+    args = [
+        str(target_path),
+        "--target",
+        sys.executable,
+        "--version-url",
+        config.UPDATE_INFO_URL,
+        "--token-env",
+        config.UPDATE_AUTH_TOKEN_ENV,
+    ]
+    subprocess.Popen(args, close_fds=True)
 
 
 def _apply_alpha(img: Image.Image, alpha: float) -> Image.Image:
