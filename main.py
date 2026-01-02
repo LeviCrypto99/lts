@@ -4,6 +4,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import tkinter as tk
 import urllib.error
 import urllib.parse
@@ -52,11 +53,18 @@ def _is_version_outdated(local: str, required: str) -> bool:
 
 
 def _fetch_version_info() -> dict:
-    headers = {"User-Agent": "LTS-Updater"}
+    headers = {
+        "User-Agent": "LTS-Updater",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+    }
     token = os.getenv(config.UPDATE_AUTH_TOKEN_ENV)
     if token:
         headers["Authorization"] = f"token {token}"
-    request = urllib.request.Request(config.UPDATE_INFO_URL, headers=headers)
+    url = config.UPDATE_INFO_URL
+    sep = "&" if "?" in url else "?"
+    url = f"{url}{sep}t={int(time.time())}"
+    request = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(request, timeout=config.UPDATE_TIMEOUT_SEC) as response:
         if response.status != 200:
             raise RuntimeError(f"Unexpected status: {response.status}")

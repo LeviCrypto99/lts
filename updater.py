@@ -24,10 +24,16 @@ def _show_info(message: str) -> None:
 
 
 def _fetch_json(url: str, token_env: str, timeout: int) -> dict:
-    headers = {"User-Agent": "LTS-Updater"}
+    headers = {
+        "User-Agent": "LTS-Updater",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+    }
     token = os.getenv(token_env)
     if token:
         headers["Authorization"] = f"token {token}"
+    sep = "&" if "?" in url else "?"
+    url = f"{url}{sep}t={int(time.time())}"
     request = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(request, timeout=timeout) as response:
         if response.status != 200:
