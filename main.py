@@ -82,6 +82,8 @@ def _download_file(url: str, target_path: Path) -> None:
 
 
 def _download_and_run_updater(url: str) -> None:
+    if not getattr(sys, "frozen", False):
+        raise RuntimeError("Updater must run from a packaged exe.")
     parsed = urllib.parse.urlparse(url)
     filename = Path(parsed.path).name or "LTS-Updater.exe"
     target_path = Path(tempfile.gettempdir()) / filename
@@ -253,6 +255,12 @@ class SplashApp:
         self._latest_version = str(required_version)
 
         if _is_version_outdated(config.VERSION, required_version):
+            if not getattr(sys, "frozen", False):
+                messagebox.showerror(
+                    "업데이트 오류",
+                    "업데이트는 배포된 exe에서만 진행됩니다. exe로 실행해 주세요.",
+                )
+                return False
             messagebox.showinfo("업데이트", "현재 실행중인 파일의 버전이 구버전이므로 패치를 진행합니다.")
             updater_url = info.get("updater_url") or config.UPDATER_URL
             if not updater_url:
