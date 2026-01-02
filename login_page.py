@@ -284,12 +284,14 @@ class EntryRow:
 
 
 class LoginPage(tk.Frame):
-    def __init__(self, master: tk.Widget) -> None:
+    def __init__(self, master: tk.Widget, current_version: str = "", latest_version: str = "") -> None:
         super().__init__(master, bg=CANVAS_BG)
         self.root = self.winfo_toplevel()
         self._supports_alpha = self._init_alpha_support()
         self._anim_offset = 0
         self._secret_visible = False
+        self._current_version = current_version or "--"
+        self._latest_version = latest_version or "--"
         self._remember_var = tk.BooleanVar(value=True)
         self._required_var = tk.BooleanVar(value=False)
 
@@ -339,6 +341,22 @@ class LoginPage(tk.Frame):
             0,
             0,
             text="",
+            fill=UI_TEXT_COLOR,
+            font=self.fonts["info"],
+            anchor="center",
+        )
+        self.info_version_current_id = self.canvas.create_text(
+            0,
+            0,
+            text=f"현재 버전 : {self._current_version}",
+            fill=UI_TEXT_COLOR,
+            font=self.fonts["info"],
+            anchor="center",
+        )
+        self.info_version_latest_id = self.canvas.create_text(
+            0,
+            0,
+            text=f"최신 버전 : {self._latest_version}",
             fill=UI_TEXT_COLOR,
             font=self.fonts["info"],
             anchor="center",
@@ -723,12 +741,14 @@ class LoginPage(tk.Frame):
         self.canvas.coords(self.info_panel_item, info_x, info_y)
 
         info_center_x = info_x + info_w / 2
-        self.canvas.coords(self.info_status_id, info_center_x, info_y + info_h * 0.30)
-        self.canvas.coords(self.info_price_id, info_center_x, info_y + info_h * 0.54)
-        time_y = info_y + info_h * 0.78
+        self.canvas.coords(self.info_status_id, info_center_x, info_y + info_h * 0.22)
+        self.canvas.coords(self.info_price_id, info_center_x, info_y + info_h * 0.42)
+        time_y = info_y + info_h * 0.62
         time_x = info_center_x - max(0, int(50 * scale))
         self.canvas.coords(self.time_month_id, time_x, time_y)
         self.canvas.coords(self.time_rest_id, time_x, time_y)
+        self.canvas.coords(self.info_version_current_id, info_center_x, info_y + info_h * 0.80)
+        self.canvas.coords(self.info_version_latest_id, info_center_x, info_y + info_h * 0.92)
 
         help_x = pad_x + HELP_PANEL_POS[0] * scale
         help_y = pad_y + (HELP_PANEL_POS[1] + self._anim_offset) * scale

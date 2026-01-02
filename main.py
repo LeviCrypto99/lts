@@ -1,5 +1,14 @@
+import json
+import os
+import re
+import tempfile
 import tkinter as tk
+import urllib.error
+import urllib.parse
+import urllib.request
+from itertools import zip_longest
 from pathlib import Path
+from tkinter import messagebox
 from typing import Optional, Tuple
 
 from PIL import Image, ImageTk
@@ -22,6 +31,63 @@ START_OFFSET = 60
 
 def _ease_out_cubic(t: float) -> float:
     return 1 - (1 - t) ** 3
+
+
+def _parse_version(value: str) -> Tuple[int, ...]:
+    numbers = [int(part) for part in re.findall(r"\d+", value)]
+    return tuple(numbers) if numbers else (0,)
+
+
+def _is_version_outdated(local: str, required: str) -> bool:
+    local_parts = _parse_version(local)
+    required_parts = _parse_version(required)
+    for local_part, required_part in zip_longest(local_parts, required_parts, fillvalue=0):
+        if local_part < required_part:
+            return True
+        if local_part > required_part:
+            return False
+    return False
+
+
+def _fetch_version_info() -> dict:
+    headers = {"User-Agent": "LTS-Updater"}
+    token = os.getenv(config.UPDATE_AUTH_TOKEN_ENV)
+    if token:
+        headers["Authorization"] = f"token {token}"
+    request = urllib.request.Request(config.UPDATE_INFO_URL, headers=headers)
+    with urllib.request.urlopen(request, timeout=config.UPDATE_TIMEOUT_SEC) as response:
+        if response.status != 200:
+            raise RuntimeError(f"Unexpected status: {response.status}")
+        payload = response.read().decode("utf-8")
+    return json.loads(payload)
+
+
+def _download_file(url: str, target_path: Path) -> None:
+    headers = {"User-Agent": "LTS-Updater"}
+    token = os.getenv(config.UPDATE_AUTH_TOKEN_ENV)
+    if token:
+        headers["Authorization"] = f"token {token}"
+    request = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(request, timeout=config.UPDATE_TIMEOUT_SEC) as response:
+        if response.status != 200:
+            raise RuntimeError(f"Unexpected status: {response.status}")
+        with open(target_path, "wb") as handle:
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                handle.write(chunk)
+
+
+def _download_and_run_updater(url: str) -> None:
+    parsed = urllib.parse.urlparse(url)
+    filename = Path(parsed.path).name or "LTS-Updater.exe"
+    target_path = Path(tempfile.gettempdir()) / filename
+    _download_file(url, target_path)
+    if hasattr(os, "startfile"):
+        os.startfile(str(target_path))
+        return
+    raise RuntimeError("Updater can only run on Windows.")
 
 
 def _apply_alpha(img: Image.Image, alpha: float) -> Image.Image:
@@ -60,10 +126,20 @@ class LogoSprite:
 
 class SplashApp:
     def __init__(self) -> None:
+        self._latest_version = ""
         self.root = tk.Tk()
         self.root.title("LeviaAutoTradeSystem")
         self.root.configure(bg="white")
+        self.root.withdraw()
+        self._should_run = self._preflight_or_exit()
+        if not self._should_run:
+            self.root.destroy()
+            return
+        self.root.deiconify()
 
+        self._setup_ui()
+
+    def _setup_ui(self) -> None:
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
         scale = min(screen_w * 0.8 / BASE_WIDTH, screen_h * 0.8 / BASE_HEIGHT, 1.0)
@@ -135,12 +211,52 @@ class SplashApp:
     def _show_login_page(self) -> None:
         self.canvas.destroy()
         self.root.title(f"LTS Launcher v{config.VERSION}")
-        login_page = LoginPage(self.root)
+        login_page = LoginPage(self.root, current_version=config.VERSION, latest_version=self._latest_version)
         login_page.pack(fill="both", expand=True)
         login_page.animate_in()
 
     def run(self) -> None:
-        self.root.mainloop()
+        if self._should_run:
+            self.root.mainloop()
+    
+    def _preflight_or_exit(self) -> bool:
+        try:
+            info = _fetch_version_info()
+        except urllib.error.HTTPError as exc:
+            messagebox.showerror(
+                "업데이트 오류",
+                f"업데이트 서버에 접근할 수 없습니다. (HTTP {exc.code})",
+            )
+            return False
+        except urllib.error.URLError:
+            messagebox.showerror("네트워크 오류", "인터넷에 연결되어 있지 않습니다. 인터넷 연결을 확인해주세요.")
+            return False
+        except json.JSONDecodeError:
+            messagebox.showerror("업데이트 오류", "업데이트 정보 형식이 올바르지 않습니다.")
+            return False
+        except Exception:
+            messagebox.showerror("업데이트 오류", "업데이트 정보를 확인할 수 없습니다.")
+            return False
+
+        required_version = info.get("min_version") or info.get("version")
+        if not required_version:
+            messagebox.showerror("업데이트 오류", "업데이트 버전 정보가 없습니다.")
+            return False
+        self._latest_version = str(required_version)
+
+        if _is_version_outdated(config.VERSION, required_version):
+            messagebox.showinfo("업데이트", "현재 실행중인 파일의 버전이 구버전이므로 패치를 진행합니다.")
+            updater_url = info.get("updater_url") or config.UPDATER_URL
+            if not updater_url:
+                messagebox.showerror("업데이트 오류", "업데이트 파일 주소가 없습니다.")
+                return False
+            try:
+                _download_and_run_updater(updater_url)
+            except Exception:
+                messagebox.showerror("업데이트 오류", "업데이트 파일 다운로드에 실패했습니다.")
+            return False
+
+        return True
 
 
 if __name__ == "__main__":
