@@ -5,6 +5,7 @@ import tempfile
 import time
 import traceback
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from tkinter import Tk, messagebox
@@ -104,6 +105,38 @@ def _replace_file(target_path: Path, new_path: Path) -> None:
     os.replace(new_path, target_path)
 
 
+def _remove_file(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+    except Exception:
+        return
+
+
+def _derive_filename_from_url(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    filename = Path(parsed.path).name
+    return urllib.parse.unquote(filename) if filename else ""
+
+
+def _swap_in_new_file(
+    target_path: Path,
+    new_path: Path,
+    desired_path: Path,
+) -> Path | None:
+    backup_path = target_path.with_suffix(target_path.suffix + ".bak")
+    if backup_path.exists():
+        _remove_file(backup_path)
+    if desired_path == target_path:
+        os.replace(target_path, backup_path)
+        os.replace(new_path, target_path)
+        return backup_path
+    os.replace(target_path, backup_path)
+    os.replace(new_path, desired_path)
+    return backup_path
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", required=True, help="Path to the app executable to replace.")
@@ -139,8 +172,15 @@ def main() -> int:
         _show_error(f"업데이트 정보를 확인할 수 없습니다.\n로그: {LOG_PATH}")
         return 1
 
+    download_name = _derive_filename_from_url(download_url)
+    desired_path = target_path
+    if download_name:
+        desired_path = target_path.with_name(download_name)
+    if desired_path != target_path:
+        _log_update(f"Renaming target: {target_path.name} -> {desired_path.name}")
+
     temp_dir = Path(tempfile.gettempdir())
-    temp_path = temp_dir / f"{target_path.stem}.new{target_path.suffix}"
+    temp_path = temp_dir / f"{desired_path.stem}.new{desired_path.suffix}"
     try:
         _log_update(f"Downloading app: {download_url} -> {temp_path}")
         _download_file(download_url, temp_path, args.token_env, args.timeout)
@@ -155,8 +195,9 @@ def main() -> int:
         _show_error(f"업데이트 적용을 위해 프로그램을 종료해 주세요.\n로그: {LOG_PATH}")
         return 1
 
+    backup_path: Path | None = None
     try:
-        _replace_file(target_path, temp_path)
+        backup_path = _swap_in_new_file(target_path, temp_path, desired_path)
     except Exception:
         _log_update("Replace file failed:\n" + traceback.format_exc())
         _show_error(f"업데이트 파일 적용에 실패했습니다.\n로그: {LOG_PATH}")
@@ -166,7 +207,9 @@ def main() -> int:
     _show_info("업데이트가 완료되었습니다.")
     try:
         if hasattr(os, "startfile"):
-            os.startfile(str(target_path))
+            os.startfile(str(desired_path))
+            if backup_path:
+                _remove_file(backup_path)
     except Exception:
         return 0
     return 0
