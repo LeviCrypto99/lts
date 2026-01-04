@@ -4,6 +4,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import traceback
 import time
 import tkinter as tk
 import urllib.error
@@ -30,6 +31,7 @@ LOGO2_FADE_MS = 500
 HOLD_AFTER_LOGO2_MS = 2000
 FPS = 60
 START_OFFSET = 60
+LOG_PATH = Path(tempfile.gettempdir()) / "LTS-Launcher-update.log"
 
 
 def _ease_out_cubic(t: float) -> float:
@@ -50,6 +52,15 @@ def _is_version_outdated(local: str, required: str) -> bool:
         if local_part > required_part:
             return False
     return False
+
+
+def _log_update(message: str) -> None:
+    try:
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with open(LOG_PATH, "a", encoding="utf-8") as handle:
+            handle.write(f"[{timestamp}] {message}\n")
+    except Exception:
+        pass
 
 
 def _fetch_version_info() -> dict:
@@ -95,6 +106,7 @@ def _download_and_run_updater(url: str) -> None:
     parsed = urllib.parse.urlparse(url)
     filename = Path(parsed.path).name or "LTS-Updater.exe"
     target_path = Path(tempfile.gettempdir()) / filename
+    _log_update(f"Downloading updater: {url} -> {target_path}")
     _download_file(url, target_path)
     args = [
         str(target_path),
@@ -105,6 +117,7 @@ def _download_and_run_updater(url: str) -> None:
         "--token-env",
         config.UPDATE_AUTH_TOKEN_ENV,
     ]
+    _log_update(f"Launching updater: {' '.join(args)}")
     subprocess.Popen(args, close_fds=True)
 
 
@@ -241,28 +254,37 @@ class SplashApp:
         try:
             info = _fetch_version_info()
         except urllib.error.HTTPError as exc:
+            _log_update(f"Version info HTTPError: {exc.code} {exc.reason}")
             messagebox.showerror(
                 "업데이트 오류",
-                f"업데이트 서버에 접근할 수 없습니다. (HTTP {exc.code})",
+                f"업데이트 서버에 접근할 수 없습니다. (HTTP {exc.code})\n로그: {LOG_PATH}",
             )
             return False
         except urllib.error.URLError:
+            _log_update("Version info URLError")
             messagebox.showerror("네트워크 오류", "인터넷에 연결되어 있지 않습니다. 인터넷 연결을 확인해주세요.")
             return False
         except json.JSONDecodeError:
+            _log_update("Version info JSONDecodeError")
             messagebox.showerror("업데이트 오류", "업데이트 정보 형식이 올바르지 않습니다.")
             return False
         except Exception:
+            _log_update("Version info unexpected error:\n" + traceback.format_exc())
             messagebox.showerror("업데이트 오류", "업데이트 정보를 확인할 수 없습니다.")
             return False
 
         required_version = info.get("min_version") or info.get("version")
         if not required_version:
+            _log_update("Missing required version in update info.")
             messagebox.showerror("업데이트 오류", "업데이트 버전 정보가 없습니다.")
             return False
         self._latest_version = str(required_version)
+        _log_update(
+            f"Update info: url={config.UPDATE_INFO_URL} local={config.VERSION} required={self._latest_version}"
+        )
 
         if _is_version_outdated(config.VERSION, required_version):
+            _log_update(f"Outdated: local={config.VERSION} required={required_version}")
             if not getattr(sys, "frozen", False):
                 messagebox.showerror(
                     "업데이트 오류",
@@ -272,12 +294,17 @@ class SplashApp:
             messagebox.showinfo("업데이트", "현재 실행중인 파일의 버전이 구버전이므로 패치를 진행합니다.")
             updater_url = info.get("updater_url") or config.UPDATER_URL
             if not updater_url:
+                _log_update("Missing updater_url.")
                 messagebox.showerror("업데이트 오류", "업데이트 파일 주소가 없습니다.")
                 return False
             try:
                 _download_and_run_updater(updater_url)
             except Exception:
-                messagebox.showerror("업데이트 오류", "업데이트 파일 다운로드에 실패했습니다.")
+                _log_update("Updater download/launch failed:\n" + traceback.format_exc())
+                messagebox.showerror(
+                    "업데이트 오류",
+                    f"업데이트 파일 다운로드에 실패했습니다.\n로그: {LOG_PATH}",
+                )
             return False
 
         return True

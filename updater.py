@@ -3,10 +3,22 @@ import json
 import os
 import tempfile
 import time
+import traceback
 import urllib.error
 import urllib.request
 from pathlib import Path
 from tkinter import Tk, messagebox
+
+LOG_PATH = Path(tempfile.gettempdir()) / "LTS-Updater.log"
+
+
+def _log_update(message: str) -> None:
+    try:
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with open(LOG_PATH, "a", encoding="utf-8") as handle:
+            handle.write(f"[{timestamp}] {message}\n")
+    except Exception:
+        pass
 
 
 def _show_error(message: str) -> None:
@@ -102,44 +114,55 @@ def main() -> int:
     args = parser.parse_args()
 
     target_path = Path(args.target).resolve()
+    _log_update(f"Start updater: target={target_path} version_url={args.version_url}")
     if not target_path.exists():
-        _show_error("업데이트 대상 파일을 찾을 수 없습니다.")
+        _log_update("Target exe not found.")
+        _show_error(f"업데이트 대상 파일을 찾을 수 없습니다.\n로그: {LOG_PATH}")
         return 1
 
     try:
         download_url = _resolve_download_url(args.download_url, args.version_url, args.token_env, args.timeout)
         if not download_url:
-            _show_error("업데이트 파일 주소가 없습니다.")
+            _log_update("Missing download_url after resolve.")
+            _show_error(f"업데이트 파일 주소가 없습니다.\n로그: {LOG_PATH}")
             return 1
     except (urllib.error.URLError, urllib.error.HTTPError):
-        _show_error("업데이트 서버에 접근할 수 없습니다.")
+        _log_update("Version info HTTP/URLError.")
+        _show_error(f"업데이트 서버에 접근할 수 없습니다.\n로그: {LOG_PATH}")
         return 1
     except json.JSONDecodeError:
-        _show_error("업데이트 정보 형식이 올바르지 않습니다.")
+        _log_update("Version info JSONDecodeError.")
+        _show_error(f"업데이트 정보 형식이 올바르지 않습니다.\n로그: {LOG_PATH}")
         return 1
     except Exception:
-        _show_error("업데이트 정보를 확인할 수 없습니다.")
+        _log_update("Version info unexpected error:\n" + traceback.format_exc())
+        _show_error(f"업데이트 정보를 확인할 수 없습니다.\n로그: {LOG_PATH}")
         return 1
 
     temp_dir = Path(tempfile.gettempdir())
     temp_path = temp_dir / f"{target_path.stem}.new{target_path.suffix}"
     try:
+        _log_update(f"Downloading app: {download_url} -> {temp_path}")
         _download_file(download_url, temp_path, args.token_env, args.timeout)
     except Exception:
-        _show_error("업데이트 파일 다운로드에 실패했습니다.")
+        _log_update("App download failed:\n" + traceback.format_exc())
+        _show_error(f"업데이트 파일 다운로드에 실패했습니다.\n로그: {LOG_PATH}")
         return 1
 
     time.sleep(1.5)
     if not _wait_for_unlock(target_path):
-        _show_error("업데이트 적용을 위해 프로그램을 종료해 주세요.")
+        _log_update("Target file still locked.")
+        _show_error(f"업데이트 적용을 위해 프로그램을 종료해 주세요.\n로그: {LOG_PATH}")
         return 1
 
     try:
         _replace_file(target_path, temp_path)
     except Exception:
-        _show_error("업데이트 파일 적용에 실패했습니다.")
+        _log_update("Replace file failed:\n" + traceback.format_exc())
+        _show_error(f"업데이트 파일 적용에 실패했습니다.\n로그: {LOG_PATH}")
         return 1
 
+    _log_update("Update completed.")
     _show_info("업데이트가 완료되었습니다.")
     try:
         if hasattr(os, "startfile"):
