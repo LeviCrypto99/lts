@@ -11,6 +11,7 @@ from tkinter import font as tkfont, messagebox
 from typing import Dict, Optional, Tuple
 
 import tkinter as tk
+import requests
 from PIL import Image, ImageDraw, ImageTk
 
 BASE_WIDTH = 1328
@@ -24,9 +25,8 @@ SECRET_LABEL_POS = (267, 400)
 SECRET_ENTRY_POS = (267, 429)
 NOTE_POS = (BASE_WIDTH / 2, 492)
 LOGIN_BTN_POS = (BASE_WIDTH / 2, 545)
-CHECK_POS = (BASE_WIDTH / 2, 620)
-REQUIRED_POS = (BASE_WIDTH / 2, 655)
-REQUIRED2_POS = (BASE_WIDTH / 2, 690)
+REQUIRED_POS = (BASE_WIDTH / 2, 620)
+REQUIRED2_POS = (BASE_WIDTH / 2, 655)
 
 INFO_PANEL_POS = (29, 32)
 INFO_PANEL_SIZE = (371, 174)
@@ -41,12 +41,15 @@ LOGIN_W = 417
 LOGIN_H = 60
 HELP_BTN_W = 278
 HELP_BTN_H = 39
+BG_TOGGLE_POS = (BASE_WIDTH - 24, 28)
+BG_TOGGLE_SIZE = 34
 
 ANIM_DURATION_MS = 500
 ANIM_OFFSET = 40
 FPS = 60
 
 CANVAS_BG = "#0b1020"
+BACKGROUND_OFF_COLOR = "#222226"
 BG_COLOR = "#ffffff"
 BORDER_COLOR = "#1a2233"
 TEXT_COLOR = "#111217"
@@ -112,6 +115,23 @@ SUB_HELP_API_RECT = (744, 552 - SUB_TITLEBAR_OFFSET, 1064, 588 - SUB_TITLEBAR_OF
 SUB_SUBMIT_TEXT_POS = (585, 527 - SUB_TITLEBAR_OFFSET)
 SUB_HELP_LEFT_TEXT_POS = (261, 570 - SUB_TITLEBAR_OFFSET)
 SUB_HELP_RIGHT_TEXT_POS = (618, 570 - SUB_TITLEBAR_OFFSET)
+
+
+def check_server_permission(api_key: str) -> str:
+    payload = {"action": "check_login", "api_key": api_key}
+    try:
+        response = requests.post(
+            SUBSCRIBER_WEBHOOK_URL,
+            json=payload,
+            timeout=SUBSCRIBER_REQUEST_TIMEOUT_SEC,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except (requests.RequestException, ValueError):
+        return "error"
+
+    result = data.get("result")
+    return result if isinstance(result, str) else "error"
 
 
 def _ease_out_cubic(t: float) -> float:
@@ -452,18 +472,23 @@ class SubscriberEntry:
 
 
 class SubscriberRequestWindow(tk.Toplevel):
-    def __init__(self, master: tk.Widget) -> None:
+    def __init__(self, master: tk.Widget, background_enabled: bool = True) -> None:
         super().__init__(master)
         parent = master.winfo_toplevel()
+        self._background_enabled = background_enabled
         self.title(parent.title() or "LTS Launcher v1.4.0")
         self.configure(bg=CANVAS_BG)
         self.resizable(False, False)
         self.transient(parent)
-        self.attributes("-topmost", True)
+        self._parent = parent
+        self._parent_focus_bind_id = parent.bind("<FocusIn>", self._on_parent_focus, add="+")
         self._center_over_parent(parent)
+        self.lift()
 
         self.canvas = tk.Canvas(self, bg=CANVAS_BG, highlightthickness=0, bd=0)
         self.canvas.pack(fill="both", expand=True)
+
+        self.bind("<FocusIn>", self._on_self_focus)
 
         self._fonts = {
             "instruction": tkfont.Font(self, family=FONT_FAMILY, size=14, weight="bold"),
@@ -477,6 +502,25 @@ class SubscriberRequestWindow(tk.Toplevel):
         self._draw_static()
         self._create_entries()
         self._bind_buttons()
+        self._apply_background_mode()
+
+    def destroy(self) -> None:
+        try:
+            if getattr(self, "_parent", None) is not None and getattr(self, "_parent_focus_bind_id", None):
+                try:
+                    self._parent.unbind("<FocusIn>", self._parent_focus_bind_id)
+                except tk.TclError:
+                    pass
+        finally:
+            super().destroy()
+
+    def _on_parent_focus(self, _event: Optional[tk.Event] = None) -> None:
+        if self.winfo_exists():
+            self.lift()
+
+    def _on_self_focus(self, _event: Optional[tk.Event] = None) -> None:
+        if self.winfo_exists():
+            self.lift()
 
     def _center_over_parent(self, parent: tk.Tk) -> None:
         parent.update_idletasks()
@@ -513,7 +557,7 @@ class SubscriberRequestWindow(tk.Toplevel):
         return ImageTk.PhotoImage(img)
 
     def _draw_static(self) -> None:
-        self.canvas.create_image(0, 0, image=self._bg_photo, anchor="nw")
+        self._bg_item = self.canvas.create_image(0, 0, image=self._bg_photo, anchor="nw")
         instr_line1 = "아래 양식에 맞게 내용을 작성하신 뒤"
         instr_line2 = "등록요청 버튼을 눌러주세요"
         instr_font = self._fonts["instruction"]
@@ -672,6 +716,21 @@ class SubscriberRequestWindow(tk.Toplevel):
             tags=("help_api",),
         )
 
+    def set_background_enabled(self, enabled: bool) -> None:
+        if self._background_enabled == enabled:
+            return
+        self._background_enabled = enabled
+        self._apply_background_mode()
+
+    def _apply_background_mode(self) -> None:
+        bg_color = CANVAS_BG if self._background_enabled else BACKGROUND_OFF_COLOR
+        self.configure(bg=bg_color)
+        self.canvas.configure(bg=bg_color)
+        if self._background_enabled:
+            self.canvas.itemconfigure(self._bg_item, image=self._bg_photo, state="normal")
+        else:
+            self.canvas.itemconfigure(self._bg_item, image="", state="hidden")
+
     def _create_entries(self) -> None:
         self._entry_api = SubscriberEntry(self, self._fonts["entry"], "로그인에 사용하실 API KEY를 입력해주세요")
         self._entry_tv = SubscriberEntry(self, self._fonts["entry"], "트레이딩뷰 ID를 입력해주세요")
@@ -817,6 +876,8 @@ class SubscriberRequestWindow(tk.Toplevel):
                 "구독요청 전송이 완료되었습니다. 등록여부는 작성하신 텔레그램으로 안내됩니다.",
                 parent=self,
             )
+            self.destroy()
+            return
         else:
             messagebox.showerror(
                 "전송 실패",
@@ -853,10 +914,14 @@ class LoginPage(tk.Frame):
         self._secret_visible = False
         self._current_version = current_version or "--"
         self._latest_version = latest_version or "--"
-        self._remember_var = tk.BooleanVar(value=True)
         self._required_var = tk.BooleanVar(value=False)
         self._required2_var = tk.BooleanVar(value=False)
         self._subscriber_window: Optional[SubscriberRequestWindow] = None
+        self._background_enabled = True
+        self._bg_toggle_original = self._load_background_toggle_icon()
+        self._bg_toggle_photo: Optional[ImageTk.PhotoImage] = None
+        self._last_bg_toggle_size: Optional[int] = None
+        self._last_bg_toggle_enabled: Optional[bool] = None
 
         self._base_fonts = {
             "title": (16, "bold"),
@@ -958,6 +1023,11 @@ class LoginPage(tk.Frame):
             anchor="nw",
         )
 
+        self.bg_toggle_item = self.canvas.create_image(0, 0, anchor="ne", tags=("bg_toggle",))
+        self.canvas.tag_bind("bg_toggle", "<Button-1>", self._toggle_background)
+        self.canvas.tag_bind("bg_toggle", "<Enter>", lambda _event: self.canvas.configure(cursor="hand2"))
+        self.canvas.tag_bind("bg_toggle", "<Leave>", lambda _event: self.canvas.configure(cursor=""))
+
         self.title_text_id = self.canvas.create_text(
             0,
             0,
@@ -988,14 +1058,6 @@ class LoginPage(tk.Frame):
             text="* Secret Key는 개발자조차도 열어볼 수 없도록 암호화되어 사용자의 PC 보안 금고에만 보관됩니다.",
             fill=NOTE_COLOR,
             font=self.fonts["note"],
-            anchor="center",
-        )
-        self.remember_text_id = self.canvas.create_text(
-            0,
-            0,
-            text=self._remember_text(),
-            fill=UI_TEXT_COLOR,
-            font=self.fonts["checkbox"],
             anchor="center",
         )
         self.required_text_id = self.canvas.create_text(
@@ -1030,6 +1092,7 @@ class LoginPage(tk.Frame):
             text="Login",
             font=self.fonts["button"],
             radius=18,
+            command=self._on_login_click,
         )
         self.help_button1 = RoundedButton(
             self.canvas,
@@ -1047,8 +1110,8 @@ class LoginPage(tk.Frame):
         )
         self.help_button1.set_state("normal")
         self.help_button2.set_state("normal")
+        self._apply_background_mode()
 
-        self._bind_checkbox(self.remember_text_id, self._toggle_remember)
         self._bind_checkbox(self.required_text_id, self._toggle_required)
         self._bind_checkbox(self.required2_text_id, self._toggle_required2)
 
@@ -1069,6 +1132,11 @@ class LoginPage(tk.Frame):
         bg_path = base_dir / "image" / "login_page" / "login_bg.png"
         return Image.open(bg_path).convert("RGBA")
 
+    def _load_background_toggle_icon(self) -> Image.Image:
+        base_dir = Path(__file__).resolve().parent
+        icon_path = base_dir / "image" / "login_page" / "background_on_off.png"
+        return Image.open(icon_path).convert("RGBA")
+
     def _open_api_guide(self) -> None:
         base_dir = Path(__file__).resolve().parent
         pdf_path = base_dir / "image" / "login_page" / "binance_copy_api_guide.pdf"
@@ -1085,7 +1153,10 @@ class LoginPage(tk.Frame):
             self._subscriber_window.lift()
             self._subscriber_window.focus_force()
             return
-        self._subscriber_window = SubscriberRequestWindow(self.root)
+        self._subscriber_window = SubscriberRequestWindow(
+            self.root,
+            background_enabled=self._background_enabled,
+        )
         self._subscriber_window.protocol("WM_DELETE_WINDOW", self._close_subscriber_request)
 
     def _close_subscriber_request(self) -> None:
@@ -1104,6 +1175,60 @@ class LoginPage(tk.Frame):
         else:
             subprocess.Popen(["xdg-open", str(path)])
 
+    def _toggle_background(self, _event: Optional[tk.Event] = None) -> None:
+        self._background_enabled = not self._background_enabled
+        self._apply_background_mode()
+        self._layout()
+        if self._subscriber_window is not None and self._subscriber_window.winfo_exists():
+            self._subscriber_window.set_background_enabled(self._background_enabled)
+
+    def _apply_background_mode(self) -> None:
+        bg_color = CANVAS_BG if self._background_enabled else BACKGROUND_OFF_COLOR
+        self.configure(bg=bg_color)
+        self.canvas.configure(bg=bg_color)
+        self.login_button.configure(bg=bg_color)
+        self.help_button1.configure(bg=bg_color)
+        self.help_button2.configure(bg=bg_color)
+        if self._background_enabled:
+            self._last_bg_size = None
+        else:
+            self.canvas.itemconfigure(self.bg_item, image="")
+
+    def _on_login_click(self) -> None:
+        api_key = self.api_row.entry.get().strip()
+        if not api_key:
+            messagebox.showwarning("입력 확인", "API KEY를 입력해주세요.", parent=self)
+            return
+
+        result = check_server_permission(api_key)
+
+        if result == "success":
+            messagebox.showinfo("로그인 성공", "인증에 성공하였습니다.", parent=self)
+            return
+        if result == "banned":
+            messagebox.showerror(
+                "접속 불가",
+                "사용 기간이 만료되었거나 승인이 거부되었습니다. 관리자에게 문의하세요.",
+                parent=self,
+            )
+            return
+        if result == "pending":
+            messagebox.showwarning("승인 대기", "구독자 승인 대기 중입니다.", parent=self)
+            return
+        if result == "fail":
+            messagebox.showwarning(
+                "미등록 사용자",
+                "등록되지 않은 사용자 입니다. 신규 등록을 위해 먼저 구독자 등록 요청을 수행하십시오.",
+                parent=self,
+            )
+            return
+
+        messagebox.showerror(
+            "서버 오류",
+            "로그인 정보를 확인할 수 없습니다. 인터넷 연결을 확인하거나 관리자에게 문의하세요.",
+            parent=self,
+        )
+
     def _bind_checkbox(self, item_id: int, callback) -> None:
         self.canvas.tag_bind(item_id, "<Button-1>", callback)
         self.canvas.tag_bind(item_id, "<Enter>", lambda _event: self.canvas.configure(cursor="hand2"))
@@ -1115,13 +1240,6 @@ class LoginPage(tk.Frame):
         except tk.TclError:
             return False
         return True
-
-    def _remember_text(self) -> str:
-        return ("[ v ] " if self._remember_var.get() else "[   ] ") + "계정 정보 기억하기 (Auto-fill)"
-
-    def _toggle_remember(self, _event: Optional[tk.Event] = None) -> None:
-        self._remember_var.set(not self._remember_var.get())
-        self.canvas.itemconfigure(self.remember_text_id, text=self._remember_text())
 
     def _required_text(self) -> str:
         prefix = "[ v ] " if self._required_var.get() else "[   ] "
@@ -1276,6 +1394,9 @@ class LoginPage(tk.Frame):
     def _update_background(self, width: int, height: int) -> None:
         if width <= 0 or height <= 0:
             return
+        if not self._background_enabled:
+            self.canvas.itemconfigure(self.bg_item, image="")
+            return
         size = (width, height)
         if self._last_bg_size == size:
             return
@@ -1291,6 +1412,20 @@ class LoginPage(tk.Frame):
         self.bg_photo = ImageTk.PhotoImage(cropped)
         self.canvas.itemconfigure(self.bg_item, image=self.bg_photo)
         self.canvas.coords(self.bg_item, 0, 0)
+
+    def _update_background_toggle_icon(self, scale: float) -> None:
+        size = max(16, int(BG_TOGGLE_SIZE * scale))
+        if self._last_bg_toggle_size == size and self._last_bg_toggle_enabled == self._background_enabled:
+            return
+        self._last_bg_toggle_size = size
+        self._last_bg_toggle_enabled = self._background_enabled
+        resample = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+        resized = self._bg_toggle_original.resize((size, size), resample)
+        if not self._background_enabled:
+            overlay = Image.new("RGBA", resized.size, (0, 0, 0, 140))
+            resized = Image.alpha_composite(resized, overlay)
+        self._bg_toggle_photo = ImageTk.PhotoImage(resized)
+        self.canvas.itemconfigure(self.bg_toggle_item, image=self._bg_toggle_photo)
 
     def _update_info_panel(self, width: int, height: int, scale: float) -> None:
         size = (max(1, int(width)), max(1, int(height)))
@@ -1331,6 +1466,13 @@ class LoginPage(tk.Frame):
 
         self._set_font_scale(scale)
         self._update_logo(scale)
+        self._update_background_toggle_icon(scale)
+        self.canvas.coords(
+            self.bg_toggle_item,
+            pad_x + BG_TOGGLE_POS[0] * scale,
+            pad_y + (BG_TOGGLE_POS[1] + self._anim_offset) * scale,
+        )
+        self.canvas.tag_raise(self.bg_toggle_item)
 
         info_w = INFO_PANEL_SIZE[0] * scale
         info_h = INFO_PANEL_SIZE[1] * scale
@@ -1414,11 +1556,6 @@ class LoginPage(tk.Frame):
             anchor="center",
         )
         self.login_button.resize(login_w, login_h, scale)
-        self.canvas.coords(
-            self.remember_text_id,
-            pad_x + CHECK_POS[0] * scale,
-            pad_y + (CHECK_POS[1] + FORM_OFFSET_Y + self._anim_offset) * scale,
-        )
         self.canvas.coords(
             self.required_text_id,
             pad_x + REQUIRED_POS[0] * scale,
