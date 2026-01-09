@@ -1,7 +1,10 @@
+import json
 import os
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tkinter import font as tkfont, messagebox
@@ -23,6 +26,7 @@ NOTE_POS = (BASE_WIDTH / 2, 492)
 LOGIN_BTN_POS = (BASE_WIDTH / 2, 545)
 CHECK_POS = (BASE_WIDTH / 2, 620)
 REQUIRED_POS = (BASE_WIDTH / 2, 655)
+REQUIRED2_POS = (BASE_WIDTH / 2, 690)
 
 INFO_PANEL_POS = (29, 32)
 INFO_PANEL_SIZE = (371, 174)
@@ -59,6 +63,55 @@ PANEL_BORDER_ALPHA = 210
 MONTH_COLOR = "#f4c36a"
 
 FONT_FAMILY = "Malgun Gothic"
+SUBSCRIBER_WEBHOOK_URL = (
+    "https://script.google.com/macros/s/AKfycbyKBEsD_GQ125wrjPm8kUrcRvnZSuZ4DlHZTg-lEr1X_UX-CiY2U9W9g3Pd6JBc6xIS/exec"
+)
+SUBSCRIBER_REQUEST_TIMEOUT_SEC = 8
+
+# Subscriber request window (ex_image.png) layout constants.
+SUB_TITLEBAR_OFFSET = 24
+SUB_WINDOW_WIDTH = 1148
+SUB_WINDOW_HEIGHT = 687
+
+SUB_PANEL_LEFT = 221
+SUB_PANEL_TOP = 119 - SUB_TITLEBAR_OFFSET
+SUB_PANEL_RIGHT = 957
+SUB_PANEL_BOTTOM = 595 - SUB_TITLEBAR_OFFSET
+SUB_PANEL_WIDTH = SUB_PANEL_RIGHT - SUB_PANEL_LEFT + 1
+SUB_PANEL_HEIGHT = SUB_PANEL_BOTTOM - SUB_PANEL_TOP + 1
+
+SUB_ENTRY_WIDTH = 663
+SUB_ENTRY_HEIGHT = 35
+SUB_ENTRY_API_POS = (254, 263 - SUB_TITLEBAR_OFFSET)
+SUB_ENTRY1_POS = (254, 331 - SUB_TITLEBAR_OFFSET)
+SUB_ENTRY2_POS = (253, 399 - SUB_TITLEBAR_OFFSET)
+SUB_ENTRY3_POS = (254, 467 - SUB_TITLEBAR_OFFSET)
+
+SUB_LABEL_API_POS = (300, 234 - SUB_TITLEBAR_OFFSET)
+SUB_LABEL1_POS = (300, 302 - SUB_TITLEBAR_OFFSET)
+SUB_LABEL2_POS = (300, 370 - SUB_TITLEBAR_OFFSET)
+SUB_LABEL3_POS = (302, 438 - SUB_TITLEBAR_OFFSET)
+
+SUB_ICON_API_POS = (254, 228 - SUB_TITLEBAR_OFFSET)
+SUB_ICON1_POS = (254, 296 - SUB_TITLEBAR_OFFSET)
+SUB_ICON2_POS = (256, 364 - SUB_TITLEBAR_OFFSET)
+SUB_ICON3_POS = (257, 432 - SUB_TITLEBAR_OFFSET)
+SUB_ICON_API_SIZE = (30, 30)
+SUB_ICON1_SIZE = (31, 31)
+SUB_ICON2_SIZE = (30, 31)
+SUB_ICON3_SIZE = (28, 26)
+
+SUB_INSTR1_POS = (592, 134 - SUB_TITLEBAR_OFFSET)
+SUB_INSTR2_POS = (593, 181 - SUB_TITLEBAR_OFFSET)
+
+SUB_SUBMIT_RECT = (424, 510 - SUB_TITLEBAR_OFFSET, 746, 544 - SUB_TITLEBAR_OFFSET)
+
+SUB_HELP_LEFT_RECT = (84, 552 - SUB_TITLEBAR_OFFSET, 404, 588 - SUB_TITLEBAR_OFFSET)
+SUB_HELP_RIGHT_RECT = (414, 552 - SUB_TITLEBAR_OFFSET, 734, 588 - SUB_TITLEBAR_OFFSET)
+SUB_HELP_API_RECT = (744, 552 - SUB_TITLEBAR_OFFSET, 1064, 588 - SUB_TITLEBAR_OFFSET)
+SUB_SUBMIT_TEXT_POS = (585, 527 - SUB_TITLEBAR_OFFSET)
+SUB_HELP_LEFT_TEXT_POS = (261, 570 - SUB_TITLEBAR_OFFSET)
+SUB_HELP_RIGHT_TEXT_POS = (618, 570 - SUB_TITLEBAR_OFFSET)
 
 
 def _ease_out_cubic(t: float) -> float:
@@ -71,6 +124,25 @@ def _hex_to_rgba(color: str, alpha: int) -> Tuple[int, int, int, int]:
     g = int(color[2:4], 16)
     b = int(color[4:6], 16)
     return r, g, b, alpha
+
+
+def _hex_to_rgb(color: str) -> Tuple[int, int, int]:
+    color = color.lstrip("#")
+    return int(color[0:2], 16), int(color[2:4], 16), int(color[4:6], 16)
+
+
+def _rgb_to_hex(color: Tuple[int, int, int]) -> str:
+    return "#{:02x}{:02x}{:02x}".format(*color)
+
+
+def _lighten_hex(color: str, amount: int) -> str:
+    if not color.startswith("#") or len(color) != 7:
+        return color
+    r, g, b = _hex_to_rgb(color)
+    r = min(255, r + amount)
+    g = min(255, g + amount)
+    b = min(255, b + amount)
+    return _rgb_to_hex((r, g, b))
 
 
 def _round_rect(canvas: tk.Canvas, x1: float, y1: float, x2: float, y2: float, r: float, **kwargs):
@@ -154,6 +226,7 @@ class RoundedButton(tk.Canvas):
         fg: str = BUTTON_FG,
         disabled_bg: str = BUTTON_DISABLED_BG,
         disabled_fg: str = BUTTON_DISABLED_FG,
+        hover_bg: Optional[str] = None,
         command=None,
     ) -> None:
         super().__init__(master, bg=CANVAS_BG, highlightthickness=0)
@@ -161,6 +234,7 @@ class RoundedButton(tk.Canvas):
         self._font = font
         self._radius = radius
         self._bg = bg
+        self._hover_bg = hover_bg or _lighten_hex(bg, 26)
         self._fg = fg
         self._disabled_bg = disabled_bg
         self._disabled_fg = disabled_fg
@@ -168,25 +242,37 @@ class RoundedButton(tk.Canvas):
         self._state = "normal"
         self._width = 0
         self._height = 0
+        self._last_scale = 1.0
+        self._current_bg = bg
+        self._anim_job: Optional[str] = None
+        self._hover_steps = 6
+        self._hover_duration_ms = 120
         self.bind("<Button-1>", self._on_click)
+        self.bind("<Enter>", self._on_enter)
+        self.bind("<Leave>", self._on_leave)
 
     def set_state(self, state: str) -> None:
         self._state = state
         self.configure(cursor="hand2" if state == "normal" else "")
+        if state != "normal":
+            self._cancel_animation()
+            self._current_bg = self._bg
         self._redraw()
 
     def resize(self, width: float, height: float, scale: float) -> None:
         self._width = int(width)
         self._height = int(height)
+        self._last_scale = scale
         self.configure(width=width, height=height)
         self._redraw(scale, width, height)
 
-    def _redraw(self, scale: float = 1.0, width: Optional[float] = None, height: Optional[float] = None) -> None:
+    def _redraw(self, scale: Optional[float] = None, width: Optional[float] = None, height: Optional[float] = None) -> None:
+        scale = self._last_scale if scale is None else scale
         width = max(1, int(width or self._width or self.winfo_width()))
         height = max(1, int(height or self._height or self.winfo_height()))
         self.delete("all")
         radius = int(self._radius * scale)
-        fill = self._bg if self._state == "normal" else self._disabled_bg
+        fill = self._current_bg if self._state == "normal" else self._disabled_bg
         fg = self._fg if self._state == "normal" else self._disabled_fg
         _round_rect(self, 0, 0, width, height, radius, fill=fill, outline=fill)
         self.create_text(width / 2, height / 2, text=self._text, font=self._font, fill=fg)
@@ -195,6 +281,46 @@ class RoundedButton(tk.Canvas):
         if self._state != "normal" or self._command is None:
             return
         self._command()
+
+    def _on_enter(self, _event: tk.Event) -> None:
+        if self._state != "normal":
+            return
+        self._animate_to(self._hover_bg)
+
+    def _on_leave(self, _event: tk.Event) -> None:
+        if self._state != "normal":
+            return
+        self._animate_to(self._bg)
+
+    def _cancel_animation(self) -> None:
+        if self._anim_job:
+            self.after_cancel(self._anim_job)
+            self._anim_job = None
+
+    def _animate_to(self, target: str) -> None:
+        if not target.startswith("#") or not self._current_bg.startswith("#"):
+            self._current_bg = target
+            self._redraw()
+            return
+        if self._current_bg == target:
+            return
+        self._cancel_animation()
+        start = _hex_to_rgb(self._current_bg)
+        end = _hex_to_rgb(target)
+        steps = self._hover_steps
+        step_ms = max(1, self._hover_duration_ms // steps)
+
+        def step(i: int) -> None:
+            t = i / steps
+            color = tuple(int(s + (e - s) * t) for s, e in zip(start, end))
+            self._current_bg = _rgb_to_hex(color)
+            self._redraw()
+            if i < steps:
+                self._anim_job = self.after(step_ms, lambda: step(i + 1))
+            else:
+                self._anim_job = None
+
+        step(1)
 
 
 class EntryRow:
@@ -283,6 +409,441 @@ class EntryRow:
         self.entry.place(x=pad_x, y=0, width=entry_w, height=inner_h, anchor="nw")
 
 
+class SubscriberEntry:
+    def __init__(self, master: tk.Widget, font: tkfont.Font, placeholder: str) -> None:
+        self.frame = tk.Frame(master, bg=BG_COLOR, highlightthickness=0, bd=0)
+        self.entry = tk.Entry(
+            self.frame,
+            bd=0,
+            relief="flat",
+            bg=BG_COLOR,
+            fg=TEXT_COLOR,
+            insertbackground=TEXT_COLOR,
+            font=font,
+        )
+        self._placeholder = placeholder
+        self._has_placeholder = True
+        self.entry.insert(0, placeholder)
+        self.entry.bind("<FocusIn>", self._clear_placeholder)
+        self.entry.bind("<FocusOut>", self._restore_placeholder)
+
+    def place(self, x: int, y: int, width: int, height: int) -> None:
+        self.frame.place(x=x, y=y, width=width, height=height, anchor="nw")
+        pad_x = 10
+        self.entry.place(x=pad_x, y=0, width=max(1, width - pad_x), height=height, anchor="nw")
+
+    def get_value(self) -> str:
+        if self._has_placeholder:
+            return ""
+        return self.entry.get().strip()
+
+    def _clear_placeholder(self, _event: Optional[tk.Event] = None) -> None:
+        if not self._has_placeholder:
+            return
+        self.entry.delete(0, tk.END)
+        self._has_placeholder = False
+
+    def _restore_placeholder(self, _event: Optional[tk.Event] = None) -> None:
+        if self.entry.get():
+            self._has_placeholder = False
+            return
+        self.entry.insert(0, self._placeholder)
+        self._has_placeholder = True
+
+
+class SubscriberRequestWindow(tk.Toplevel):
+    def __init__(self, master: tk.Widget) -> None:
+        super().__init__(master)
+        parent = master.winfo_toplevel()
+        self.title(parent.title() or "LTS Launcher v1.4.0")
+        self.configure(bg=CANVAS_BG)
+        self.resizable(False, False)
+        self.transient(parent)
+        self.attributes("-topmost", True)
+        self._center_over_parent(parent)
+
+        self.canvas = tk.Canvas(self, bg=CANVAS_BG, highlightthickness=0, bd=0)
+        self.canvas.pack(fill="both", expand=True)
+
+        self._fonts = {
+            "instruction": tkfont.Font(self, family=FONT_FAMILY, size=14, weight="bold"),
+            "label": tkfont.Font(self, family=FONT_FAMILY, size=12, weight="bold"),
+            "entry": tkfont.Font(self, family=FONT_FAMILY, size=11, weight="normal"),
+            "button": tkfont.Font(self, family=FONT_FAMILY, size=11, weight="bold"),
+            "footer": tkfont.Font(self, family=FONT_FAMILY, size=11, weight="normal"),
+        }
+
+        self._load_images()
+        self._draw_static()
+        self._create_entries()
+        self._bind_buttons()
+
+    def _center_over_parent(self, parent: tk.Tk) -> None:
+        parent.update_idletasks()
+        try:
+            base_x = parent.winfo_x()
+            base_y = parent.winfo_y()
+            base_w = parent.winfo_width()
+            base_h = parent.winfo_height()
+            x = base_x + max(0, (base_w - SUB_WINDOW_WIDTH) // 2)
+            y = base_y + max(0, (base_h - SUB_WINDOW_HEIGHT) // 2)
+        except tk.TclError:
+            x = 0
+            y = 0
+        self.geometry(f"{SUB_WINDOW_WIDTH}x{SUB_WINDOW_HEIGHT}+{x}+{y}")
+
+    def _load_images(self) -> None:
+        base_dir = Path(__file__).resolve().parent
+        bg_path = base_dir / "image" / "login_page" / "subscribe_request_bg.jpg"
+        bg = Image.open(bg_path).convert("RGBA")
+        resample = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+        bg = bg.resize((SUB_WINDOW_WIDTH, SUB_WINDOW_HEIGHT), resample)
+        self._bg_photo = ImageTk.PhotoImage(bg)
+
+        icons_dir = base_dir / "image" / "login_page"
+        self._icon_api = self._load_icon(icons_dir / "api_icon.png", SUB_ICON_API_SIZE)
+        self._icon_tv = self._load_icon(icons_dir / "tradingview_icon.png", SUB_ICON1_SIZE)
+        self._icon_telegram = self._load_icon(icons_dir / "telegram_icon.png", SUB_ICON2_SIZE)
+        self._icon_binance = self._load_icon(icons_dir / "binance_icon.png", SUB_ICON3_SIZE)
+
+    def _load_icon(self, path: Path, size: Tuple[int, int]) -> ImageTk.PhotoImage:
+        img = Image.open(path).convert("RGBA")
+        resample = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+        img = img.resize(size, resample)
+        return ImageTk.PhotoImage(img)
+
+    def _draw_static(self) -> None:
+        self.canvas.create_image(0, 0, image=self._bg_photo, anchor="nw")
+        instr_line1 = "아래 양식에 맞게 내용을 작성하신 뒤"
+        instr_line2 = "등록요청 버튼을 눌러주세요"
+        instr_font = self._fonts["instruction"]
+        line_height = instr_font.metrics("linespace")
+        text_w = max(instr_font.measure(instr_line1), instr_font.measure(instr_line2))
+        pad_x, pad_y = 18, 8
+        top = int(SUB_INSTR1_POS[1] - line_height / 2 - pad_y)
+        bottom = int(SUB_INSTR2_POS[1] + line_height / 2 + pad_y)
+        box_w = int(text_w + pad_x * 2)
+        box_h = max(1, bottom - top)
+        box_img = Image.new("RGBA", (box_w, box_h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(box_img)
+        rect = (0, 0, box_w - 1, box_h - 1)
+        fill = (0, 0, 0, 140)
+        if hasattr(draw, "rounded_rectangle"):
+            draw.rounded_rectangle(rect, radius=12, fill=fill)
+        else:
+            draw.rectangle(rect, fill=fill)
+        self._instr_bg_photo = ImageTk.PhotoImage(box_img)
+        self.canvas.create_image(SUB_INSTR1_POS[0], top, image=self._instr_bg_photo, anchor="n")
+
+        self.canvas.create_text(
+            SUB_INSTR1_POS[0],
+            SUB_INSTR1_POS[1],
+            text=instr_line1,
+            fill=UI_TEXT_COLOR,
+            font=instr_font,
+            anchor="center",
+        )
+        self.canvas.create_text(
+            SUB_INSTR2_POS[0],
+            SUB_INSTR2_POS[1],
+            text=instr_line2,
+            fill=UI_TEXT_COLOR,
+            font=instr_font,
+            anchor="center",
+        )
+
+        self.canvas.create_text(
+            SUB_LABEL_API_POS[0],
+            SUB_LABEL_API_POS[1],
+            text="API KEY",
+            fill=UI_TEXT_COLOR,
+            font=self._fonts["label"],
+            anchor="nw",
+        )
+        self.canvas.create_text(
+            SUB_LABEL1_POS[0],
+            SUB_LABEL1_POS[1],
+            text="트레이딩 뷰 ID",
+            fill=UI_TEXT_COLOR,
+            font=self._fonts["label"],
+            anchor="nw",
+        )
+        self.canvas.create_text(
+            SUB_LABEL2_POS[0],
+            SUB_LABEL2_POS[1],
+            text="텔레그램 ID",
+            fill=UI_TEXT_COLOR,
+            font=self._fonts["label"],
+            anchor="nw",
+        )
+        self.canvas.create_text(
+            SUB_LABEL3_POS[0],
+            SUB_LABEL3_POS[1],
+            text="바이낸스 UID",
+            fill=UI_TEXT_COLOR,
+            font=self._fonts["label"],
+            anchor="nw",
+        )
+
+        self.canvas.create_image(SUB_ICON_API_POS[0], SUB_ICON_API_POS[1], image=self._icon_api, anchor="nw")
+        self.canvas.create_image(SUB_ICON1_POS[0], SUB_ICON1_POS[1], image=self._icon_tv, anchor="nw")
+        self.canvas.create_image(SUB_ICON2_POS[0], SUB_ICON2_POS[1], image=self._icon_telegram, anchor="nw")
+        self.canvas.create_image(SUB_ICON3_POS[0], SUB_ICON3_POS[1], image=self._icon_binance, anchor="nw")
+
+        self._submit_rect_id = self.canvas.create_rectangle(
+            SUB_SUBMIT_RECT[0],
+            SUB_SUBMIT_RECT[1],
+            SUB_SUBMIT_RECT[2],
+            SUB_SUBMIT_RECT[3],
+            fill=BUTTON_BG,
+            outline="",
+            tags=("submit_btn",),
+        )
+        submit_cx = (SUB_SUBMIT_RECT[0] + SUB_SUBMIT_RECT[2]) / 2
+        submit_cy = (SUB_SUBMIT_RECT[1] + SUB_SUBMIT_RECT[3]) / 2
+        self._submit_text_id = self.canvas.create_text(
+            submit_cx,
+            submit_cy,
+            text="💎 구독자 등록 요청하기",
+            fill=BUTTON_FG,
+            font=self._fonts["button"],
+            anchor="center",
+            tags=("submit_btn",),
+        )
+
+        self._help_left_id = self.canvas.create_rectangle(
+            SUB_HELP_LEFT_RECT[0],
+            SUB_HELP_LEFT_RECT[1],
+            SUB_HELP_LEFT_RECT[2],
+            SUB_HELP_LEFT_RECT[3],
+            fill=BUTTON_BG,
+            outline="",
+            tags=("help_left",),
+        )
+        self._help_right_id = self.canvas.create_rectangle(
+            SUB_HELP_RIGHT_RECT[0],
+            SUB_HELP_RIGHT_RECT[1],
+            SUB_HELP_RIGHT_RECT[2],
+            SUB_HELP_RIGHT_RECT[3],
+            fill=BUTTON_BG,
+            outline="",
+            tags=("help_right",),
+        )
+        self._help_api_id = self.canvas.create_rectangle(
+            SUB_HELP_API_RECT[0],
+            SUB_HELP_API_RECT[1],
+            SUB_HELP_API_RECT[2],
+            SUB_HELP_API_RECT[3],
+            fill=BUTTON_BG,
+            outline="",
+            tags=("help_api",),
+        )
+        help_left_cx = (SUB_HELP_LEFT_RECT[0] + SUB_HELP_LEFT_RECT[2]) / 2
+        help_left_cy = (SUB_HELP_LEFT_RECT[1] + SUB_HELP_LEFT_RECT[3]) / 2
+        help_right_cx = (SUB_HELP_RIGHT_RECT[0] + SUB_HELP_RIGHT_RECT[2]) / 2
+        help_right_cy = (SUB_HELP_RIGHT_RECT[1] + SUB_HELP_RIGHT_RECT[3]) / 2
+        help_api_cx = (SUB_HELP_API_RECT[0] + SUB_HELP_API_RECT[2]) / 2
+        help_api_cy = (SUB_HELP_API_RECT[1] + SUB_HELP_API_RECT[3]) / 2
+        self.canvas.create_text(
+            help_left_cx,
+            help_left_cy,
+            text="❓ 바이낸스 UID는 어떻게 확인할 수 있나요?",
+            fill=BUTTON_FG,
+            font=self._fonts["button"],
+            anchor="center",
+            tags=("help_left",),
+        )
+        self.canvas.create_text(
+            help_right_cx,
+            help_right_cy,
+            text="❓ 트레이딩뷰 ID는 어떻게 확인할 수 있나요?",
+            fill=BUTTON_FG,
+            font=self._fonts["button"],
+            anchor="center",
+            tags=("help_right",),
+        )
+        self.canvas.create_text(
+            help_api_cx,
+            help_api_cy,
+            text="🔑 API Key 발급 가이드",
+            fill=BUTTON_FG,
+            font=self._fonts["button"],
+            anchor="center",
+            tags=("help_api",),
+        )
+
+    def _create_entries(self) -> None:
+        self._entry_api = SubscriberEntry(self, self._fonts["entry"], "로그인에 사용하실 API KEY를 입력해주세요")
+        self._entry_tv = SubscriberEntry(self, self._fonts["entry"], "트레이딩뷰 ID를 입력해주세요")
+        self._entry_telegram = SubscriberEntry(self, self._fonts["entry"], "텔레그램 ID를 입력해주세요")
+        self._entry_binance = SubscriberEntry(self, self._fonts["entry"], "바이낸스 UID를 입력해주세요")
+
+        self._entry_api.place(SUB_ENTRY_API_POS[0], SUB_ENTRY_API_POS[1], SUB_ENTRY_WIDTH, SUB_ENTRY_HEIGHT)
+        self._entry_tv.place(SUB_ENTRY1_POS[0], SUB_ENTRY1_POS[1], SUB_ENTRY_WIDTH, SUB_ENTRY_HEIGHT)
+        self._entry_telegram.place(SUB_ENTRY2_POS[0], SUB_ENTRY2_POS[1], SUB_ENTRY_WIDTH, SUB_ENTRY_HEIGHT)
+        self._entry_binance.place(SUB_ENTRY3_POS[0], SUB_ENTRY3_POS[1], SUB_ENTRY_WIDTH, SUB_ENTRY_HEIGHT)
+
+    def _bind_buttons(self) -> None:
+        self._button_anim_jobs: Dict[int, str] = {}
+        buttons = {
+            "submit_btn": self._submit_rect_id,
+            "help_left": self._help_left_id,
+            "help_right": self._help_right_id,
+            "help_api": self._help_api_id,
+        }
+        for tag, rect_id in buttons.items():
+            self.canvas.tag_bind(
+                tag,
+                "<Enter>",
+                lambda _event, rid=rect_id: self._on_button_hover(rid, True),
+            )
+            self.canvas.tag_bind(
+                tag,
+                "<Leave>",
+                lambda _event, rid=rect_id: self._on_button_hover(rid, False),
+            )
+        self.canvas.tag_bind("submit_btn", "<Button-1>", self._on_submit_click)
+        self.canvas.tag_bind("help_left", "<Button-1>", self._on_binance_help_click)
+        self.canvas.tag_bind("help_right", "<Button-1>", self._on_tradingview_help_click)
+        self.canvas.tag_bind("help_api", "<Button-1>", self._on_api_help_click)
+
+    def _on_button_hover(self, rect_id: int, hovering: bool) -> None:
+        self.canvas.configure(cursor="hand2" if hovering else "")
+        target = "#1a1a1a" if hovering else BUTTON_BG
+        self._animate_button_fill(rect_id, target)
+
+    def _animate_button_fill(self, rect_id: int, target_hex: str) -> None:
+        if self._button_anim_jobs.get(rect_id):
+            self.after_cancel(self._button_anim_jobs[rect_id])
+            self._button_anim_jobs.pop(rect_id, None)
+        current = self.canvas.itemcget(rect_id, "fill") or BUTTON_BG
+        if current == target_hex:
+            return
+        start = self._hex_to_rgb(current)
+        end = self._hex_to_rgb(target_hex)
+        steps = 6
+        duration_ms = 120
+        step_ms = max(1, duration_ms // steps)
+
+        def step(i: int) -> None:
+            t = i / steps
+            color = tuple(int(s + (e - s) * t) for s, e in zip(start, end))
+            self.canvas.itemconfigure(rect_id, fill=self._rgb_to_hex(color))
+            if i < steps:
+                self._button_anim_jobs[rect_id] = self.after(step_ms, lambda: step(i + 1))
+            else:
+                self._button_anim_jobs.pop(rect_id, None)
+
+        step(1)
+
+    @staticmethod
+    def _hex_to_rgb(color: str) -> Tuple[int, int, int]:
+        color = color.lstrip("#")
+        return int(color[0:2], 16), int(color[2:4], 16), int(color[4:6], 16)
+
+    @staticmethod
+    def _rgb_to_hex(color: Tuple[int, int, int]) -> str:
+        return "#{:02x}{:02x}{:02x}".format(*color)
+
+    def _on_binance_help_click(self, _event: Optional[tk.Event] = None) -> None:
+        self._open_help_pdf("binance_uid_check.pdf")
+
+    def _on_tradingview_help_click(self, _event: Optional[tk.Event] = None) -> None:
+        self._open_help_pdf("tradingview_id_check.pdf")
+
+    def _on_api_help_click(self, _event: Optional[tk.Event] = None) -> None:
+        self._open_help_pdf("binance_copy_api_guide.pdf")
+
+    def _open_help_pdf(self, filename: str) -> None:
+        base_dir = Path(__file__).resolve().parent
+        pdf_path = base_dir / "image" / "login_page" / filename
+        if not pdf_path.exists():
+            messagebox.showerror("파일 없음", f"PDF 파일을 찾을 수 없습니다:\n{pdf_path}", parent=self)
+            return
+        try:
+            self._open_file(pdf_path)
+        except Exception as exc:
+            messagebox.showerror("열기 실패", f"PDF를 열 수 없습니다:\n{exc}", parent=self)
+
+    @staticmethod
+    def _open_file(path: Path) -> None:
+        if sys.platform.startswith("win"):
+            os.startfile(path)  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(path)])
+        else:
+            subprocess.Popen(["xdg-open", str(path)])
+
+    def _on_submit_click(self, _event: Optional[tk.Event] = None) -> None:
+        missing = []
+        if not self._entry_api.get_value():
+            missing.append("API KEY")
+        if not self._entry_tv.get_value():
+            missing.append("트레이딩뷰 닉네임")
+        if not self._entry_telegram.get_value():
+            missing.append("텔레그램 닉네임")
+        if not self._entry_binance.get_value():
+            missing.append("바이낸스 UID")
+
+        if missing:
+            missing_text = ", ".join(missing)
+            messagebox.showwarning(
+                "입력 확인",
+                f"{missing_text}이 공란입니다. 모든 항목을 작성해주세요.",
+                parent=self,
+            )
+            self.lift()
+            self.focus_force()
+            return
+
+        confirmed = messagebox.askyesno(
+            "등록 요청 확인",
+            "입력하신 정보로 구독자 등록 요청을 전송합니다. 오타가 있는지 확인하십시오. "
+            "등록 요청을 전송하시겠습니까?",
+            parent=self,
+        )
+        self.lift()
+        self.focus_force()
+        if not confirmed:
+            return
+
+        api_key = self._entry_api.get_value()
+        tv_nick = self._entry_tv.get_value()
+        tg_nick = self._entry_telegram.get_value()
+        uid = self._entry_binance.get_value()
+        if self._send_subscriber_request(api_key, tv_nick, tg_nick, uid):
+            messagebox.showinfo(
+                "전송 완료",
+                "구독요청 전송이 완료되었습니다. 등록여부는 작성하신 텔레그램으로 안내됩니다.",
+                parent=self,
+            )
+        else:
+            messagebox.showerror(
+                "전송 실패",
+                "구독요청 전송에 실패했습니다. 사용자님의 인터넷 연결상태를 확인하시거나 관리자에게 문의하십시오.",
+                parent=self,
+            )
+        self.lift()
+        self.focus_force()
+
+    def _send_subscriber_request(self, api_key: str, tv_nick: str, tg_nick: str, uid: str) -> bool:
+        payload = {"api_key": api_key, "tv_nick": tv_nick, "tg_nick": tg_nick, "uid": uid}
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        request = urllib.request.Request(
+            SUBSCRIBER_WEBHOOK_URL,
+            data=data,
+            headers={"Content-Type": "application/json; charset=utf-8"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=SUBSCRIBER_REQUEST_TIMEOUT_SEC) as response:
+                status = getattr(response, "status", None) or response.getcode()
+                return 200 <= status < 300
+        except (urllib.error.HTTPError, urllib.error.URLError, ValueError):
+            return False
+
+
+
 class LoginPage(tk.Frame):
     def __init__(self, master: tk.Widget, current_version: str = "", latest_version: str = "") -> None:
         super().__init__(master, bg=CANVAS_BG)
@@ -294,12 +855,14 @@ class LoginPage(tk.Frame):
         self._latest_version = latest_version or "--"
         self._remember_var = tk.BooleanVar(value=True)
         self._required_var = tk.BooleanVar(value=False)
+        self._required2_var = tk.BooleanVar(value=False)
+        self._subscriber_window: Optional[SubscriberRequestWindow] = None
 
         self._base_fonts = {
             "title": (16, "bold"),
             "label": (12, "bold"),
             "entry": (12, "normal"),
-            "note": (10, "normal"),
+            "note": (10, "bold"),
             "button": (14, "bold"),
             "checkbox": (11, "normal"),
             "icon": (12, "normal"),
@@ -422,7 +985,7 @@ class LoginPage(tk.Frame):
         self.note_text_id = self.canvas.create_text(
             0,
             0,
-            text="* Secret Key는 서버에 저장되지 않으며 암호화 되어 로컬에만 남습니다.",
+            text="* Secret Key는 개발자조차도 열어볼 수 없도록 암호화되어 사용자의 PC 보안 금고에만 보관됩니다.",
             fill=NOTE_COLOR,
             font=self.fonts["note"],
             anchor="center",
@@ -439,6 +1002,14 @@ class LoginPage(tk.Frame):
             0,
             0,
             text=self._required_text(),
+            fill=UI_TEXT_COLOR,
+            font=self.fonts["checkbox"],
+            anchor="center",
+        )
+        self.required2_text_id = self.canvas.create_text(
+            0,
+            0,
+            text=self._required2_text(),
             fill=UI_TEXT_COLOR,
             font=self.fonts["checkbox"],
             anchor="center",
@@ -472,12 +1043,14 @@ class LoginPage(tk.Frame):
             text="💎 구독자 등록 요청",
             font=self.fonts["help_button"],
             radius=12,
+            command=self._open_subscriber_request,
         )
         self.help_button1.set_state("normal")
         self.help_button2.set_state("normal")
 
         self._bind_checkbox(self.remember_text_id, self._toggle_remember)
         self._bind_checkbox(self.required_text_id, self._toggle_required)
+        self._bind_checkbox(self.required2_text_id, self._toggle_required2)
 
         self._update_login_state()
         self._refresh_market_info()
@@ -506,6 +1079,22 @@ class LoginPage(tk.Frame):
             self._open_file(pdf_path)
         except Exception as exc:
             messagebox.showerror("열기 실패", f"PDF를 열 수 없습니다:\n{exc}")
+
+    def _open_subscriber_request(self) -> None:
+        if self._subscriber_window is not None and self._subscriber_window.winfo_exists():
+            self._subscriber_window.lift()
+            self._subscriber_window.focus_force()
+            return
+        self._subscriber_window = SubscriberRequestWindow(self.root)
+        self._subscriber_window.protocol("WM_DELETE_WINDOW", self._close_subscriber_request)
+
+    def _close_subscriber_request(self) -> None:
+        if self._subscriber_window is None:
+            return
+        try:
+            self._subscriber_window.destroy()
+        finally:
+            self._subscriber_window = None
 
     def _open_file(self, path: Path) -> None:
         if sys.platform.startswith("win"):
@@ -543,8 +1132,18 @@ class LoginPage(tk.Frame):
         self.canvas.itemconfigure(self.required_text_id, text=self._required_text())
         self._update_login_state()
 
+    def _required2_text(self) -> str:
+        prefix = "[ v ] " if self._required2_var.get() else "[   ] "
+        return prefix + "(필수) 사용자의 부주의로 인한 키 유출로 발생하는 손실은 당사가 책임지지 않는것에 동의합니다."
+
+    def _toggle_required2(self, _event: Optional[tk.Event] = None) -> None:
+        self._required2_var.set(not self._required2_var.get())
+        self.canvas.itemconfigure(self.required2_text_id, text=self._required2_text())
+        self._update_login_state()
+
     def _update_login_state(self) -> None:
-        self.login_button.set_state("normal" if self._required_var.get() else "disabled")
+        enabled = self._required_var.get() and self._required2_var.get()
+        self.login_button.set_state("normal" if enabled else "disabled")
 
     def _paste_text(self, entry: tk.Entry) -> None:
         try:
@@ -825,8 +1424,14 @@ class LoginPage(tk.Frame):
             pad_x + REQUIRED_POS[0] * scale,
             pad_y + (REQUIRED_POS[1] + FORM_OFFSET_Y + self._anim_offset) * scale,
         )
+        self.canvas.coords(
+            self.required2_text_id,
+            pad_x + REQUIRED2_POS[0] * scale,
+            pad_y + (REQUIRED2_POS[1] + FORM_OFFSET_Y + self._anim_offset) * scale,
+        )
 
         wrap = max(240, int(ENTRY_W * scale))
         self.canvas.itemconfigure(self.title_text_id, width=wrap)
         self.canvas.itemconfigure(self.note_text_id, width=wrap)
         self.canvas.itemconfigure(self.required_text_id, width=wrap)
+        self.canvas.itemconfigure(self.required2_text_id, width=wrap)
