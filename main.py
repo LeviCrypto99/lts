@@ -1,3 +1,4 @@
+import ctypes
 import json
 import os
 import re
@@ -18,6 +19,24 @@ from typing import Optional, Tuple
 from PIL import Image, ImageTk
 
 import config
+
+
+def _ensure_sta_thread() -> None:
+    if sys.platform != "win32":
+        return
+    try:
+        ole32 = ctypes.windll.ole32
+    except Exception:
+        return
+    COINIT_APARTMENTTHREADED = 0x2
+    hr = ole32.CoInitializeEx(None, COINIT_APARTMENTTHREADED)
+    if hr not in (0, 1):
+        if hr & 0xFFFFFFFF == 0x80010106:  # RPC_E_CHANGED_MODE
+            return
+
+
+_ensure_sta_thread()
+
 from login_page import LoginPage
 
 BASE_WIDTH = 1328

@@ -14,6 +14,8 @@ import tkinter as tk
 import requests
 from PIL import Image, ImageDraw, ImageTk
 
+from trade_page import TradePage
+
 BASE_WIDTH = 1328
 BASE_HEIGHT = 800
 
@@ -1204,6 +1206,7 @@ class LoginPage(tk.Frame):
 
         if result == "success":
             messagebox.showinfo("로그인 성공", "인증에 성공하였습니다.", parent=self)
+            self._open_trade_page()
             return
         if result == "banned":
             messagebox.showerror(
@@ -1228,6 +1231,12 @@ class LoginPage(tk.Frame):
             "로그인 정보를 확인할 수 없습니다. 인터넷 연결을 확인하거나 관리자에게 문의하세요.",
             parent=self,
         )
+
+    def _open_trade_page(self) -> None:
+        self.destroy()
+        trade_page = TradePage(self.root)
+        trade_page.pack(fill="both", expand=True)
+        trade_page.animate_in()
 
     def _bind_checkbox(self, item_id: int, callback) -> None:
         self.canvas.tag_bind(item_id, "<Button-1>", callback)
