@@ -1217,11 +1217,16 @@ class TradePage(tk.Frame):
             "side": side,
             "type": "MARKET",
             "quantity": quantity_text,
-            "reduceOnly": "true",
         }
         position_side = position.get("positionSide")
-        if isinstance(position_side, str) and position_side and position_side.upper() != "BOTH":
-            params["positionSide"] = position_side.upper()
+        if isinstance(position_side, str) and position_side:
+            position_side = position_side.upper()
+        else:
+            position_side = ""
+        if position_side and position_side != "BOTH":
+            params["positionSide"] = position_side
+        else:
+            params["reduceOnly"] = "true"
         result = self._binance_signed_post("https://fapi.binance.com", "/fapi/v1/order", params)
         if not isinstance(result, dict) or "orderId" not in result:
             if isinstance(result, dict):
