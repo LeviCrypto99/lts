@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import math
+import tempfile
 import threading
 import time
 import tkinter as tk
@@ -57,6 +58,7 @@ UI_TEXT_COLOR = "#f6f8fc"
 HIGHLIGHT_TEXT = "#ff0000"
 WALLET_VALUE_COLOR = "#00ff7f"
 MIN_WALLET_BALANCE = 100.0
+TRADE_LOG_PATH = Path(tempfile.gettempdir()) / "LTS-Trade.log"
 
 # Base layout coordinates (scaled from image/ex_image/ex_image.png).
 CHART_RECT = (49, 112, 770, 446)
@@ -208,6 +210,25 @@ def _round_rect_points(x1: float, y1: float, x2: float, y2: float, radius: float
 
 def _ease_out_cubic(t: float) -> float:
     return 1 - (1 - t) ** 3
+
+
+def _trim_text(value: str, limit: int = 600) -> str:
+    if not value:
+        return ""
+    text = " ".join(str(value).split())
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}...(+{len(text) - limit} chars)"
+
+
+def _log_trade(message: str) -> None:
+    try:
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        line = f"[{timestamp}] {message}\n"
+        with open(TRADE_LOG_PATH, "a", encoding="utf-8") as handle:
+            handle.write(line)
+    except Exception:
+        pass
 
 
 class TradePage(tk.Frame):
@@ -1204,7 +1225,16 @@ class TradePage(tk.Frame):
         result = self._binance_signed_post("https://fapi.binance.com", "/fapi/v1/order", params)
         if not isinstance(result, dict) or "orderId" not in result:
             if isinstance(result, dict):
+                _log_trade(
+                    "Close order rejected: "
+                    f"symbol={symbol} side={side} qty={quantity_text} "
+                    f"positionSide={position_side} response={result!r}"
+                )
                 return False, str(result.get("msg") or "청산 주문에 실패했습니다.")
+            _log_trade(
+                "Close order failed: "
+                f"symbol={symbol} side={side} qty={quantity_text} positionSide={position_side} response=None"
+            )
             return False, "청산 주문에 실패했습니다."
         return True, ""
 
@@ -1280,9 +1310,36 @@ class TradePage(tk.Frame):
         headers = {"X-MBX-APIKEY": self._api_key}
         try:
             response = requests.post(url, headers=headers, timeout=10)
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException:
+            try:
+                data = response.json()
+            except ValueError:
+                data = None
+            if not response.ok:
+                detail = data if isinstance(data, dict) else _trim_text(response.text)
+                _log_trade(
+                    f"POST {path} failed status={response.status_code} params={params} detail={detail!r}"
+                )
+                return data if isinstance(data, dict) else None
+            if data is None:
+                _log_trade(
+                    f"POST {path} returned non-JSON response status={response.status_code} "
+                    f"params={params} body={_trim_text(response.text)!r}"
+                )
+            return data
+        except requests.RequestException as exc:
+            response = getattr(exc, "response", None)
+            if response is not None:
+                try:
+                    data = response.json()
+                except ValueError:
+                    data = None
+                detail = data if isinstance(data, dict) else _trim_text(response.text)
+                _log_trade(
+                    f"POST {path} request error status={response.status_code} "
+                    f"params={params} detail={detail!r}"
+                )
+            else:
+                _log_trade(f"POST {path} request error params={params} error={exc!r}")
             return None
 
     @staticmethod
@@ -2209,7 +2266,7 @@ class ClosePositionWindow(tk.Toplevel):
         qty_text = self._format_qty(qty)
         ok, msg = self._trade_page._submit_close_order(self._position, qty_text)
         if not ok:
-            messagebox.showerror("청산 실패", msg, parent=self)
+            messagebox.showerror("청산 실패", f"{msg}\n로그: {TRADE_LOG_PATH}", parent=self)
             return
         threading.Thread(target=self._trade_page._refresh_status, daemon=True).start()
         self.destroy()

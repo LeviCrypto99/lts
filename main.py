@@ -51,8 +51,13 @@ LOGO2_FADE_MS = 500
 HOLD_AFTER_LOGO2_MS = 2000
 FPS = 60
 START_OFFSET = 60
+SINGLE_INSTANCE_MUTEX_NAME = "Local\\LeviaAutoTradeSystem_Launcher"
 LOG_PATH = Path(tempfile.gettempdir()) / "LTS-Launcher-update.log"
 LOCAL_LOG_PATH = Path(__file__).resolve().parent / "LTS-Launcher-startup.log"
+SINGLE_INSTANCE_LOCK_PATH = Path(tempfile.gettempdir()) / "LTS-Launcher.lock"
+
+_SINGLE_INSTANCE_HANDLE = None
+_SINGLE_INSTANCE_LOCKFILE = None
 
 
 def _ease_out_cubic(t: float) -> float:
@@ -87,6 +92,52 @@ def _log_update(message: str) -> None:
                 pass
     except Exception:
         pass
+
+
+def _show_already_running_message() -> None:
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showwarning("LTS", "LTS가 이미 실행중입니다.")
+        root.destroy()
+    except Exception:
+        pass
+
+
+def _acquire_single_instance_lock() -> bool:
+    global _SINGLE_INSTANCE_HANDLE, _SINGLE_INSTANCE_LOCKFILE
+    if sys.platform == "win32":
+        try:
+            kernel32 = ctypes.windll.kernel32
+            mutex = kernel32.CreateMutexW(None, False, SINGLE_INSTANCE_MUTEX_NAME)
+            if not mutex:
+                return True
+            already_exists = kernel32.GetLastError() == 183  # ERROR_ALREADY_EXISTS
+            if already_exists:
+                return False
+            _SINGLE_INSTANCE_HANDLE = mutex
+            return True
+        except Exception:
+            return True
+    try:
+        import fcntl
+
+        handle = open(SINGLE_INSTANCE_LOCK_PATH, "w", encoding="utf-8")
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _SINGLE_INSTANCE_LOCKFILE = handle
+        return True
+    except BlockingIOError:
+        return False
+    except Exception:
+        return True
+
+
+def _ensure_single_instance_or_exit() -> bool:
+    if _acquire_single_instance_lock():
+        return True
+    _log_update("Detected existing launcher instance; exit new launch.")
+    _show_already_running_message()
+    return False
 
 
 def _fetch_version_info() -> dict:
@@ -348,6 +399,8 @@ class SplashApp:
 
 if __name__ == "__main__":
     _log_update("Launcher main entry.")
+    if not _ensure_single_instance_or_exit():
+        sys.exit(0)
     try:
         SplashApp().run()
     except Exception:
