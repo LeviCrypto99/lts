@@ -19,6 +19,7 @@ from typing import Optional, Tuple
 from PIL import Image, ImageTk
 
 import config
+from exit import ExitManager
 
 
 def _ensure_sta_thread() -> None:
@@ -51,6 +52,7 @@ HOLD_AFTER_LOGO2_MS = 2000
 FPS = 60
 START_OFFSET = 60
 LOG_PATH = Path(tempfile.gettempdir()) / "LTS-Launcher-update.log"
+LOCAL_LOG_PATH = Path(__file__).resolve().parent / "LTS-Launcher-startup.log"
 
 
 def _ease_out_cubic(t: float) -> float:
@@ -76,8 +78,13 @@ def _is_version_outdated(local: str, required: str) -> bool:
 def _log_update(message: str) -> None:
     try:
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        with open(LOG_PATH, "a", encoding="utf-8") as handle:
-            handle.write(f"[{timestamp}] {message}\n")
+        line = f"[{timestamp}] {message}\n"
+        for path in (LOG_PATH, LOCAL_LOG_PATH):
+            try:
+                with open(path, "a", encoding="utf-8") as handle:
+                    handle.write(line)
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -177,14 +184,20 @@ class LogoSprite:
 class SplashApp:
     def __init__(self) -> None:
         self._latest_version = ""
+        self._exit_manager: Optional[ExitManager] = None
         self.root = tk.Tk()
         self.root.title("LeviaAutoTradeSystem")
         self.root.configure(bg="white")
         self.root.withdraw()
         self._should_run = self._preflight_or_exit()
+        if not self._should_run and not getattr(sys, "frozen", False):
+            _log_update("Preflight blocked; continue in dev mode.")
+            self._should_run = True
         if not self._should_run:
             self.root.destroy()
             return
+        self._exit_manager = ExitManager(self.root, app_name="LTS Launcher")
+        self.root._exit_manager = self._exit_manager
         self.root.deiconify()
 
         self._setup_ui()
@@ -270,6 +283,9 @@ class SplashApp:
             self.root.mainloop()
     
     def _preflight_or_exit(self) -> bool:
+        if os.getenv("LTS_SKIP_UPDATE") == "1":
+            _log_update("Skip update preflight (LTS_SKIP_UPDATE=1).")
+            return True
         try:
             info = _fetch_version_info()
         except urllib.error.HTTPError as exc:
@@ -278,25 +294,25 @@ class SplashApp:
                 "업데이트 오류",
                 f"업데이트 서버에 접근할 수 없습니다. (HTTP {exc.code})\n로그: {LOG_PATH}",
             )
-            return False
+            return not getattr(sys, "frozen", False)
         except urllib.error.URLError:
             _log_update("Version info URLError")
             messagebox.showerror("네트워크 오류", "인터넷에 연결되어 있지 않습니다. 인터넷 연결을 확인해주세요.")
-            return False
+            return not getattr(sys, "frozen", False)
         except json.JSONDecodeError:
             _log_update("Version info JSONDecodeError")
             messagebox.showerror("업데이트 오류", "업데이트 정보 형식이 올바르지 않습니다.")
-            return False
+            return not getattr(sys, "frozen", False)
         except Exception:
             _log_update("Version info unexpected error:\n" + traceback.format_exc())
             messagebox.showerror("업데이트 오류", "업데이트 정보를 확인할 수 없습니다.")
-            return False
+            return not getattr(sys, "frozen", False)
 
         required_version = info.get("min_version") or info.get("version")
         if not required_version:
             _log_update("Missing required version in update info.")
             messagebox.showerror("업데이트 오류", "업데이트 버전 정보가 없습니다.")
-            return False
+            return not getattr(sys, "frozen", False)
         self._latest_version = str(required_version)
         _log_update(
             f"Update info: url={config.UPDATE_INFO_URL} local={config.VERSION} required={self._latest_version}"
@@ -326,8 +342,14 @@ class SplashApp:
                 )
             return False
 
+        _log_update("Preflight OK.")
         return True
 
 
 if __name__ == "__main__":
-    SplashApp().run()
+    _log_update("Launcher main entry.")
+    try:
+        SplashApp().run()
+    except Exception:
+        _log_update("Fatal error:\n" + traceback.format_exc())
+        raise

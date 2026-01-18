@@ -43,7 +43,12 @@ LOGIN_W = 417
 LOGIN_H = 60
 HELP_BTN_W = 278
 HELP_BTN_H = 39
-BG_TOGGLE_POS = (BASE_WIDTH - 24, 28)
+TOP_ICON_GAP = 38
+TOP_ICON_ROW_OFFSET_X = 16
+EXIT_ICON_OFFSET_X = 12
+EXIT_ICON_POS = (BASE_WIDTH - 24 - TOP_ICON_GAP + EXIT_ICON_OFFSET_X + TOP_ICON_ROW_OFFSET_X, 28)
+EXIT_ICON_SIZE = 34
+BG_TOGGLE_POS = (BASE_WIDTH - 24 - TOP_ICON_GAP * 2 + TOP_ICON_ROW_OFFSET_X, 28)
 BG_TOGGLE_SIZE = 34
 
 ANIM_DURATION_MS = 500
@@ -924,6 +929,13 @@ class LoginPage(tk.Frame):
         self._bg_toggle_photo: Optional[ImageTk.PhotoImage] = None
         self._last_bg_toggle_size: Optional[int] = None
         self._last_bg_toggle_enabled: Optional[bool] = None
+        self._exit_icon_original = self._load_exit_icon()
+        self._exit_icon_photo: Optional[ImageTk.PhotoImage] = None
+        self._last_exit_icon_size: Optional[int] = None
+
+        exit_manager = getattr(self.root, "_exit_manager", None)
+        if exit_manager is not None:
+            exit_manager.set_position_checker(None)
 
         self._base_fonts = {
             "title": (16, "bold"),
@@ -1029,6 +1041,11 @@ class LoginPage(tk.Frame):
         self.canvas.tag_bind("bg_toggle", "<Button-1>", self._toggle_background)
         self.canvas.tag_bind("bg_toggle", "<Enter>", lambda _event: self.canvas.configure(cursor="hand2"))
         self.canvas.tag_bind("bg_toggle", "<Leave>", lambda _event: self.canvas.configure(cursor=""))
+
+        self.exit_item = self.canvas.create_image(0, 0, anchor="ne", tags=("exit_app",))
+        self.canvas.tag_bind("exit_app", "<Button-1>", self._request_exit)
+        self.canvas.tag_bind("exit_app", "<Enter>", lambda _event: self.canvas.configure(cursor="hand2"))
+        self.canvas.tag_bind("exit_app", "<Leave>", lambda _event: self.canvas.configure(cursor=""))
 
         self.title_text_id = self.canvas.create_text(
             0,
@@ -1139,6 +1156,11 @@ class LoginPage(tk.Frame):
         icon_path = base_dir / "image" / "login_page" / "background_on_off.png"
         return Image.open(icon_path).convert("RGBA")
 
+    def _load_exit_icon(self) -> Image.Image:
+        base_dir = Path(__file__).resolve().parent
+        icon_path = base_dir / "image" / "trade_page" / "exit.png"
+        return Image.open(icon_path).convert("RGBA")
+
     def _open_api_guide(self) -> None:
         base_dir = Path(__file__).resolve().parent
         pdf_path = base_dir / "image" / "login_page" / "binance_copy_api_guide.pdf"
@@ -1184,6 +1206,16 @@ class LoginPage(tk.Frame):
         if self._subscriber_window is not None and self._subscriber_window.winfo_exists():
             self._subscriber_window.set_background_enabled(self._background_enabled)
 
+    def _request_exit(self, _event: Optional[tk.Event] = None) -> None:
+        exit_manager = getattr(self.root, "_exit_manager", None)
+        if exit_manager is not None:
+            exit_manager.request_exit()
+            return
+        try:
+            self.root.destroy()
+        except tk.TclError:
+            pass
+
     def _apply_background_mode(self) -> None:
         bg_color = CANVAS_BG if self._background_enabled else BACKGROUND_OFF_COLOR
         self.configure(bg=bg_color)
@@ -1201,12 +1233,13 @@ class LoginPage(tk.Frame):
         if not api_key:
             messagebox.showwarning("입력 확인", "API KEY를 입력해주세요.", parent=self)
             return
+        secret_key = self.secret_row.entry.get().strip()
 
         result = check_server_permission(api_key)
 
         if result == "success":
             messagebox.showinfo("로그인 성공", "인증에 성공하였습니다.", parent=self)
-            self._open_trade_page()
+            self._open_trade_page(api_key, secret_key)
             return
         if result == "banned":
             messagebox.showerror(
@@ -1232,9 +1265,9 @@ class LoginPage(tk.Frame):
             parent=self,
         )
 
-    def _open_trade_page(self) -> None:
+    def _open_trade_page(self, api_key: str, secret_key: str) -> None:
         self.destroy()
-        trade_page = TradePage(self.root)
+        trade_page = TradePage(self.root, api_key=api_key, secret_key=secret_key)
         trade_page.pack(fill="both", expand=True)
         trade_page.animate_in()
 
@@ -1436,6 +1469,16 @@ class LoginPage(tk.Frame):
         self._bg_toggle_photo = ImageTk.PhotoImage(resized)
         self.canvas.itemconfigure(self.bg_toggle_item, image=self._bg_toggle_photo)
 
+    def _update_exit_icon(self, scale: float) -> None:
+        size = max(16, int(EXIT_ICON_SIZE * scale))
+        if self._last_exit_icon_size == size:
+            return
+        self._last_exit_icon_size = size
+        resample = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+        resized = self._exit_icon_original.resize((size, size), resample)
+        self._exit_icon_photo = ImageTk.PhotoImage(resized)
+        self.canvas.itemconfigure(self.exit_item, image=self._exit_icon_photo)
+
     def _update_info_panel(self, width: int, height: int, scale: float) -> None:
         size = (max(1, int(width)), max(1, int(height)))
         if self._last_info_panel_size == size:
@@ -1476,12 +1519,19 @@ class LoginPage(tk.Frame):
         self._set_font_scale(scale)
         self._update_logo(scale)
         self._update_background_toggle_icon(scale)
+        self._update_exit_icon(scale)
         self.canvas.coords(
             self.bg_toggle_item,
             pad_x + BG_TOGGLE_POS[0] * scale,
             pad_y + (BG_TOGGLE_POS[1] + self._anim_offset) * scale,
         )
         self.canvas.tag_raise(self.bg_toggle_item)
+        self.canvas.coords(
+            self.exit_item,
+            pad_x + EXIT_ICON_POS[0] * scale,
+            pad_y + (EXIT_ICON_POS[1] + self._anim_offset) * scale,
+        )
+        self.canvas.tag_raise(self.exit_item)
 
         info_w = INFO_PANEL_SIZE[0] * scale
         info_h = INFO_PANEL_SIZE[1] * scale
