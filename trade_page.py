@@ -11,7 +11,7 @@ import urllib.parse
 from collections import Counter
 from pathlib import Path
 from tkinter import font as tkfont, messagebox, ttk
-from typing import Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 import requests
 
@@ -44,9 +44,17 @@ PANEL_RADIUS = 18
 PANEL_BORDER_WIDTH = 2
 
 STATUS_REFRESH_MS = 5000
+BALANCE_SYNC_INTERVAL_SEC = 10 * 60
+SUBSCRIBER_WEBHOOK_URL = (
+    "https://script.google.com/macros/s/AKfycbyKBEsD_GQ125wrjPm8kUrcRvnZSuZ4DlHZTg-lEr1X_UX-CiY2U9W9g3Pd6JBc6xIS/exec"
+)
+SUBSCRIBER_REQUEST_TIMEOUT_SEC = 8
 
 START_FILL = "#00b050"
 STOP_FILL = "#ff0000"
+SAVE_SETTINGS_FILL = "#00b050"
+SAVE_SETTINGS_DISABLED_FILL = "#5f5f5f"
+RESET_SETTINGS_FILL = "#7a7a7a"
 BUTTON_TEXT_COLOR = "#ffffff"
 BUTTON_ACTIVE_BORDER = "#1f5eff"
 BUTTON_HOVER_LIFT = 6
@@ -57,7 +65,6 @@ BUTTON_HOVER_ANIM_STEPS = 6
 UI_TEXT_COLOR = "#f6f8fc"
 HIGHLIGHT_TEXT = "#ff0000"
 WALLET_VALUE_COLOR = "#00ff7f"
-MIN_WALLET_BALANCE = 100.0
 TRADE_LOG_PATH = Path(tempfile.gettempdir()) / "LTS-Trade.log"
 
 # Base layout coordinates (scaled from image/ex_image/ex_image.png).
@@ -65,15 +72,35 @@ CHART_RECT = (49, 112, 770, 446)
 TABLE_RECT = (47, 466, 765, 753)
 
 CAUTION_RECT = (779, 80, 1321, 256)
-WALLET_RECT = (819, 263, 1292, 560)
-START_BUTTON_RECT = (872, 475, 1042, 527)
-STOP_BUTTON_RECT = (1090, 475, 1260, 527)
+WALLET_RECT = (819, 263, 1292, 590)
+WALLET_TEXT_Y_RATIO = 0.2
+WALLET_SETTINGS_LINE_GAP = 12
+WALLET_CONTENT_Y_OFFSET = 12
+START_BUTTON_RECT = (872, 503, 1042, 555)
+STOP_BUTTON_RECT = (1090, 503, 1260, 555)
+MONITOR_RECT = (768, 600, 1325, 781)
 
 FILTER_LABEL_FILL = "#ffffff"
 FILTER_LABEL_OUTLINE = "#000000"
 FILTER_LABEL_TEXT = "#000000"
 FILTER_TEXT_OFFSET = 0
 COMBOBOX_PADDING_Y = 2
+
+# Monitor list layout (scaled from image/ex_image/ex_image.png).
+MONITOR_REF_WIDTH = 557
+MONITOR_REF_HEIGHT = 181
+
+MONITOR_TITLE_TOP = 0 / MONITOR_REF_HEIGHT
+MONITOR_TITLE_BOTTOM = 24 / MONITOR_REF_HEIGHT
+MONITOR_TITLE_TEXT_Y = 12 / MONITOR_REF_HEIGHT
+MONITOR_HEADER_TOP = 26 / MONITOR_REF_HEIGHT
+MONITOR_HEADER_TEXT_Y = 36 / MONITOR_REF_HEIGHT
+MONITOR_HEADER_LINE_Y = 47 / MONITOR_REF_HEIGHT
+
+MONITOR_COL_SYMBOL_X = 29 / MONITOR_REF_WIDTH
+MONITOR_COL_FILTER_X = (96 + 24) / MONITOR_REF_WIDTH
+MONITOR_COL_STATUS_X = 271 / MONITOR_REF_WIDTH
+MONITOR_COL_ENTRY_X = 388 / MONITOR_REF_WIDTH
 
 # Active positions table layout (scaled from image/ex_image/ex_image.png).
 TABLE_REF_WIDTH = 849
@@ -147,8 +174,14 @@ MDD_LABEL_RECT = (90, 156, 390, 188)
 MDD_DROPDOWN_RECT = (90, 196, 390, 228)
 TP_LABEL_RECT = (430, 156, 730, 188)
 TP_DROPDOWN_RECT = (430, 196, 730, 228)
-RISK_LABEL_RECT = (259, 262, 559, 294)
-RISK_DROPDOWN_RECT = (259, 302, 559, 334)
+RISK_LABEL_RECT = (260, 262, 560, 294)
+RISK_DROPDOWN_RECT = (260, 302, 560, 334)
+SAVE_SETTINGS_BUTTON_RECT = (190, 352, 400, 388)
+RESET_SETTINGS_BUTTON_RECT = (420, 352, 630, 388)
+
+DEFAULT_MDD = "15%"
+DEFAULT_TP_RATIO = "5%"
+DEFAULT_RISK_FILTER = "보수적"
 
 
 def _hex_to_rgba(value: str, alpha: int) -> Tuple[int, int, int, int]:
@@ -298,20 +331,40 @@ class TradePage(tk.Frame):
         self._close_button_photos: Dict[Tuple[int, int, bool], ImageTk.PhotoImage] = {}
 
         self._trade_state = "start"
-        self._button_hover = {"start": False, "stop": False}
-        self._button_lift = {"start": 0.0, "stop": 0.0}
-        self._button_anim_jobs: Dict[str, Optional[str]] = {"start": None, "stop": None}
+        self._button_hover = {
+            "start": False,
+            "stop": False,
+            "filter_save": False,
+            "filter_reset": False,
+        }
+        self._button_lift = {
+            "start": 0.0,
+            "stop": 0.0,
+            "filter_save": 0.0,
+            "filter_reset": 0.0,
+        }
+        self._button_anim_jobs: Dict[str, Optional[str]] = {
+            "start": None,
+            "stop": None,
+            "filter_save": None,
+            "filter_reset": None,
+        }
         self._wallet_value = "N"
         self._wallet_unit = "USDT"
         self._wallet_value_color = WALLET_VALUE_COLOR
         self._wallet_balance: Optional[float] = None
-        self._wallet_low_balance = False
         self._wallet_fetch_started = False
         self._positions: list[dict] = []
         self._position_map: Dict[str, dict] = {}
         self._refresh_in_progress = False
         self._refresh_job: Optional[str] = None
+        self._sheet_balance_sync_next_at = 0.0
+        self._sheet_balance_sync_pending = True
+        self._sheet_balance_sync_in_progress = False
+        self._sheet_balance_sync_lock = threading.Lock()
         self._exchange_filters: Dict[str, Tuple[float, float]] = {}
+        self._saved_filter_settings: Optional[dict] = None
+        self._save_enabled = False
         self._close_window: Optional["ClosePositionWindow"] = None
 
         exit_manager = getattr(self.root, "_exit_manager", None)
@@ -322,6 +375,8 @@ class TradePage(tk.Frame):
         self._configure_combobox_style("TradeFilter.TCombobox", COMBOBOX_PADDING_Y)
 
         self._create_widgets()
+        self._saved_filter_settings = self._default_filter_settings()
+        self._save_enabled = False
         self._bind_clickables()
         self._apply_background_mode()
 
@@ -338,24 +393,26 @@ class TradePage(tk.Frame):
 
         self.mdd_dropdown = ttk.Combobox(
             self.canvas,
-            values=["10%", "20%", "30%"],
+            values=["15%"],
             state="readonly",
             style="TradeFilter.TCombobox",
             justify="center",
         )
-        self.mdd_dropdown.set("30%")
+        self.mdd_dropdown.set(DEFAULT_MDD)
         self._bind_combobox_focus(self.mdd_dropdown)
+        self.mdd_dropdown.bind("<<ComboboxSelected>>", self._on_filter_change, add="+")
         self.mdd_dropdown_window = self.canvas.create_window(0, 0, window=self.mdd_dropdown, anchor="nw")
 
         self.tp_ratio_dropdown = ttk.Combobox(
             self.canvas,
-            values=["3%", "5%", "7%", "10%"],
+            values=["3%", "5%"],
             state="readonly",
             style="TradeFilter.TCombobox",
             justify="center",
         )
-        self.tp_ratio_dropdown.set("5%")
+        self.tp_ratio_dropdown.set(DEFAULT_TP_RATIO)
         self._bind_combobox_focus(self.tp_ratio_dropdown)
+        self.tp_ratio_dropdown.bind("<<ComboboxSelected>>", self._on_filter_change, add="+")
         self.tp_ratio_dropdown_window = self.canvas.create_window(0, 0, window=self.tp_ratio_dropdown, anchor="nw")
 
         self.risk_filter_dropdown = ttk.Combobox(
@@ -365,8 +422,9 @@ class TradePage(tk.Frame):
             style="TradeFilter.TCombobox",
             justify="center",
         )
-        self.risk_filter_dropdown.set("보수적")
+        self.risk_filter_dropdown.set(DEFAULT_RISK_FILTER)
         self._bind_combobox_focus(self.risk_filter_dropdown)
+        self.risk_filter_dropdown.bind("<<ComboboxSelected>>", self._on_filter_change, add="+")
         self.risk_filter_dropdown_window = self.canvas.create_window(0, 0, window=self.risk_filter_dropdown, anchor="nw")
 
     def _load_background(self) -> Image.Image:
@@ -465,15 +523,45 @@ class TradePage(tk.Frame):
             on_enter=lambda _e: self._set_button_hover("stop", True),
             on_leave=lambda _e: self._set_button_hover("stop", False),
         )
+        self._bind_tag(
+            "filter_save",
+            self._handle_filter_save,
+            on_enter=lambda _e: self._set_button_hover("filter_save", True),
+            on_leave=lambda _e: self._set_button_hover("filter_save", False),
+            enabled=lambda: self._save_enabled,
+        )
+        self._bind_tag(
+            "filter_reset",
+            self._handle_filter_reset,
+            on_enter=lambda _e: self._set_button_hover("filter_reset", True),
+            on_leave=lambda _e: self._set_button_hover("filter_reset", False),
+        )
 
-    def _bind_tag(self, tag: str, handler, on_enter=None, on_leave=None) -> None:
-        self.canvas.tag_bind(tag, "<Button-1>", handler)
-        self.canvas.tag_bind(tag, "<Enter>", lambda _e: self.canvas.configure(cursor="hand2"))
-        self.canvas.tag_bind(tag, "<Leave>", lambda _e: self.canvas.configure(cursor=""))
-        if on_enter is not None:
-            self.canvas.tag_bind(tag, "<Enter>", on_enter, add="+")
-        if on_leave is not None:
-            self.canvas.tag_bind(tag, "<Leave>", on_leave, add="+")
+    def _bind_tag(self, tag: str, handler, on_enter=None, on_leave=None, enabled: Optional[Callable[[], bool]] = None) -> None:
+        def is_enabled() -> bool:
+            return enabled() if enabled is not None else True
+
+        def handle_click(event: tk.Event) -> None:
+            if not is_enabled():
+                return
+            handler(event)
+
+        def handle_enter(event: tk.Event) -> None:
+            if is_enabled():
+                self.canvas.configure(cursor="hand2")
+                if on_enter is not None:
+                    on_enter(event)
+            else:
+                self.canvas.configure(cursor="")
+
+        def handle_leave(event: tk.Event) -> None:
+            self.canvas.configure(cursor="")
+            if on_leave is not None:
+                on_leave(event)
+
+        self.canvas.tag_bind(tag, "<Button-1>", handle_click)
+        self.canvas.tag_bind(tag, "<Enter>", handle_enter)
+        self.canvas.tag_bind(tag, "<Leave>", handle_leave)
 
     def _set_button_hover(self, key: str, hovering: bool) -> None:
         if self._button_hover.get(key) == hovering:
@@ -557,17 +645,49 @@ class TradePage(tk.Frame):
             self._layout()
 
     def _handle_start_click(self, _event=None) -> None:
-        if self._wallet_balance is not None and self._wallet_balance < MIN_WALLET_BALANCE:
-            self._wallet_value_color = HIGHLIGHT_TEXT
-            self._wallet_low_balance = True
-            self._layout()
-            messagebox.showwarning(
-                "잔고 부족",
-                "자동매매 구동에 필요한 최소 주문금액이 부족합니다. 최소 100 usdt 이상을 지갑에 예치해주세요.",
-                parent=self,
-            )
-            return
         self._set_trade_state("start")
+
+    @staticmethod
+    def _default_filter_settings() -> dict:
+        return {
+            "mdd": DEFAULT_MDD,
+            "tp_ratio": DEFAULT_TP_RATIO,
+            "risk_filter": DEFAULT_RISK_FILTER,
+        }
+
+    def _current_filter_settings(self) -> dict:
+        return {
+            "mdd": self.mdd_dropdown.get(),
+            "tp_ratio": self.tp_ratio_dropdown.get(),
+            "risk_filter": self.risk_filter_dropdown.get(),
+        }
+
+    def _update_filter_save_state(self) -> None:
+        current = self._current_filter_settings()
+        saved = self._saved_filter_settings or self._default_filter_settings()
+        enabled = current != saved
+        if enabled != self._save_enabled:
+            self._save_enabled = enabled
+            if not enabled:
+                self._button_hover["filter_save"] = False
+                self._button_lift["filter_save"] = 0.0
+            self._layout()
+
+    def _on_filter_change(self, _event=None) -> None:
+        self._update_filter_save_state()
+
+    def _handle_filter_save(self, _event=None) -> None:
+        if not self._save_enabled:
+            return
+        self._saved_filter_settings = self._current_filter_settings()
+        self._update_filter_save_state()
+
+    def _handle_filter_reset(self, _event=None) -> None:
+        defaults = self._default_filter_settings()
+        self.mdd_dropdown.set(defaults["mdd"])
+        self.tp_ratio_dropdown.set(defaults["tp_ratio"])
+        self.risk_filter_dropdown.set(defaults["risk_filter"])
+        self._update_filter_save_state()
 
     def _on_resize(self, _event: tk.Event) -> None:
         self._layout()
@@ -706,6 +826,7 @@ class TradePage(tk.Frame):
         self._draw_table(scale, pad_x, content_pad_y)
         self._draw_caution(scale, pad_x, content_pad_y)
         self._draw_wallet(scale, pad_x, content_pad_y)
+        self._draw_monitor_list(scale, pad_x, content_pad_y)
 
         self.canvas.coords(
             self.bg_toggle_item,
@@ -812,6 +933,32 @@ class TradePage(tk.Frame):
         self._position_dropdown(self.mdd_dropdown_window, offset_rect(MDD_DROPDOWN_RECT, offset_y), scale, pad_x, pad_y)
         self._position_dropdown(self.tp_ratio_dropdown_window, offset_rect(TP_DROPDOWN_RECT, offset_y), scale, pad_x, pad_y)
         self._position_dropdown(self.risk_filter_dropdown_window, offset_rect(RISK_DROPDOWN_RECT, offset_y), scale, pad_x, pad_y)
+        save_enabled = self._save_enabled
+        save_fill = SAVE_SETTINGS_FILL if save_enabled else SAVE_SETTINGS_DISABLED_FILL
+        self._draw_rounded_button(
+            offset_rect(SAVE_SETTINGS_BUTTON_RECT, offset_y),
+            "설정 저장",
+            save_fill,
+            "filter_save",
+            active=False,
+            hover=self._button_hover.get("filter_save", False) if save_enabled else False,
+            lift=self._button_lift.get("filter_save", 0.0) if save_enabled else 0.0,
+            scale=scale,
+            pad_x=pad_x,
+            pad_y=pad_y,
+        )
+        self._draw_rounded_button(
+            offset_rect(RESET_SETTINGS_BUTTON_RECT, offset_y),
+            "기본값 변환",
+            RESET_SETTINGS_FILL,
+            "filter_reset",
+            active=False,
+            hover=self._button_hover.get("filter_reset", False),
+            lift=self._button_lift.get("filter_reset", 0.0),
+            scale=scale,
+            pad_x=pad_x,
+            pad_y=pad_y,
+        )
 
     def _draw_table(self, scale: float, pad_x: float, pad_y: float) -> None:
         x1, y1, x2, y2 = self._scale_rect(TABLE_RECT, scale, pad_x, pad_y)
@@ -1029,6 +1176,89 @@ class TradePage(tk.Frame):
 
             drawn += 1
 
+    def _draw_monitor_list(self, scale: float, pad_x: float, pad_y: float) -> None:
+        x1, y1, x2, y2 = self._scale_rect(MONITOR_RECT, scale, pad_x, pad_y)
+        panel = self._panel_image("monitor", int(x2 - x1), int(y2 - y1), scale)
+        self.canvas.create_image(x1, y1, image=panel, anchor="nw", tags="ui")
+
+        width = x2 - x1
+        height = y2 - y1
+
+        def rx(ratio: float) -> float:
+            return x1 + width * ratio
+
+        def ry(ratio: float) -> float:
+            return y1 + height * ratio
+
+        border = max(1, int(2 * scale))
+
+        title_top = ry(MONITOR_TITLE_TOP)
+        title_bottom = ry(MONITOR_TITLE_BOTTOM)
+        title_text_y = ry(MONITOR_TITLE_TEXT_Y)
+        header_top = ry(MONITOR_HEADER_TOP)
+        header_text_y = ry(MONITOR_HEADER_TEXT_Y)
+        header_line_y = ry(MONITOR_HEADER_LINE_Y)
+
+        radius = max(6, int(PANEL_RADIUS * scale))
+        title_points = _round_rect_points(x1, title_top, x2, title_bottom, radius)
+        self.canvas.create_polygon(
+            title_points,
+            fill=TABLE_TITLE_FILL,
+            outline=TABLE_TITLE_BORDER,
+            width=border,
+            smooth=True,
+            splinesteps=36,
+            tags="ui",
+        )
+        if title_bottom - title_top > radius:
+            self.canvas.create_rectangle(
+                x1,
+                title_top + radius,
+                x2,
+                title_bottom,
+                fill=TABLE_TITLE_FILL,
+                outline="",
+                tags="ui",
+            )
+        self.canvas.create_text(
+            (x1 + x2) / 2,
+            title_text_y,
+            text="타점 모니터링 리스트",
+            font=self.fonts["table_title"],
+            fill="#000000",
+            anchor="center",
+            tags="ui",
+        )
+
+        self.canvas.create_line(x1, header_top, x2, header_top, fill=TABLE_TITLE_BORDER, width=border, tags="ui")
+        self.canvas.create_rectangle(x1, header_top, x2, header_line_y, fill=TABLE_HEADER_FILL, outline="", tags="ui")
+        self.canvas.create_line(
+            x1,
+            header_line_y,
+            x2,
+            header_line_y,
+            fill=TABLE_LINE_COLOR,
+            width=max(1, int(1 * scale)),
+            tags="ui",
+        )
+
+        headers = [
+            ("종목", MONITOR_COL_SYMBOL_X),
+            ("필터링 성향", MONITOR_COL_FILTER_X),
+            ("상태", MONITOR_COL_STATUS_X),
+            ("진입 예정가", MONITOR_COL_ENTRY_X),
+        ]
+        for label, x_ratio in headers:
+            self.canvas.create_text(
+                rx(x_ratio),
+                header_text_y,
+                text=label,
+                font=self.fonts["table_header"],
+                fill=TABLE_HEADER_TEXT,
+                anchor="w",
+                tags="ui",
+            )
+
     def _draw_caution(self, scale: float, pad_x: float, pad_y: float) -> None:
         x1, y1, x2, y2 = self._scale_rect(CAUTION_RECT, scale, pad_x, pad_y)
         panel = self._panel_image("caution", int(x2 - x1), int(y2 - y1), scale)
@@ -1079,15 +1309,12 @@ class TradePage(tk.Frame):
         value_font = self.fonts["wallet_value"]
         suffix_font = self.fonts["wallet"]
         suffix_color = UI_TEXT_COLOR
-        if self._wallet_low_balance:
-            suffix_font = value_font
-            suffix_color = self._wallet_value_color
 
         label_w = font.measure(label + " ")
         value_w = value_font.measure(value + " ")
         suffix_w = suffix_font.measure(suffix)
         total_w = label_w + value_w + suffix_w
-        text_y = y1 + (y2 - y1) * 0.35
+        text_y = y1 + (y2 - y1) * WALLET_TEXT_Y_RATIO + WALLET_CONTENT_Y_OFFSET * scale
         start_x = center_x - total_w / 2
 
         self.canvas.create_text(
@@ -1117,6 +1344,44 @@ class TradePage(tk.Frame):
             anchor="center",
             tags="ui",
         )
+
+        settings = self._saved_filter_settings or self._default_filter_settings()
+        line_font = self.fonts["wallet"]
+        value_line_font = self.fonts["wallet_value"]
+        line_height = max(line_font.metrics("linespace"), value_line_font.metrics("linespace"))
+        line_gap = WALLET_SETTINGS_LINE_GAP * scale
+        cursor_y = text_y + line_height + line_gap
+
+        lines = [
+            ("MDD :", settings.get("mdd") or "N%"),
+            ("TP-Ratio :", settings.get("tp_ratio") or "N%"),
+            ("필터링 성향 :", settings.get("risk_filter") or "보수적/공격적"),
+        ]
+
+        for label_text, value_text in lines:
+            label_w = line_font.measure(label_text + " ")
+            value_w = value_line_font.measure(value_text)
+            total_w = label_w + value_w
+            start_x = center_x - total_w / 2
+            self.canvas.create_text(
+                start_x + label_w / 2,
+                cursor_y,
+                text=label_text,
+                font=line_font,
+                fill=UI_TEXT_COLOR,
+                anchor="center",
+                tags="ui",
+            )
+            self.canvas.create_text(
+                start_x + label_w + value_w / 2,
+                cursor_y,
+                text=value_text,
+                font=value_line_font,
+                fill=UI_TEXT_COLOR,
+                anchor="center",
+                tags="ui",
+            )
+            cursor_y += line_height + line_gap
 
         self._draw_trade_buttons(scale, pad_x, pad_y)
 
@@ -1256,6 +1521,7 @@ class TradePage(tk.Frame):
             if balance is None:
                 self._set_wallet_failure_async()
                 return
+            self._sync_wallet_balance_to_sheet(balance)
             positions = self._fetch_open_positions()
             self.after(0, lambda: self._set_wallet_value(balance))
             self.after(0, lambda: self._set_positions(positions or []))
@@ -1289,6 +1555,44 @@ class TradePage(tk.Frame):
             positions.append(item)
         positions.sort(key=lambda item: item.get("symbol", ""))
         return positions
+
+    def _sync_wallet_balance_to_sheet(self, balance: float) -> None:
+        if not self._api_key:
+            return
+
+        now = time.time()
+        with self._sheet_balance_sync_lock:
+            due = self._sheet_balance_sync_pending or now >= self._sheet_balance_sync_next_at
+            if not due or self._sheet_balance_sync_in_progress:
+                return
+            self._sheet_balance_sync_in_progress = True
+
+        success = False
+        payload = {
+            "action": "update_balance",
+            "api_key": self._api_key,
+            "balance": round(float(balance), 2),
+        }
+
+        try:
+            response = requests.post(
+                SUBSCRIBER_WEBHOOK_URL,
+                json=payload,
+                timeout=SUBSCRIBER_REQUEST_TIMEOUT_SEC,
+            )
+            response.raise_for_status()
+            data = response.json()
+            success = isinstance(data, dict) and data.get("result") == "updated"
+        except (requests.RequestException, TypeError, ValueError):
+            success = False
+        finally:
+            with self._sheet_balance_sync_lock:
+                self._sheet_balance_sync_in_progress = False
+                if success:
+                    self._sheet_balance_sync_pending = False
+                    self._sheet_balance_sync_next_at = time.time() + BALANCE_SYNC_INTERVAL_SEC
+                else:
+                    self._sheet_balance_sync_pending = True
 
     def _binance_signed_get(self, base_url: str, path: str, params: Optional[dict] = None) -> Optional[dict]:
         params = dict(params or {})
@@ -1507,12 +1811,7 @@ class TradePage(tk.Frame):
         self._wallet_balance = balance
         self._wallet_value = f"{balance:,.2f}"
         self._wallet_unit = "USDT"
-        if balance < MIN_WALLET_BALANCE:
-            self._wallet_value_color = HIGHLIGHT_TEXT
-            self._wallet_low_balance = True
-        else:
-            self._wallet_value_color = WALLET_VALUE_COLOR
-            self._wallet_low_balance = False
+        self._wallet_value_color = WALLET_VALUE_COLOR
         self._layout()
 
     def _set_wallet_failure(self) -> None:
@@ -1520,7 +1819,6 @@ class TradePage(tk.Frame):
         self._wallet_value = "연결실패"
         self._wallet_unit = ""
         self._wallet_value_color = HIGHLIGHT_TEXT
-        self._wallet_low_balance = False
         self._positions = []
         self._layout()
 
@@ -1546,6 +1844,8 @@ class TradePage(tk.Frame):
         try:
             balance = self._fetch_futures_balance()
             positions = self._fetch_open_positions()
+            if balance is not None:
+                self._sync_wallet_balance_to_sheet(balance)
         except Exception:
             balance = None
             positions = None
