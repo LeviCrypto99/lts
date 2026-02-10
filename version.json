@@ -1,5 +1,7 @@
 {
-  "min_version": "1.9.1",
+  "min_version": "1.9.2",
   "updater_url": "https://raw.githubusercontent.com/LeviCrypto99/lts/main/LTS-Updater.exe",
-  "app_url": "https://raw.githubusercontent.com/LeviCrypto99/lts/main/LTS%20V1.9.1.exe"
+  "updater_sha256": "842d90c72b6fe36bb024a6e995968fa927ecc31db8773beb34400d24f5126723",
+  "app_url": "https://raw.githubusercontent.com/LeviCrypto99/lts/main/LTS%20V1.9.2.exe",
+  "app_sha256": "90c067c41984ec8ec1cca80944ffcd1bbbd84b93135c545396a190ccffeefd8f"
 }

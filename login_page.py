@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -77,6 +78,7 @@ SUBSCRIBER_WEBHOOK_URL = (
     "https://script.google.com/macros/s/AKfycbyKBEsD_GQ125wrjPm8kUrcRvnZSuZ4DlHZTg-lEr1X_UX-CiY2U9W9g3Pd6JBc6xIS/exec"
 )
 SUBSCRIBER_REQUEST_TIMEOUT_SEC = 8
+LOGIN_LOG_PATH = Path(tempfile.gettempdir()) / "LTS-Login.log"
 
 # Subscriber request window (ex_image.png) layout constants.
 SUB_TITLEBAR_OFFSET = 24
@@ -124,8 +126,33 @@ SUB_HELP_LEFT_TEXT_POS = (261, 570 - SUB_TITLEBAR_OFFSET)
 SUB_HELP_RIGHT_TEXT_POS = (618, 570 - SUB_TITLEBAR_OFFSET)
 
 
+def _log_login(message: str) -> None:
+    try:
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with open(LOGIN_LOG_PATH, "a", encoding="utf-8") as handle:
+            handle.write(f"[{timestamp}] {message}\n")
+    except Exception:
+        pass
+
+
+def _mask_api_key(api_key: str) -> str:
+    key = str(api_key or "").strip()
+    if not key:
+        return "<empty>"
+    if len(key) <= 4:
+        return "*" * len(key)
+    if len(key) <= 10:
+        return f"{key[:2]}***{key[-2:]}"
+    return f"{key[:4]}***{key[-4:]}"
+
+
 def check_server_permission(api_key: str) -> str:
     payload = {"action": "check_login", "api_key": api_key}
+    masked_key = _mask_api_key(api_key)
+    _log_login(
+        "check_server_permission started: "
+        f"api_key={masked_key} timeout={SUBSCRIBER_REQUEST_TIMEOUT_SEC}"
+    )
     try:
         response = requests.post(
             SUBSCRIBER_WEBHOOK_URL,
@@ -133,12 +160,42 @@ def check_server_permission(api_key: str) -> str:
             timeout=SUBSCRIBER_REQUEST_TIMEOUT_SEC,
         )
         response.raise_for_status()
+    except requests.RequestException as exc:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        _log_login(
+            "check_server_permission request failed: "
+            f"api_key={masked_key} error={exc.__class__.__name__} status={status}"
+        )
+        return "error"
+
+    try:
         data = response.json()
-    except (requests.RequestException, ValueError):
+    except ValueError as exc:
+        _log_login(
+            "check_server_permission invalid json: "
+            f"api_key={masked_key} error={exc.__class__.__name__}"
+        )
         return "error"
 
     result = data.get("result")
-    return result if isinstance(result, str) else "error"
+    if not isinstance(result, str):
+        _log_login(
+            "check_server_permission invalid result type: "
+            f"api_key={masked_key} type={type(result).__name__}"
+        )
+        return "error"
+    normalized = result.strip().lower()
+    _log_login(
+        "check_server_permission completed: "
+        f"api_key={masked_key} result={normalized}"
+    )
+    if normalized in {"success", "banned", "pending", "fail"}:
+        return normalized
+    _log_login(
+        "check_server_permission unexpected result value: "
+        f"api_key={masked_key} raw={result}"
+    )
+    return "error"
 
 
 def _ease_out_cubic(t: float) -> float:
@@ -1230,18 +1287,30 @@ class LoginPage(tk.Frame):
 
     def _on_login_click(self) -> None:
         api_key = self.api_row.entry.get().strip()
+        masked_key = _mask_api_key(api_key)
         if not api_key:
+            _log_login("login_click rejected: api_key_missing")
             messagebox.showwarning("입력 확인", "API KEY를 입력해주세요.", parent=self)
             return
         secret_key = self.secret_row.entry.get().strip()
+        _log_login(
+            "login_click submitted: "
+            f"api_key={masked_key} secret_key_present={bool(secret_key)}"
+        )
 
         result = check_server_permission(api_key)
+        _log_login(
+            "login_click permission_result: "
+            f"api_key={masked_key} result={result}"
+        )
 
         if result == "success":
+            _log_login(f"login_click success: api_key={masked_key}")
             messagebox.showinfo("로그인 성공", "인증에 성공하였습니다.", parent=self)
             self._open_trade_page(api_key, secret_key)
             return
         if result == "banned":
+            _log_login(f"login_click banned: api_key={masked_key}")
             messagebox.showerror(
                 "접속 불가",
                 "사용 기간이 만료되었거나 승인이 거부되었습니다. 관리자에게 문의하세요.",
@@ -1249,9 +1318,11 @@ class LoginPage(tk.Frame):
             )
             return
         if result == "pending":
+            _log_login(f"login_click pending: api_key={masked_key}")
             messagebox.showwarning("승인 대기", "구독자 승인 대기 중입니다.", parent=self)
             return
         if result == "fail":
+            _log_login(f"login_click unregistered: api_key={masked_key}")
             messagebox.showwarning(
                 "미등록 사용자",
                 "등록되지 않은 사용자 입니다. 신규 등록을 위해 먼저 구독자 등록 요청을 수행하십시오.",
@@ -1259,6 +1330,7 @@ class LoginPage(tk.Frame):
             )
             return
 
+        _log_login(f"login_click error_fallback: api_key={masked_key}")
         messagebox.showerror(
             "서버 오류",
             "로그인 정보를 확인할 수 없습니다. 인터넷 연결을 확인하거나 관리자에게 문의하세요.",

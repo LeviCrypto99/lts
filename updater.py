@@ -8,7 +8,15 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from tkinter import Tk, messagebox
+from typing import Optional
+
+from update_security import extract_sha256_from_metadata, normalize_sha256, verify_file_sha256
+
+try:
+    from tkinter import Tk, messagebox
+except ModuleNotFoundError:
+    Tk = None
+    messagebox = None
 
 LOG_PATH = Path(tempfile.gettempdir()) / "LTS-Updater.log"
 
@@ -23,17 +31,33 @@ def _log_update(message: str) -> None:
 
 
 def _show_error(message: str) -> None:
-    root = Tk()
-    root.withdraw()
-    messagebox.showerror("업데이트 오류", message)
-    root.destroy()
+    if Tk is None or messagebox is None:
+        _log_update("Tkinter unavailable for error dialog; fallback to console output.")
+        print(f"[업데이트 오류] {message}")
+        return
+    try:
+        root = Tk()
+        root.withdraw()
+        messagebox.showerror("업데이트 오류", message)
+        root.destroy()
+    except Exception:
+        _log_update("Error dialog failed; fallback to console output.")
+        print(f"[업데이트 오류] {message}")
 
 
 def _show_info(message: str) -> None:
-    root = Tk()
-    root.withdraw()
-    messagebox.showinfo("업데이트", message)
-    root.destroy()
+    if Tk is None or messagebox is None:
+        _log_update("Tkinter unavailable for info dialog; fallback to console output.")
+        print(f"[업데이트] {message}")
+        return
+    try:
+        root = Tk()
+        root.withdraw()
+        messagebox.showinfo("업데이트", message)
+        root.destroy()
+    except Exception:
+        _log_update("Info dialog failed; fallback to console output.")
+        print(f"[업데이트] {message}")
 
 
 def _fetch_json(url: str, token_env: str, timeout: int) -> dict:
@@ -72,13 +96,43 @@ def _download_file(url: str, target_path: Path, token_env: str, timeout: int) ->
                 handle.write(chunk)
 
 
-def _resolve_download_url(download_url: str | None, version_url: str | None, token_env: str, timeout: int) -> str:
+def _resolve_download_plan(
+    download_url: str | None,
+    expected_sha256: Optional[str],
+    version_url: str | None,
+    token_env: str,
+    timeout: int,
+) -> tuple[str, str]:
+    normalized_expected = normalize_sha256(expected_sha256) if expected_sha256 else None
     if download_url:
-        return download_url
+        if not normalized_expected:
+            raise RuntimeError("Direct download requires --expected-sha256.")
+        return download_url, normalized_expected
     if not version_url:
         raise RuntimeError("Missing download URL.")
     info = _fetch_json(version_url, token_env, timeout)
-    return info.get("app_url") or info.get("download_url") or info.get("latest_url") or ""
+    if not isinstance(info, dict):
+        raise RuntimeError("Invalid version metadata type.")
+
+    resolved_url = info.get("app_url") or info.get("download_url") or info.get("latest_url") or ""
+    if not resolved_url:
+        raise RuntimeError("Missing app download URL in version metadata.")
+
+    resolved_sha256 = normalized_expected or extract_sha256_from_metadata(
+        info,
+        keys=(
+            "app_sha256",
+            "app_hash",
+            "launcher_sha256",
+            "launcher_hash",
+            "app",
+            "launcher",
+        ),
+        file_url=resolved_url,
+    )
+    if not resolved_sha256:
+        raise RuntimeError("Missing app SHA256 in version metadata.")
+    return resolved_url, resolved_sha256
 
 
 def _wait_for_unlock(path: Path, timeout_sec: int = 30) -> bool:
@@ -142,6 +196,7 @@ def main() -> int:
     parser.add_argument("--target", required=True, help="Path to the app executable to replace.")
     parser.add_argument("--download-url", help="Direct URL to the latest app executable.")
     parser.add_argument("--version-url", help="URL to version.json that contains app_url.")
+    parser.add_argument("--expected-sha256", help="Expected SHA256 for downloaded app executable.")
     parser.add_argument("--token-env", default="LTS_UPDATE_TOKEN", help="Env var for optional auth token.")
     parser.add_argument("--timeout", type=int, default=10)
     args = parser.parse_args()
@@ -154,7 +209,17 @@ def main() -> int:
         return 1
 
     try:
-        download_url = _resolve_download_url(args.download_url, args.version_url, args.token_env, args.timeout)
+        download_url, expected_sha256 = _resolve_download_plan(
+            args.download_url,
+            args.expected_sha256,
+            args.version_url,
+            args.token_env,
+            args.timeout,
+        )
+        _log_update(
+            "Resolved update plan: "
+            f"url={download_url} expected_sha256={expected_sha256}"
+        )
         if not download_url:
             _log_update("Missing download_url after resolve.")
             _show_error(f"업데이트 파일 주소가 없습니다.\n로그: {LOG_PATH}")
@@ -188,6 +253,26 @@ def main() -> int:
         _log_update("App download failed:\n" + traceback.format_exc())
         _show_error(f"업데이트 파일 다운로드에 실패했습니다.\n로그: {LOG_PATH}")
         return 1
+
+    try:
+        verified, actual_sha256 = verify_file_sha256(temp_path, expected_sha256)
+    except Exception:
+        _log_update("SHA256 verification error:\n" + traceback.format_exc())
+        _remove_file(temp_path)
+        _show_error(f"업데이트 파일 무결성 검증 중 오류가 발생했습니다.\n로그: {LOG_PATH}")
+        return 1
+
+    if not verified:
+        _log_update(
+            "SHA256 mismatch: "
+            f"expected={expected_sha256} actual={actual_sha256} file={temp_path}"
+        )
+        _remove_file(temp_path)
+        _show_error(f"업데이트 파일 무결성 검증에 실패했습니다.\n로그: {LOG_PATH}")
+        return 1
+    _log_update(
+        f"SHA256 verified: expected={expected_sha256} actual={actual_sha256}"
+    )
 
     time.sleep(1.5)
     if not _wait_for_unlock(target_path):

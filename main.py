@@ -7,19 +7,37 @@ import sys
 import tempfile
 import traceback
 import time
-import tkinter as tk
 import urllib.error
 import urllib.parse
 import urllib.request
 from itertools import zip_longest
 from pathlib import Path
-from tkinter import messagebox
 from typing import Optional, Tuple
 
-from PIL import Image, ImageTk
+try:
+    from PIL import Image, ImageTk
+except ModuleNotFoundError as exc:
+    if exc.name in {"PIL", "PIL.Image", "PIL.ImageTk"}:
+        raise SystemExit(
+            "Pillow 모듈을 찾을 수 없습니다. "
+            "`python -m pip install -r requirements.txt` 후 다시 실행해 주세요."
+        ) from exc
+    raise
 
 import config
 from exit import ExitManager
+from update_security import extract_sha256_from_metadata, verify_file_sha256
+
+try:
+    import tkinter as tk
+    from tkinter import messagebox
+except ModuleNotFoundError as exc:
+    if exc.name == "tkinter":
+        raise SystemExit(
+            "tkinter 모듈을 찾을 수 없습니다. "
+            "Windows Python 환경에서 실행하거나 tkinter가 포함된 Python을 사용해 주세요."
+        ) from exc
+    raise
 
 
 def _ensure_sta_thread() -> None:
@@ -58,6 +76,7 @@ SINGLE_INSTANCE_LOCK_PATH = Path(tempfile.gettempdir()) / "LTS-Launcher.lock"
 
 _SINGLE_INSTANCE_HANDLE = None
 _SINGLE_INSTANCE_LOCKFILE = None
+_TRUTHY_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
 
 
 def _ease_out_cubic(t: float) -> float:
@@ -140,6 +159,49 @@ def _ensure_single_instance_or_exit() -> bool:
     return False
 
 
+def _is_truthy_env_value(value: Optional[str]) -> bool:
+    return str(value or "").strip().lower() in _TRUTHY_ENV_VALUES
+
+
+def _should_allow_launch_on_update_check_failure() -> bool:
+    strict_mode = _is_truthy_env_value(os.getenv(config.UPDATE_CHECK_STRICT_MODE_ENV))
+    allow_launch = bool(config.ALLOW_LAUNCH_ON_UPDATE_CHECK_FAILURE) and not strict_mode
+    _log_update(
+        "Update-check failure policy: "
+        f"allow_launch_default={config.ALLOW_LAUNCH_ON_UPDATE_CHECK_FAILURE} "
+        f"strict_env={strict_mode} "
+        f"result_allow_launch={allow_launch}"
+    )
+    return allow_launch
+
+
+def _resolve_updater_sha256(version_info: dict, updater_url: str) -> Optional[str]:
+    return extract_sha256_from_metadata(
+        version_info,
+        keys=(
+            "updater_sha256",
+            "updater_hash",
+            "updater",
+        ),
+        file_url=updater_url,
+    )
+
+
+def _resolve_app_sha256(version_info: dict, app_url: str) -> Optional[str]:
+    return extract_sha256_from_metadata(
+        version_info,
+        keys=(
+            "app_sha256",
+            "app_hash",
+            "launcher_sha256",
+            "launcher_hash",
+            "app",
+            "launcher",
+        ),
+        file_url=app_url,
+    )
+
+
 def _fetch_version_info() -> dict:
     headers = {
         "User-Agent": "LTS-Updater",
@@ -177,7 +239,12 @@ def _download_file(url: str, target_path: Path) -> None:
                 handle.write(chunk)
 
 
-def _download_and_run_updater(url: str) -> None:
+def _download_and_run_updater(
+    url: str,
+    *,
+    updater_sha256: str,
+    app_sha256: str,
+) -> None:
     if not getattr(sys, "frozen", False):
         raise RuntimeError("Updater must run from a packaged exe.")
     parsed = urllib.parse.urlparse(url)
@@ -185,6 +252,20 @@ def _download_and_run_updater(url: str) -> None:
     target_path = Path(tempfile.gettempdir()) / filename
     _log_update(f"Downloading updater: {url} -> {target_path}")
     _download_file(url, target_path)
+    verified, actual_sha256 = verify_file_sha256(target_path, updater_sha256)
+    if not verified:
+        _log_update(
+            "Updater SHA256 mismatch: "
+            f"expected={updater_sha256} actual={actual_sha256} file={target_path}"
+        )
+        try:
+            target_path.unlink()
+        except Exception:
+            pass
+        raise RuntimeError("Updater SHA256 verification failed.")
+    _log_update(
+        f"Updater SHA256 verified: expected={updater_sha256} actual={actual_sha256}"
+    )
     args = [
         str(target_path),
         "--target",
@@ -193,6 +274,8 @@ def _download_and_run_updater(url: str) -> None:
         config.UPDATE_INFO_URL,
         "--token-env",
         config.UPDATE_AUTH_TOKEN_ENV,
+        "--expected-sha256",
+        app_sha256,
     ]
     _log_update(f"Launching updater: {' '.join(args)}")
     subprocess.Popen(args, close_fds=True)
@@ -332,7 +415,35 @@ class SplashApp:
     def run(self) -> None:
         if self._should_run:
             self.root.mainloop()
-    
+
+    def _handle_update_check_failure(
+        self,
+        *,
+        title: str,
+        user_message: str,
+        failure_code: str,
+    ) -> bool:
+        allow_launch = _should_allow_launch_on_update_check_failure()
+        _log_update(
+            f"Update preflight failure: code={failure_code} allow_launch={allow_launch}"
+        )
+        if allow_launch:
+            messagebox.showwarning(
+                "업데이트 확인 실패",
+                (
+                    f"{user_message}\n\n"
+                    f"업데이트 확인에 실패했지만 현재 버전(v{config.VERSION})으로 실행을 계속합니다.\n"
+                    f"네트워크가 복구되면 재실행 후 업데이트를 확인해 주세요.\n"
+                    f"로그: {LOG_PATH}"
+                ),
+            )
+            return True
+        messagebox.showerror(
+            title,
+            f"{user_message}\n로그: {LOG_PATH}",
+        )
+        return False
+
     def _preflight_or_exit(self) -> bool:
         if os.getenv("LTS_SKIP_UPDATE") == "1":
             _log_update("Skip update preflight (LTS_SKIP_UPDATE=1).")
@@ -341,29 +452,49 @@ class SplashApp:
             info = _fetch_version_info()
         except urllib.error.HTTPError as exc:
             _log_update(f"Version info HTTPError: {exc.code} {exc.reason}")
-            messagebox.showerror(
-                "업데이트 오류",
-                f"업데이트 서버에 접근할 수 없습니다. (HTTP {exc.code})\n로그: {LOG_PATH}",
+            return self._handle_update_check_failure(
+                title="업데이트 오류",
+                user_message=f"업데이트 서버에 접근할 수 없습니다. (HTTP {exc.code})",
+                failure_code=f"HTTP_{exc.code}",
             )
-            return not getattr(sys, "frozen", False)
         except urllib.error.URLError:
             _log_update("Version info URLError")
-            messagebox.showerror("네트워크 오류", "인터넷에 연결되어 있지 않습니다. 인터넷 연결을 확인해주세요.")
-            return not getattr(sys, "frozen", False)
+            return self._handle_update_check_failure(
+                title="네트워크 오류",
+                user_message="인터넷에 연결되어 있지 않습니다. 인터넷 연결을 확인해주세요.",
+                failure_code="URL_ERROR",
+            )
         except json.JSONDecodeError:
             _log_update("Version info JSONDecodeError")
-            messagebox.showerror("업데이트 오류", "업데이트 정보 형식이 올바르지 않습니다.")
-            return not getattr(sys, "frozen", False)
+            return self._handle_update_check_failure(
+                title="업데이트 오류",
+                user_message="업데이트 정보 형식이 올바르지 않습니다.",
+                failure_code="JSON_DECODE_ERROR",
+            )
         except Exception:
             _log_update("Version info unexpected error:\n" + traceback.format_exc())
-            messagebox.showerror("업데이트 오류", "업데이트 정보를 확인할 수 없습니다.")
-            return not getattr(sys, "frozen", False)
+            return self._handle_update_check_failure(
+                title="업데이트 오류",
+                user_message="업데이트 정보를 확인할 수 없습니다.",
+                failure_code="UNEXPECTED_ERROR",
+            )
+
+        if not isinstance(info, dict):
+            _log_update(f"Version info invalid type: {type(info).__name__}")
+            return self._handle_update_check_failure(
+                title="업데이트 오류",
+                user_message="업데이트 정보 응답 형식이 올바르지 않습니다.",
+                failure_code="INVALID_RESPONSE_TYPE",
+            )
 
         required_version = info.get("min_version") or info.get("version")
         if not required_version:
             _log_update("Missing required version in update info.")
-            messagebox.showerror("업데이트 오류", "업데이트 버전 정보가 없습니다.")
-            return not getattr(sys, "frozen", False)
+            return self._handle_update_check_failure(
+                title="업데이트 오류",
+                user_message="업데이트 버전 정보가 없습니다.",
+                failure_code="MISSING_REQUIRED_VERSION",
+            )
         self._latest_version = str(required_version)
         _log_update(
             f"Update info: url={config.UPDATE_INFO_URL} local={config.VERSION} required={self._latest_version}"
@@ -383,8 +514,23 @@ class SplashApp:
                 _log_update("Missing updater_url.")
                 messagebox.showerror("업데이트 오류", "업데이트 파일 주소가 없습니다.")
                 return False
+            app_url = info.get("app_url") or info.get("download_url") or info.get("latest_url") or ""
+            updater_sha256 = _resolve_updater_sha256(info, updater_url)
+            app_sha256 = _resolve_app_sha256(info, app_url)
+            if not updater_sha256:
+                _log_update("Missing updater SHA256 in update metadata.")
+                messagebox.showerror("업데이트 오류", "업데이트 파일 해시 정보(updater_sha256)가 없습니다.")
+                return False
+            if not app_sha256:
+                _log_update("Missing app SHA256 in update metadata.")
+                messagebox.showerror("업데이트 오류", "앱 파일 해시 정보(app_sha256)가 없습니다.")
+                return False
             try:
-                _download_and_run_updater(updater_url)
+                _download_and_run_updater(
+                    updater_url,
+                    updater_sha256=updater_sha256,
+                    app_sha256=app_sha256,
+                )
             except Exception:
                 _log_update("Updater download/launch failed:\n" + traceback.format_exc())
                 messagebox.showerror(

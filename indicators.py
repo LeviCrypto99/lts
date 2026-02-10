@@ -1,8 +1,16 @@
 import requests
-import pandas as pd
-import numpy as np
 import math
 from datetime import datetime, timedelta
+
+try:
+    import pandas as pd
+except ModuleNotFoundError:  # pragma: no cover - optional runtime dependency
+    pd = None
+
+try:
+    import numpy as np
+except ModuleNotFoundError:  # pragma: no cover - optional runtime dependency
+    np = None
 
 
 # ==========================================
@@ -11,6 +19,9 @@ from datetime import datetime, timedelta
 
 def fetch_binance_futures_data(symbol, interval='3m', limit=200):
     """바이낸스 USDT 선물 캔들 데이터 조회"""
+    if pd is None:
+        print("❌ pandas 미설치: 캔들 DataFrame 변환을 진행할 수 없습니다.")
+        return None, symbol.upper() if symbol else symbol
     symbol = symbol.upper()
     if not symbol.endswith('USDT'):
         symbol += 'USDT'
@@ -90,23 +101,45 @@ def get_decimal_places(tick_size):
 # 2. 계산 로직 (ATR 밴드) - 변경 없음
 # ==========================================
 
-def calculate_atr_bands(df, length=3, multiplier=1):
-    high, low, close = df['high'].values, df['low'].values, df['close'].values
-    n = len(df)
+def _extract_price_series(df, column):
+    try:
+        col = df[column]
+        values = col.values if hasattr(col, "values") else col
+        return [float(x) for x in values]
+    except Exception:
+        pass
 
-    tr = np.zeros(n)
+    try:
+        return [float(row[column]) for row in df]
+    except Exception as exc:
+        raise ValueError(f"'{column}' series extraction failed") from exc
+
+
+def calculate_atr_bands(df, length=3, multiplier=1):
+    high = _extract_price_series(df, 'high')
+    low = _extract_price_series(df, 'low')
+    close = _extract_price_series(df, 'close')
+    n = len(close)
+    if n == 0:
+        raise ValueError("empty candle input")
+    if not (len(high) == len(low) == n):
+        raise ValueError("candle series length mismatch")
+    if length <= 0:
+        raise ValueError("length must be positive")
+
+    tr = [0.0] * n
     tr[0] = high[0] - low[0]
     for i in range(1, n):
         tr[i] = max(high[i] - low[i], abs(high[i] - close[i - 1]), abs(low[i] - close[i - 1]))
 
-    atr = np.zeros(n)
-    atr[length - 1] = np.mean(tr[:length])
-    for i in range(length, n):
-        atr[i] = (atr[i - 1] * (length - 1) + tr[i]) / length
+    atr = [0.0] * n
+    if n >= length:
+        atr[length - 1] = sum(tr[:length]) / length
+        for i in range(length, n):
+            atr[i] = (atr[i - 1] * (length - 1) + tr[i]) / length
 
-    upper = close + (atr * multiplier)
-    lower = close - (atr * multiplier)
-
+    upper = [close[i] + (atr[i] * multiplier) for i in range(n)]
+    lower = [close[i] - (atr[i] * multiplier) for i in range(n)]
     return upper, lower, atr
 
 
