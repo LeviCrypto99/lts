@@ -73,6 +73,8 @@ SINGLE_INSTANCE_MUTEX_NAME = "Local\\LeviaAutoTradeSystem_Launcher"
 LOG_PATH = Path(tempfile.gettempdir()) / "LTS-Launcher-update.log"
 LOCAL_LOG_PATH = Path(__file__).resolve().parent / "LTS-Launcher-startup.log"
 SINGLE_INSTANCE_LOCK_PATH = Path(tempfile.gettempdir()) / "LTS-Launcher.lock"
+UPDATER_DOWNLOAD_RETRY_COUNT = 3
+UPDATER_DOWNLOAD_RETRY_DELAY_SEC = 0.8
 
 _SINGLE_INSTANCE_HANDLE = None
 _SINGLE_INSTANCE_LOCKFILE = None
@@ -239,6 +241,43 @@ def _download_file(url: str, target_path: Path) -> None:
                 handle.write(chunk)
 
 
+def _make_updater_temp_path(filename: str, attempt: int) -> Path:
+    parsed_name = Path(filename)
+    stem = parsed_name.stem or "LTS-Updater"
+    suffix = parsed_name.suffix or ".exe"
+    unique_token = f"{os.getpid()}-{int(time.time() * 1000)}-{attempt}"
+    target_path = Path(tempfile.gettempdir()) / f"{stem}-{unique_token}{suffix}"
+    _log_update(f"Prepared updater temp path: {target_path}")
+    return target_path
+
+
+def _download_updater_with_retry(url: str, filename: str) -> Path:
+    last_error: Exception | None = None
+    for attempt in range(1, UPDATER_DOWNLOAD_RETRY_COUNT + 1):
+        target_path = _make_updater_temp_path(filename, attempt)
+        _log_update(
+            f"Downloading updater (attempt {attempt}/{UPDATER_DOWNLOAD_RETRY_COUNT}): "
+            f"{url} -> {target_path}"
+        )
+        try:
+            _download_file(url, target_path)
+            _log_update(f"Updater download succeeded on attempt {attempt}: {target_path}")
+            return target_path
+        except PermissionError as exc:
+            last_error = exc
+            _log_update(
+                f"Updater download PermissionError on attempt {attempt}: {exc}"
+            )
+        except Exception as exc:
+            last_error = exc
+            _log_update(f"Updater download failed on attempt {attempt}: {exc!r}")
+        if attempt < UPDATER_DOWNLOAD_RETRY_COUNT:
+            time.sleep(UPDATER_DOWNLOAD_RETRY_DELAY_SEC)
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("Updater download failed without captured error.")
+
+
 def _download_and_run_updater(
     url: str,
     *,
@@ -249,9 +288,7 @@ def _download_and_run_updater(
         raise RuntimeError("Updater must run from a packaged exe.")
     parsed = urllib.parse.urlparse(url)
     filename = Path(parsed.path).name or "LTS-Updater.exe"
-    target_path = Path(tempfile.gettempdir()) / filename
-    _log_update(f"Downloading updater: {url} -> {target_path}")
-    _download_file(url, target_path)
+    target_path = _download_updater_with_retry(url, filename)
     verified, actual_sha256 = verify_file_sha256(target_path, updater_sha256)
     if not verified:
         _log_update(
