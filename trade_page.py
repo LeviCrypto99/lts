@@ -117,6 +117,17 @@ TELEGRAM_REQUEST_TIMEOUT_SEC = 10
 TELEGRAM_POLL_LIMIT = 100
 TELEGRAM_POLL_ERROR_LOG_THROTTLE_SEC = 5
 TELEGRAM_START_SYNC_MAX_BATCHES = 300
+SIGNAL_SOURCE_MODE_ENV = "LTS_SIGNAL_SOURCE_MODE"
+SIGNAL_SOURCE_MODE_TELEGRAM = "telegram"
+SIGNAL_SOURCE_MODE_RELAY = "relay"
+SIGNAL_RELAY_BASE_URL_ENV = "LTS_SIGNAL_RELAY_BASE_URL"
+SIGNAL_RELAY_CLIENT_ID_ENV = "LTS_SIGNAL_RELAY_CLIENT_ID"
+SIGNAL_RELAY_TOKEN_ENV = "LTS_SIGNAL_RELAY_TOKEN"
+SIGNAL_RELAY_REQUEST_TIMEOUT_ENV = "LTS_SIGNAL_RELAY_REQUEST_TIMEOUT_SEC"
+SIGNAL_RELAY_POLL_LIMIT_ENV = "LTS_SIGNAL_RELAY_POLL_LIMIT"
+SIGNAL_RELAY_REQUEST_TIMEOUT_SEC = 5
+SIGNAL_RELAY_POLL_LIMIT = 100
+SIGNAL_RELAY_POLL_ERROR_LOG_THROTTLE_SEC = 5
 BINANCE_FUTURES_MARK_PRICE_STREAM_URL = "wss://fstream.binance.com/ws/!markPrice@arr@1s"
 WS_RECONNECT_BACKOFF_SEC = 3
 BINANCE_FUTURES_USER_STREAM_BASE_URL = "wss://fstream.binance.com/ws"
@@ -465,6 +476,26 @@ class TradePage(tk.Frame):
         self._telegram_bot_token = os.environ.get(TELEGRAM_BOT_TOKEN_ENV, "").strip()
         self._telegram_update_offset = 0
         self._telegram_last_poll_error_log_at = 0.0
+        self._signal_source_mode = self._resolve_signal_source_mode()
+        self._signal_relay_base_url = self._normalize_relay_base_url(
+            os.environ.get(SIGNAL_RELAY_BASE_URL_ENV, "")
+        )
+        self._signal_relay_token = os.environ.get(SIGNAL_RELAY_TOKEN_ENV, "").strip()
+        self._signal_relay_client_id = self._resolve_signal_relay_client_id()
+        self._signal_relay_update_offset = 0
+        self._signal_relay_request_timeout_sec = self._read_env_int_or_default(
+            SIGNAL_RELAY_REQUEST_TIMEOUT_ENV,
+            SIGNAL_RELAY_REQUEST_TIMEOUT_SEC,
+            minimum=1,
+            maximum=30,
+        )
+        self._signal_relay_poll_limit = self._read_env_int_or_default(
+            SIGNAL_RELAY_POLL_LIMIT_ENV,
+            SIGNAL_RELAY_POLL_LIMIT,
+            minimum=1,
+            maximum=500,
+        )
+        self._signal_relay_last_poll_error_log_at = 0.0
         self._last_monitor_snapshot = ""
         self._rate_limit_fail_streak = 0
         self._rate_limit_recover_streak = 0
@@ -530,8 +561,15 @@ class TradePage(tk.Frame):
         self._hydrate_auto_trade_state_from_disk()
         self._sync_orchestrator_runtime_from_recovery_state()
         _log_trade(
+            "Signal source configured: "
+            f"mode={self._signal_source_mode} "
+            f"relay_base_url={self._signal_relay_base_url or '-'} "
+            f"relay_client_id={self._signal_relay_client_id} "
+            f"relay_token_set={bool(self._signal_relay_token)}"
+        )
+        _log_trade(
             "Telegram receiver configured: "
-            f"enabled={bool(self._telegram_bot_token)} "
+            f"enabled={bool(self._telegram_bot_token and self._signal_source_mode == SIGNAL_SOURCE_MODE_TELEGRAM)} "
             f"channel_entry={self._auto_trade_settings.entry_signal_channel_id} "
             f"channel_risk={self._auto_trade_settings.risk_signal_channel_id}"
         )
@@ -931,9 +969,9 @@ class TradePage(tk.Frame):
             cleared_monitoring_queue_count=queue_count,
             loop_label="ui-start",
         )
-        telegram_synced_offset: Optional[int] = None
+        synced_offset: Optional[int] = None
         if result.success:
-            telegram_synced_offset = self._sync_telegram_update_offset_for_fresh_start()
+            synced_offset = self._sync_signal_source_offset_for_fresh_start()
 
         def apply_result() -> None:
             offset_sync_applied = False
@@ -943,16 +981,22 @@ class TradePage(tk.Frame):
                 self._auto_trade_state = result.state
                 self._auto_trade_starting = False
                 self._auto_trade_monitoring_queue.clear()
-                if result.success and telegram_synced_offset is not None:
-                    previous_offset = int(self._telegram_update_offset)
-                    updated_offset = max(previous_offset, int(telegram_synced_offset))
-                    self._telegram_update_offset = updated_offset
+                if result.success and synced_offset is not None:
+                    if self._signal_source_mode == SIGNAL_SOURCE_MODE_RELAY:
+                        previous_offset = int(self._signal_relay_update_offset)
+                        updated_offset = max(previous_offset, int(synced_offset))
+                        self._signal_relay_update_offset = updated_offset
+                    else:
+                        previous_offset = int(self._telegram_update_offset)
+                        updated_offset = max(previous_offset, int(synced_offset))
+                        self._telegram_update_offset = updated_offset
                     offset_sync_applied = True
                 self._sync_orchestrator_runtime_from_recovery_state_locked()
             if offset_sync_applied:
                 _log_trade(
-                    "Telegram offset updated for fresh start: "
-                    f"previous_offset={previous_offset} updated_offset={updated_offset}"
+                    "Signal source offset updated for fresh start: "
+                    f"source={self._signal_source_mode} previous_offset={previous_offset} "
+                    f"updated_offset={updated_offset}"
                 )
             self._set_trade_state("start" if result.success else "stop")
             if result.success:
@@ -1452,6 +1496,141 @@ class TradePage(tk.Frame):
             return False
         mark_price = self._safe_float(payload.get("markPrice"))
         return mark_price is not None and mark_price > 0.0
+
+    @staticmethod
+    def _read_env_int_or_default(
+        key: str,
+        default: int,
+        *,
+        minimum: Optional[int] = None,
+        maximum: Optional[int] = None,
+    ) -> int:
+        raw = os.environ.get(key)
+        if raw is None:
+            _log_trade(f"Signal relay config default used: key={key} value={default} reason=missing")
+            return default
+        try:
+            value = int(raw)
+        except ValueError:
+            _log_trade(f"Signal relay config default used: key={key} value={default} reason=invalid_int raw={raw!r}")
+            return default
+        if minimum is not None and value < minimum:
+            _log_trade(
+                "Signal relay config default used: "
+                f"key={key} value={default} reason=below_minimum raw={value} minimum={minimum}"
+            )
+            return default
+        if maximum is not None and value > maximum:
+            _log_trade(
+                "Signal relay config default used: "
+                f"key={key} value={default} reason=above_maximum raw={value} maximum={maximum}"
+            )
+            return default
+        _log_trade(f"Signal relay config loaded: key={key} value={value}")
+        return value
+
+    @staticmethod
+    def _normalize_relay_base_url(value: str) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        return text.rstrip("/")
+
+    def _resolve_signal_source_mode(self) -> str:
+        requested = str(os.environ.get(SIGNAL_SOURCE_MODE_ENV, "") or "").strip().lower()
+        if requested in (SIGNAL_SOURCE_MODE_RELAY, SIGNAL_SOURCE_MODE_TELEGRAM):
+            _log_trade(f"Signal source mode loaded from env: mode={requested}")
+            return requested
+        relay_base_url = self._normalize_relay_base_url(os.environ.get(SIGNAL_RELAY_BASE_URL_ENV, ""))
+        if relay_base_url:
+            _log_trade(
+                "Signal source mode selected: "
+                f"mode={SIGNAL_SOURCE_MODE_RELAY} reason=relay_base_url_present"
+            )
+            return SIGNAL_SOURCE_MODE_RELAY
+        _log_trade(
+            "Signal source mode selected: "
+            f"mode={SIGNAL_SOURCE_MODE_TELEGRAM} reason=default_fallback"
+        )
+        return SIGNAL_SOURCE_MODE_TELEGRAM
+
+    def _resolve_signal_relay_client_id(self) -> str:
+        from_env = str(os.environ.get(SIGNAL_RELAY_CLIENT_ID_ENV, "") or "").strip()
+        if from_env:
+            return from_env
+        api_key = str(self._api_key or "").strip()
+        if api_key:
+            return f"api-{hashlib.sha256(api_key.encode('utf-8')).hexdigest()[:12]}"
+        return "anonymous-client"
+
+    def _build_signal_relay_headers(self) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        token = str(self._signal_relay_token or "").strip()
+        if token:
+            headers["X-LTS-Relay-Token"] = token
+        return headers
+
+    def _sync_signal_source_offset_for_fresh_start(self) -> Optional[int]:
+        if self._signal_source_mode == SIGNAL_SOURCE_MODE_RELAY:
+            return self._sync_signal_relay_offset_for_fresh_start()
+        return self._sync_telegram_update_offset_for_fresh_start()
+
+    def _sync_signal_relay_offset_for_fresh_start(self) -> Optional[int]:
+        relay_base_url = self._normalize_relay_base_url(self._signal_relay_base_url)
+        baseline_offset = max(0, int(self._signal_relay_update_offset))
+        if not relay_base_url:
+            _log_trade("Signal relay start-sync skipped: relay_base_url_missing.")
+            return baseline_offset
+
+        endpoint = f"{relay_base_url}/api/v1/offset/latest"
+        _log_trade(
+            "Signal relay start-sync begin: "
+            f"baseline_offset={baseline_offset} endpoint={endpoint}"
+        )
+        try:
+            response = requests.get(
+                endpoint,
+                headers=self._build_signal_relay_headers(),
+                timeout=self._signal_relay_request_timeout_sec,
+            )
+        except requests.RequestException as exc:
+            _log_trade(
+                "Signal relay start-sync failed: "
+                f"reason=request_exception error={exc!r} endpoint={endpoint}"
+            )
+            return baseline_offset
+
+        if int(response.status_code) != 200:
+            _log_trade(
+                "Signal relay start-sync failed: "
+                f"reason=http_status_{response.status_code} endpoint={endpoint}"
+            )
+            return baseline_offset
+
+        try:
+            payload = response.json()
+        except ValueError:
+            _log_trade(
+                "Signal relay start-sync failed: "
+                f"reason=invalid_json endpoint={endpoint} body={_trim_text(response.text, 200)!r}"
+            )
+            return baseline_offset
+
+        if not isinstance(payload, dict):
+            _log_trade(
+                "Signal relay start-sync failed: "
+                f"reason=invalid_payload_type endpoint={endpoint} payload_type={type(payload).__name__}"
+            )
+            return baseline_offset
+
+        latest_event_id = self._safe_int(payload.get("latest_event_id")) or 0
+        synced_offset = max(baseline_offset, int(latest_event_id))
+        _log_trade(
+            "Signal relay start-sync done: "
+            f"baseline_offset={baseline_offset} synced_offset={synced_offset} "
+            f"latest_event_id={latest_event_id}"
+        )
+        return synced_offset
 
     def _sync_telegram_update_offset_for_fresh_start(self) -> Optional[int]:
         token = (self._telegram_bot_token or "").strip()
@@ -2275,7 +2454,7 @@ class TradePage(tk.Frame):
         _log_trade("Signal loop worker exited.")
 
     def _signal_loop_tick(self) -> None:
-        self._poll_telegram_bot_updates()
+        self._poll_signal_source_updates()
         self._poll_signal_inbox_file()
         open_orders, positions = self._fetch_loop_account_snapshot(
             loop_label="signal-loop-pre-sync-snapshot",
@@ -2608,7 +2787,155 @@ class TradePage(tk.Frame):
         )
         self._layout()
 
+    def _poll_signal_source_updates(self) -> None:
+        if self._signal_source_mode == SIGNAL_SOURCE_MODE_RELAY:
+            self._poll_signal_relay_updates()
+            return
+        self._poll_telegram_bot_updates()
+
+    def _poll_signal_relay_updates(self) -> None:
+        relay_base_url = self._normalize_relay_base_url(self._signal_relay_base_url)
+        if not relay_base_url:
+            now = time.time()
+            if now - self._signal_relay_last_poll_error_log_at >= SIGNAL_RELAY_POLL_ERROR_LOG_THROTTLE_SEC:
+                self._signal_relay_last_poll_error_log_at = now
+                _log_trade("Signal relay poll skipped: reason=relay_base_url_missing.")
+            return
+
+        with self._auto_trade_runtime_lock:
+            runtime = self._orchestrator_runtime
+            entry_channel_id = int(runtime.settings.entry_signal_channel_id)
+            risk_channel_id = int(runtime.settings.risk_signal_channel_id)
+        allowed_channel_ids = {entry_channel_id, risk_channel_id}
+
+        endpoint = f"{relay_base_url}/api/v1/signals"
+        previous_offset = max(0, int(self._signal_relay_update_offset))
+        params = {
+            "after_id": previous_offset,
+            "limit": max(1, int(self._signal_relay_poll_limit)),
+            "client_id": self._signal_relay_client_id,
+        }
+        try:
+            response = requests.get(
+                endpoint,
+                params=params,
+                headers=self._build_signal_relay_headers(),
+                timeout=self._signal_relay_request_timeout_sec,
+            )
+        except requests.RequestException as exc:
+            now = time.time()
+            if now - self._signal_relay_last_poll_error_log_at >= SIGNAL_RELAY_POLL_ERROR_LOG_THROTTLE_SEC:
+                self._signal_relay_last_poll_error_log_at = now
+                _log_trade(
+                    "Signal relay poll failed: "
+                    f"reason=request_exception error={exc!r} endpoint={endpoint}"
+                )
+            return
+
+        if int(response.status_code) != 200:
+            now = time.time()
+            if now - self._signal_relay_last_poll_error_log_at >= SIGNAL_RELAY_POLL_ERROR_LOG_THROTTLE_SEC:
+                self._signal_relay_last_poll_error_log_at = now
+                _log_trade(
+                    "Signal relay poll failed: "
+                    f"reason=http_status_{response.status_code} endpoint={endpoint}"
+                )
+            return
+
+        try:
+            payload = response.json()
+        except ValueError:
+            now = time.time()
+            if now - self._signal_relay_last_poll_error_log_at >= SIGNAL_RELAY_POLL_ERROR_LOG_THROTTLE_SEC:
+                self._signal_relay_last_poll_error_log_at = now
+                _log_trade(
+                    "Signal relay poll failed: "
+                    f"reason=invalid_json endpoint={endpoint} body={_trim_text(response.text, 200)!r}"
+                )
+            return
+
+        if not isinstance(payload, dict):
+            now = time.time()
+            if now - self._signal_relay_last_poll_error_log_at >= SIGNAL_RELAY_POLL_ERROR_LOG_THROTTLE_SEC:
+                self._signal_relay_last_poll_error_log_at = now
+                _log_trade(
+                    "Signal relay poll failed: "
+                    f"reason=invalid_payload_type endpoint={endpoint} payload_type={type(payload).__name__}"
+                )
+            return
+
+        if payload.get("ok") is not True:
+            now = time.time()
+            if now - self._signal_relay_last_poll_error_log_at >= SIGNAL_RELAY_POLL_ERROR_LOG_THROTTLE_SEC:
+                self._signal_relay_last_poll_error_log_at = now
+                _log_trade(
+                    "Signal relay poll failed: "
+                    f"reason=relay_not_ok endpoint={endpoint} payload={payload!r}"
+                )
+            return
+
+        raw_events = payload.get("events")
+        if not isinstance(raw_events, list):
+            now = time.time()
+            if now - self._signal_relay_last_poll_error_log_at >= SIGNAL_RELAY_POLL_ERROR_LOG_THROTTLE_SEC:
+                self._signal_relay_last_poll_error_log_at = now
+                _log_trade(
+                    "Signal relay poll failed: "
+                    f"reason=invalid_events_type endpoint={endpoint} events_type={type(raw_events).__name__}"
+                )
+            return
+
+        next_after_id = max(0, self._safe_int(payload.get("next_after_id")))
+        latest_event_id = max(0, self._safe_int(payload.get("latest_event_id")))
+        accepted_count = 0
+        skipped_count = 0
+        max_event_id_seen = previous_offset
+
+        for raw_event in raw_events:
+            if not isinstance(raw_event, dict):
+                skipped_count += 1
+                continue
+            event_id = max(0, self._safe_int(raw_event.get("event_id")))
+            if event_id > max_event_id_seen:
+                max_event_id_seen = event_id
+            channel_id = self._safe_int(raw_event.get("channel_id"))
+            if channel_id not in allowed_channel_ids:
+                skipped_count += 1
+                continue
+            message_id = self._safe_int(raw_event.get("message_id"))
+            if message_id <= 0:
+                skipped_count += 1
+                continue
+            message_text = str(raw_event.get("message_text") or "").strip()
+            if not message_text:
+                skipped_count += 1
+                continue
+            received_at_local = self._safe_int(raw_event.get("received_at_local")) or int(time.time())
+            self._enqueue_signal_event(
+                {
+                    "channel_id": int(channel_id),
+                    "message_id": int(message_id),
+                    "message_text": message_text,
+                    "received_at_local": int(received_at_local),
+                }
+            )
+            accepted_count += 1
+
+        synced_offset = max(previous_offset, next_after_id, latest_event_id, max_event_id_seen)
+        if synced_offset > previous_offset:
+            self._signal_relay_update_offset = synced_offset
+
+        if accepted_count > 0 or skipped_count > 0:
+            _log_trade(
+                "Signal relay poll success: "
+                f"events={len(raw_events)} accepted={accepted_count} skipped={skipped_count} "
+                f"previous_offset={previous_offset} synced_offset={self._signal_relay_update_offset} "
+                f"next_after_id={next_after_id} latest_event_id={latest_event_id}"
+            )
+
     def _poll_telegram_bot_updates(self) -> None:
+        if self._signal_source_mode != SIGNAL_SOURCE_MODE_TELEGRAM:
+            return
         if not self._telegram_bot_token:
             return
         with self._auto_trade_runtime_lock:
