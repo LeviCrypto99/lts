@@ -17,6 +17,7 @@ from tkinter import font as tkfont, messagebox, ttk
 from typing import Any, Callable, Dict, Mapping, Optional, Tuple
 
 import requests
+import config
 
 from PIL import Image, ImageDraw, ImageTk
 from auto_trade import (
@@ -476,11 +477,9 @@ class TradePage(tk.Frame):
         self._telegram_bot_token = os.environ.get(TELEGRAM_BOT_TOKEN_ENV, "").strip()
         self._telegram_update_offset = 0
         self._telegram_last_poll_error_log_at = 0.0
+        self._signal_relay_base_url = self._resolve_signal_relay_base_url()
+        self._signal_relay_token = self._resolve_signal_relay_token()
         self._signal_source_mode = self._resolve_signal_source_mode()
-        self._signal_relay_base_url = self._normalize_relay_base_url(
-            os.environ.get(SIGNAL_RELAY_BASE_URL_ENV, "")
-        )
-        self._signal_relay_token = os.environ.get(SIGNAL_RELAY_TOKEN_ENV, "").strip()
         self._signal_relay_client_id = self._resolve_signal_relay_client_id()
         self._signal_relay_update_offset = 0
         self._signal_relay_request_timeout_sec = self._read_env_int_or_default(
@@ -1536,13 +1535,71 @@ class TradePage(tk.Frame):
             return ""
         return text.rstrip("/")
 
+    def _resolve_signal_relay_base_url(self) -> str:
+        from_env = self._normalize_relay_base_url(os.environ.get(SIGNAL_RELAY_BASE_URL_ENV, ""))
+        if from_env:
+            _log_trade(
+                "Signal relay base URL loaded: "
+                f"source=env key={SIGNAL_RELAY_BASE_URL_ENV} value={from_env}"
+            )
+            return from_env
+
+        from_config = self._normalize_relay_base_url(getattr(config, "SIGNAL_RELAY_BASE_URL_DEFAULT", ""))
+        if from_config:
+            _log_trade(
+                "Signal relay base URL loaded: "
+                "source=config key=SIGNAL_RELAY_BASE_URL_DEFAULT "
+                f"value={from_config}"
+            )
+            return from_config
+
+        _log_trade(
+            "Signal relay base URL missing: "
+            f"env_key={SIGNAL_RELAY_BASE_URL_ENV} config_key=SIGNAL_RELAY_BASE_URL_DEFAULT"
+        )
+        return ""
+
+    def _resolve_signal_relay_token(self) -> str:
+        from_env = str(os.environ.get(SIGNAL_RELAY_TOKEN_ENV, "") or "").strip()
+        if from_env:
+            _log_trade(
+                "Signal relay token loaded: "
+                f"source=env key={SIGNAL_RELAY_TOKEN_ENV} token_set={bool(from_env)}"
+            )
+            return from_env
+
+        from_config = str(getattr(config, "SIGNAL_RELAY_TOKEN_DEFAULT", "") or "").strip()
+        if from_config:
+            _log_trade(
+                "Signal relay token loaded: "
+                "source=config key=SIGNAL_RELAY_TOKEN_DEFAULT token_set=True"
+            )
+            return from_config
+
+        _log_trade(
+            "Signal relay token missing: "
+            f"env_key={SIGNAL_RELAY_TOKEN_ENV} config_key=SIGNAL_RELAY_TOKEN_DEFAULT"
+        )
+        return ""
+
     def _resolve_signal_source_mode(self) -> str:
         requested = str(os.environ.get(SIGNAL_SOURCE_MODE_ENV, "") or "").strip().lower()
         if requested in (SIGNAL_SOURCE_MODE_RELAY, SIGNAL_SOURCE_MODE_TELEGRAM):
             _log_trade(f"Signal source mode loaded from env: mode={requested}")
             return requested
-        relay_base_url = self._normalize_relay_base_url(os.environ.get(SIGNAL_RELAY_BASE_URL_ENV, ""))
-        if relay_base_url:
+
+        from_config = str(getattr(config, "SIGNAL_SOURCE_MODE_DEFAULT", "") or "").strip().lower()
+        if from_config in (SIGNAL_SOURCE_MODE_RELAY, SIGNAL_SOURCE_MODE_TELEGRAM):
+            if from_config == SIGNAL_SOURCE_MODE_RELAY and not self._signal_relay_base_url:
+                _log_trade(
+                    "Signal source mode warning: "
+                    f"requested={SIGNAL_SOURCE_MODE_RELAY} source=config "
+                    "reason=relay_base_url_missing"
+                )
+            _log_trade(f"Signal source mode loaded from config: mode={from_config}")
+            return from_config
+
+        if self._signal_relay_base_url:
             _log_trade(
                 "Signal source mode selected: "
                 f"mode={SIGNAL_SOURCE_MODE_RELAY} reason=relay_base_url_present"
