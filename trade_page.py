@@ -496,6 +496,7 @@ class TradePage(tk.Frame):
         )
         self._signal_relay_last_poll_error_log_at = 0.0
         self._last_monitor_snapshot = ""
+        self._last_auto_trade_status_snapshot = ""
         self._rate_limit_fail_streak = 0
         self._rate_limit_recover_streak = 0
         self._auth_error_recover_streak = 0
@@ -851,6 +852,19 @@ class TradePage(tk.Frame):
             _log_trade(f"Confirmation dialog failed: title={title} error={exc!r} default=False")
             return False
 
+    def _show_info_message(self, *, title: str, message: str) -> None:
+        showinfo = getattr(messagebox, "showinfo", None)
+        if not callable(showinfo):
+            _log_trade(
+                "Info dialog unavailable: "
+                f"title={title} reason=showinfo_not_callable"
+            )
+            return
+        try:
+            showinfo(title, message, parent=self)
+        except tk.TclError as exc:
+            _log_trade(f"Info dialog failed: title={title} error={exc!r}")
+
     def _build_start_confirmation_message(self) -> str:
         settings = self._saved_filter_settings or self._default_filter_settings()
         mdd_value = str(settings.get("mdd") or "N%")
@@ -887,6 +901,17 @@ class TradePage(tk.Frame):
         return pending_count, queue_count
 
     def _handle_start_click(self, _event=None) -> None:
+        with self._auto_trade_runtime_lock:
+            already_running = bool(self._auto_trade_starting or self._auto_trade_state.signal_loop_running)
+        if self._trade_state == "start" or already_running:
+            _log_trade(
+                "Auto-trade start ignored: "
+                f"reason=already_running trade_state={self._trade_state} "
+                f"signal_loop_running={self._auto_trade_state.signal_loop_running} "
+                f"auto_trade_starting={self._auto_trade_starting}"
+            )
+            self._show_info_message(title="자동매매 안내", message="이미 실행중입니다.")
+            return
         message = self._build_start_confirmation_message()
         _log_trade(
             "Auto-trade start confirmation opened: "
@@ -911,6 +936,10 @@ class TradePage(tk.Frame):
                 "Auto-trade stop ignored: "
                 "reason=already_stopped trade_state=stop signal_loop_running=False"
             )
+            self._show_info_message(
+                title="자동매매 안내",
+                message="자동매매가 현재 중지상태 입니다.",
+            )
             return
 
         _log_trade(
@@ -924,7 +953,9 @@ class TradePage(tk.Frame):
         if not confirmed:
             _log_trade("Auto-trade stop canceled by user.")
             return
+        signal_loop_stopped = self._stop_signal_loop_thread()
         pending_count, queue_count = self._clear_monitoring_targets_for_stop()
+        dropped_events = self._clear_signal_event_queue_for_stop(loop_label="ui-stop")
 
         with self._auto_trade_runtime_lock:
             transition = stop_signal_loop_with_logging(
@@ -935,13 +966,14 @@ class TradePage(tk.Frame):
             self._auto_trade_starting = False
             self._sync_orchestrator_runtime_from_recovery_state_locked()
         self._set_trade_state("stop")
-        self._stop_signal_loop_thread()
         self._persist_auto_trade_runtime()
         _log_trade(
             "Auto-trade stop requested: "
             f"reason={transition.reason_code} recovery_locked={transition.current.recovery_locked} "
             f"signal_loop_paused={transition.current.signal_loop_paused} "
-            f"cleared_pending_monitoring={pending_count} cleared_monitor_queue={queue_count}"
+            f"signal_loop_stopped={signal_loop_stopped} "
+            f"cleared_pending_monitoring={pending_count} cleared_monitor_queue={queue_count} "
+            f"dropped_signal_events={dropped_events}"
         )
 
     def _request_auto_trade_startup(self) -> None:
@@ -1896,7 +1928,7 @@ class TradePage(tk.Frame):
             self._start_user_stream_thread_locked()
         _log_trade("Signal loop thread started.")
 
-    def _stop_signal_loop_thread(self) -> None:
+    def _stop_signal_loop_thread(self) -> bool:
         self._signal_loop_stop.set()
         self._ws_loop_stop.set()
         self._user_stream_stop.set()
@@ -1904,6 +1936,20 @@ class TradePage(tk.Frame):
             self._user_stream_connected = False
             self._user_stream_last_activity_at = 0.0
         _log_trade("Signal loop stop requested.")
+        thread = self._signal_loop_thread
+        if thread is not None and thread.is_alive() and threading.current_thread() is not thread:
+            timeout_sec = 12.0
+            deadline = time.time() + timeout_sec
+            while thread.is_alive() and time.time() < deadline:
+                thread.join(timeout=0.2)
+            if thread.is_alive():
+                _log_trade(
+                    "Signal loop stop wait timeout: "
+                    f"reason=thread_still_alive timeout_sec={timeout_sec:.1f}"
+                )
+                return False
+            _log_trade("Signal loop thread joined.")
+        return True
 
     def _start_ws_price_thread_locked(self) -> None:
         thread = self._ws_loop_thread
@@ -2490,6 +2536,17 @@ class TradePage(tk.Frame):
                 self._signal_event_queue.clear()
         _log_trade(
             "Fresh-start signal queue reset: "
+            f"dropped_events={dropped_count} loop={loop_label}"
+        )
+        return dropped_count
+
+    def _clear_signal_event_queue_for_stop(self, *, loop_label: str) -> int:
+        with self._signal_queue_lock:
+            dropped_count = len(self._signal_event_queue)
+            if dropped_count:
+                self._signal_event_queue.clear()
+        _log_trade(
+            "Stop signal queue reset: "
             f"dropped_events={dropped_count} loop={loop_label}"
         )
         return dropped_count
@@ -6930,11 +6987,14 @@ class TradePage(tk.Frame):
         line_height = max(line_font.metrics("linespace"), value_line_font.metrics("linespace"))
         line_gap = WALLET_SETTINGS_LINE_GAP * scale
         cursor_y = text_y + line_height + line_gap
+        auto_trade_status_text = self._current_auto_trade_status_text()
+        self._log_auto_trade_status_snapshot_if_changed(auto_trade_status_text)
 
         lines = [
             ("MDD :", settings.get("mdd") or "N%"),
             ("TP-Ratio :", settings.get("tp_ratio") or "N%"),
             ("필터링 성향 :", settings.get("risk_filter") or "보수적/공격적"),
+            ("현재 자동매매 상태 :", auto_trade_status_text),
         ]
 
         for label_text, value_text in lines:
@@ -6963,6 +7023,18 @@ class TradePage(tk.Frame):
             cursor_y += line_height + line_gap
 
         self._draw_trade_buttons(scale, pad_x, pad_y)
+
+    def _current_auto_trade_status_text(self) -> str:
+        with self._auto_trade_runtime_lock:
+            running = bool(self._auto_trade_starting or self._auto_trade_state.signal_loop_running)
+        return "🚀실행중" if running else "❌중단됨"
+
+    def _log_auto_trade_status_snapshot_if_changed(self, status_text: str) -> None:
+        normalized = str(status_text or "").strip()
+        if normalized == self._last_auto_trade_status_snapshot:
+            return
+        self._last_auto_trade_status_snapshot = normalized
+        _log_trade(f"Wallet auto-trade status refreshed: status={normalized}")
 
     def _draw_trade_buttons(self, scale: float, pad_x: float, pad_y: float) -> None:
         self._draw_rounded_button(
