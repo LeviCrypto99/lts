@@ -10,6 +10,8 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
+from log_rotation import append_rotating_log_line
+from runtime_paths import get_log_path
 from update_security import extract_sha256_from_metadata, normalize_sha256, verify_file_sha256
 
 try:
@@ -18,16 +20,20 @@ except ModuleNotFoundError:
     Tk = None
     messagebox = None
 
-LOG_PATH = Path(tempfile.gettempdir()) / "LTS-Updater.log"
+LOG_PATH = get_log_path("LTS-Updater.log")
 
 
 def _log_update(message: str) -> None:
     try:
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        with open(LOG_PATH, "a", encoding="utf-8") as handle:
-            handle.write(f"[{timestamp}] {message}\n")
+        append_rotating_log_line(LOG_PATH, f"[{timestamp}] {message}\n")
     except Exception:
         pass
+
+
+def _set_log_path_for_target(target_path: Path) -> None:
+    global LOG_PATH
+    LOG_PATH = get_log_path("LTS-Updater.log", target_executable=target_path)
 
 
 def _show_error(message: str) -> None:
@@ -202,6 +208,8 @@ def main() -> int:
     args = parser.parse_args()
 
     target_path = Path(args.target).resolve()
+    _set_log_path_for_target(target_path)
+    _log_update(f"Updater log path resolved: {LOG_PATH}")
     _log_update(f"Start updater: target={target_path} version_url={args.version_url}")
     if not target_path.exists():
         _log_update("Target exe not found.")

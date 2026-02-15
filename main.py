@@ -26,6 +26,8 @@ except ModuleNotFoundError as exc:
 
 import config
 from exit import ExitManager
+from log_rotation import append_rotating_log_line
+from runtime_paths import get_log_path
 from update_security import extract_sha256_from_metadata, verify_file_sha256
 
 try:
@@ -70,8 +72,8 @@ HOLD_AFTER_LOGO2_MS = 2000
 FPS = 60
 START_OFFSET = 60
 SINGLE_INSTANCE_MUTEX_NAME = "Local\\LeviaAutoTradeSystem_Launcher"
-LOG_PATH = Path(tempfile.gettempdir()) / "LTS-Launcher-update.log"
-LOCAL_LOG_PATH = Path(__file__).resolve().parent / "LTS-Launcher-startup.log"
+LOG_PATH = get_log_path("LTS-Launcher-update.log")
+LOCAL_LOG_PATH = get_log_path("LTS-Launcher-startup.log")
 SINGLE_INSTANCE_LOCK_PATH = Path(tempfile.gettempdir()) / "LTS-Launcher.lock"
 UPDATER_DOWNLOAD_RETRY_COUNT = 3
 UPDATER_DOWNLOAD_RETRY_DELAY_SEC = 0.8
@@ -107,8 +109,7 @@ def _log_update(message: str) -> None:
         line = f"[{timestamp}] {message}\n"
         for path in (LOG_PATH, LOCAL_LOG_PATH):
             try:
-                with open(path, "a", encoding="utf-8") as handle:
-                    handle.write(line)
+                append_rotating_log_line(path, line)
             except Exception:
                 pass
     except Exception:
@@ -356,9 +357,11 @@ class SplashApp:
     def __init__(self) -> None:
         self._latest_version = ""
         self._exit_manager: Optional[ExitManager] = None
+        self._window_icon_photo: Optional[tk.PhotoImage] = None
         self.root = tk.Tk()
         self.root.title("LeviaAutoTradeSystem")
         self.root.configure(bg="white")
+        self._apply_program_icon()
         self.root.withdraw()
         self._should_run = self._preflight_or_exit()
         if not self._should_run and not getattr(sys, "frozen", False):
@@ -372,6 +375,18 @@ class SplashApp:
         self.root.deiconify()
 
         self._setup_ui()
+
+    def _apply_program_icon(self) -> None:
+        icon_path = Path(__file__).resolve().parent / "image" / "login_page" / "logo2.png"
+        if not icon_path.exists():
+            _log_update(f"Program icon apply skipped: icon_path_missing={icon_path}")
+            return
+        try:
+            self._window_icon_photo = tk.PhotoImage(file=str(icon_path))
+            self.root.iconphoto(True, self._window_icon_photo)
+            _log_update(f"Program icon applied from tray icon source: {icon_path}")
+        except Exception as exc:
+            _log_update(f"Program icon apply failed: icon_path={icon_path} error={exc!r}")
 
     def _setup_ui(self) -> None:
         screen_w = self.root.winfo_screenwidth()

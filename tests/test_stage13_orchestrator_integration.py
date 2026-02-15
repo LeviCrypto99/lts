@@ -95,6 +95,36 @@ class OrchestratorIntegrationTests(unittest.TestCase):
         self.assertEqual(updated.cooldown_by_symbol["BTCUSDT"], 1_000)
         self.assertEqual(updated.message_id_by_symbol["BTCUSDT"], 101)
 
+    @patch("auto_trade.orchestrator.time.time", return_value=2.0)
+    def test_leading_signal_target_uses_processing_time_when_received_time_is_stale(
+        self,
+        _mocked_time,
+    ) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+        )
+        candles = [
+            {"timestamp": 100, "close_time": 500, "high": 100.0, "low": 90.0, "close": 95.0},
+            {"timestamp": 600, "close_time": 1000, "high": 110.0, "low": 92.0, "close": 101.0},
+            {"timestamp": 1100, "close_time": 1500, "high": 120.0, "low": 93.0, "close": 111.0},
+        ]
+        updated, result = handle_leading_market_signal(
+            runtime,
+            channel_id=runtime.settings.entry_signal_channel_id,
+            message_id=102,
+            message_text=_leading_message_text(),
+            received_at_local=1,
+            exchange_info=_exchange_info(),
+            candles=candles,
+            entry_mode="AGGRESSIVE",
+            loop_label="stage13-leading-stale-received-at",
+        )
+        self.assertTrue(result.accepted)
+        self.assertIn("BTCUSDT", updated.pending_trigger_candidates)
+        self.assertEqual(updated.pending_trigger_candidates["BTCUSDT"].target_price, 120.0)
+
     def test_trigger_cycle_submits_first_entry_and_locks_entry(self) -> None:
         runtime = AutoTradeRuntime(
             settings=_default_settings(),

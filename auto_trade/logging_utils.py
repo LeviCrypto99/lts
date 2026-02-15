@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import tempfile
-import threading
 import time
-from pathlib import Path
 from typing import Any
 
-AUTO_TRADE_LOG_PATH = Path(tempfile.gettempdir()) / "LTS-AutoTrade.log"
-_LOG_LOCK = threading.Lock()
+from log_rotation import append_rotating_log_line
+from runtime_paths import get_log_path
+
+AUTO_TRADE_LOG_PATH = get_log_path("LTS-AutoTrade.log")
 
 
 def _normalize_value(value: Any) -> str:
@@ -19,9 +18,7 @@ def write_auto_trade_log_line(message: str) -> None:
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     line = f"[{timestamp}] {message}\n"
     try:
-        with _LOG_LOCK:
-            with open(AUTO_TRADE_LOG_PATH, "a", encoding="utf-8") as handle:
-                handle.write(line)
+        append_rotating_log_line(AUTO_TRADE_LOG_PATH, line)
     except Exception:
         # Logging must never break runtime flow.
         pass

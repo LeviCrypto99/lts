@@ -5,8 +5,18 @@ import sys
 import threading
 import types
 import unittest
+from unittest.mock import patch
 
-from auto_trade import AutoTradeRuntime, AutoTradeSettings, ExitReconcilePlan, GlobalState, SymbolFilterRules
+from auto_trade import (
+    AutoTradeRuntime,
+    AutoTradeSettings,
+    ExitReconcilePlan,
+    GatewayCallResult,
+    GatewayRetryResult,
+    GlobalState,
+    SymbolFilterRules,
+    TriggerCandidate,
+)
 
 
 def _default_settings() -> AutoTradeSettings:
@@ -92,7 +102,15 @@ def _make_trade_page_stub(runtime: AutoTradeRuntime | None = None) -> TradePage:
     page._auto_trade_runtime_lock = threading.Lock()
     page._signal_queue_lock = threading.Lock()
     page._signal_event_queue = []
+    page._signal_source_mode = trade_page.SIGNAL_SOURCE_MODE_TELEGRAM
+    page._entry_order_ref_by_symbol = {}
+    page._second_entry_skip_latch = set()
     page._second_entry_fully_filled_symbols = set()
+    page._last_open_exit_order_ids_by_symbol = {}
+    page._oco_last_filled_exit_order_by_symbol = {}
+    page._pending_oco_retry_symbols = set()
+    page._position_zero_confirm_streak_by_symbol = {}
+    page._tp_trigger_submit_guard_by_symbol = {}
     page._saved_filter_settings = {"mdd": "15%", "tp_ratio": "5%"}
     page._default_filter_settings = lambda: {"mdd": "15%", "tp_ratio": "5%"}
     if runtime is None:
@@ -106,9 +124,9 @@ def _make_trade_page_stub(runtime: AutoTradeRuntime | None = None) -> TradePage:
 
 
 class TradePageRegressionTests(unittest.TestCase):
-    def test_tp_ratio_options_exclude_half_percent(self) -> None:
-        self.assertNotIn("0.5%", trade_page.TP_RATIO_OPTIONS)
-        self.assertEqual(trade_page.TP_RATIO_OPTIONS, ["3%", "5%"])
+    def test_tp_ratio_options_include_half_percent(self) -> None:
+        self.assertIn("0.5%", trade_page.TP_RATIO_OPTIONS)
+        self.assertEqual(trade_page.TP_RATIO_OPTIONS, ["0.5%", "3%", "5%"])
 
     def test_normalize_open_order_row_uses_trigger_price_when_stop_price_zero(self) -> None:
         row = TradePage._normalize_open_order_row(
@@ -127,6 +145,28 @@ class TradePageRegressionTests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertAlmostEqual(float(row.get("stopPrice") or 0.0), 19.786, places=9)
         self.assertEqual(row.get("_stop_price_source"), "triggerPrice")
+
+    def test_normalize_open_order_row_maps_algo_order_type_and_status_fields(self) -> None:
+        row = TradePage._normalize_open_order_row(
+            {
+                "symbol": "RIVERUSDT",
+                "algoId": 555123,
+                "algoStatus": "NEW",
+                "orderType": "TAKE_PROFIT",
+                "side": "BUY",
+                "quantity": "15.8",
+                "price": "17.55",
+                "triggerPrice": "17.786",
+            },
+            is_algo_order=True,
+        )
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row.get("orderId"), 555123)
+        self.assertEqual(row.get("status"), "NEW")
+        self.assertEqual(row.get("type"), "TAKE_PROFIT")
+        self.assertEqual(row.get("_type_source"), "orderType")
+        self.assertAlmostEqual(float(row.get("origQty") or 0.0), 15.8, places=9)
 
     def test_phase1_tp_target_uses_three_percent_ratio_when_selected(self) -> None:
         runtime = AutoTradeRuntime(
@@ -160,6 +200,229 @@ class TradePageRegressionTests(unittest.TestCase):
 
         self.assertEqual(submitted.get("symbol"), "BTCUSDT")
         self.assertAlmostEqual(float(submitted.get("target_price_override") or 0.0), 103.0, places=9)
+
+    def test_phase1_tp_target_and_trigger_use_half_percent_ratio_when_selected(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE1",
+        )
+        page = _make_trade_page_stub(runtime)
+        page._saved_filter_settings = {"mdd": "15%", "tp_ratio": "0.5%", "risk_filter": "보수적"}
+        page._default_filter_settings = lambda: {"mdd": "15%", "tp_ratio": "0.5%", "risk_filter": "보수적"}
+        page._get_symbol_filter_rule = lambda _symbol: SymbolFilterRules(
+            tick_size=0.1,
+            step_size=0.001,
+            min_qty=0.001,
+            min_notional=5.0,
+        )
+        submitted: dict[str, object] = {}
+        page._submit_tp_limit_once = lambda **kwargs: submitted.update(kwargs) or True
+
+        positions = [
+            {"symbol": "BTCUSDT", "positionAmt": "-1.0", "entryPrice": "100", "markPrice": "99.7"},
+        ]
+        _ = page._enforce_phase_exit_policy(
+            runtime,
+            symbol="BTCUSDT",
+            open_orders=[],
+            positions=positions,
+            loop_label="stage15-half-percent-tp",
+        )
+
+        self.assertEqual(submitted.get("symbol"), "BTCUSDT")
+        self.assertAlmostEqual(float(submitted.get("target_price_override") or 0.0), 99.5, places=9)
+        self.assertAlmostEqual(float(submitted.get("trigger_price_override") or 0.0), 99.6, places=9)
+
+    def test_phase1_tp_trigger_guard_blocks_duplicate_submit_with_same_params(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE1",
+        )
+        page = _make_trade_page_stub(runtime)
+        page._saved_filter_settings = {"mdd": "15%", "tp_ratio": "0.5%", "risk_filter": "보수적"}
+        page._default_filter_settings = lambda: {"mdd": "15%", "tp_ratio": "0.5%", "risk_filter": "보수적"}
+        page._get_symbol_filter_rule = lambda _symbol: SymbolFilterRules(
+            tick_size=0.1,
+            step_size=0.001,
+            min_qty=0.001,
+            min_notional=5.0,
+        )
+        submit_counter = {"count": 0}
+
+        def _submit(**_kwargs):
+            submit_counter["count"] += 1
+            return True
+
+        page._submit_tp_limit_once = _submit
+
+        positions = [
+            {"symbol": "BTCUSDT", "positionAmt": "-1.0", "entryPrice": "100", "markPrice": "99.7"},
+        ]
+
+        _ = page._enforce_phase_exit_policy(
+            runtime,
+            symbol="BTCUSDT",
+            open_orders=[],
+            positions=positions,
+            loop_label="stage15-tp-guard-1",
+        )
+        _ = page._enforce_phase_exit_policy(
+            runtime,
+            symbol="BTCUSDT",
+            open_orders=[],
+            positions=positions,
+            loop_label="stage15-tp-guard-2",
+        )
+
+        self.assertEqual(submit_counter["count"], 1)
+
+    def test_phase1_skips_tp_submit_when_algo_order_uses_order_type_field(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE1",
+        )
+        page = _make_trade_page_stub(runtime)
+        page._saved_filter_settings = {"mdd": "15%", "tp_ratio": "0.5%", "risk_filter": "보수적"}
+        page._default_filter_settings = lambda: {"mdd": "15%", "tp_ratio": "0.5%", "risk_filter": "보수적"}
+        page._get_symbol_filter_rule = lambda _symbol: SymbolFilterRules(
+            tick_size=0.1,
+            step_size=0.001,
+            min_qty=0.001,
+            min_notional=5.0,
+        )
+        submit_counter = {"count": 0}
+
+        def _submit(**_kwargs):
+            submit_counter["count"] += 1
+            return True
+
+        page._submit_tp_limit_once = _submit
+        positions = [
+            {"symbol": "BTCUSDT", "positionAmt": "-1.0", "entryPrice": "100", "markPrice": "99.7"},
+        ]
+        raw_open_order = {
+            "symbol": "BTCUSDT",
+            "algoId": 2000001,
+            "algoStatus": "NEW",
+            "orderType": "TAKE_PROFIT",
+            "side": "BUY",
+            "price": "99.5",
+            "triggerPrice": "99.6",
+            "quantity": "1.0",
+            "reduceOnly": False,
+            "closePosition": False,
+        }
+        normalized = TradePage._normalize_open_order_row(raw_open_order, is_algo_order=True)
+        self.assertIsNotNone(normalized)
+        open_orders = [normalized]
+
+        _ = page._enforce_phase_exit_policy(
+            runtime,
+            symbol="BTCUSDT",
+            open_orders=open_orders,
+            positions=positions,
+            loop_label="stage15-phase1-algo-ordertype-aligned",
+        )
+
+        self.assertEqual(submit_counter["count"], 0)
+
+    def test_phase1_keeps_existing_tp_limit_child_order_without_replacing(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE1",
+        )
+        page = _make_trade_page_stub(runtime)
+        page._saved_filter_settings = {"mdd": "15%", "tp_ratio": "0.5%", "risk_filter": "보수적"}
+        page._default_filter_settings = lambda: {"mdd": "15%", "tp_ratio": "0.5%", "risk_filter": "보수적"}
+        page._get_symbol_filter_rule = lambda _symbol: SymbolFilterRules(
+            tick_size=0.000001,
+            step_size=1.0,
+            min_qty=1.0,
+            min_notional=5.0,
+        )
+        cancel_reasons: list[str] = []
+        page._cancel_orders_by_ids = lambda **kwargs: cancel_reasons.append(str(kwargs.get("reason") or ""))
+        page._submit_tp_limit_once = lambda **_kwargs: self.fail("tp trigger should not be re-submitted")
+
+        positions = [
+            {"symbol": "BLESSUSDT", "positionAmt": "-24069", "entryPrice": "0.005925", "markPrice": "0.005896"},
+        ]
+        open_orders = [
+            {
+                "symbol": "BLESSUSDT",
+                "orderId": 937594872,
+                "type": "LIMIT",
+                "side": "BUY",
+                "price": "0.005895",
+                "reduceOnly": "true",
+                "status": "NEW",
+            }
+        ]
+
+        _ = page._enforce_phase_exit_policy(
+            runtime,
+            symbol="BLESSUSDT",
+            open_orders=open_orders,
+            positions=positions,
+            loop_label="stage15-phase1-keep-triggered-limit",
+        )
+
+        self.assertEqual(cancel_reasons, [])
+
+    def test_submit_tp_trigger_immediate_reject_does_not_force_market_exit(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE1",
+        )
+        page = _make_trade_page_stub(runtime)
+        page._get_symbol_filter_rule = lambda _symbol: SymbolFilterRules(
+            tick_size=0.0001,
+            step_size=1.0,
+            min_qty=1.0,
+            min_notional=5.0,
+        )
+        page._current_position_mode = lambda: "ONE_WAY"
+        market_exit_called = {"value": False}
+        page._submit_market_exit_for_symbol = lambda **_kwargs: market_exit_called.__setitem__("value", True) or True
+
+        last_result = GatewayCallResult(
+            ok=False,
+            reason_code="EXCHANGE_REJECTED",
+            payload={"code": -2021, "msg": "Order would immediately trigger."},
+            error_code=-2021,
+            error_message="Order would immediately trigger.",
+        )
+        retry_result = GatewayRetryResult(
+            operation="CREATE",
+            success=False,
+            attempts=1,
+            reason_code="EXCHANGE_REJECTED",
+            last_result=last_result,
+            history=[last_result],
+        )
+        positions = [
+            {"symbol": "BLESSUSDT", "positionAmt": "-1000", "entryPrice": "1.0", "markPrice": "0.99"},
+        ]
+
+        with patch.object(trade_page, "create_order_with_retry_with_logging", return_value=retry_result):
+            submitted = page._submit_tp_limit_once(
+                symbol="BLESSUSDT",
+                positions=positions,
+                loop_label="stage15-tp-immediate-reject",
+            )
+
+        self.assertFalse(submitted)
+        self.assertFalse(market_exit_called["value"])
 
     def test_phase2_mdd_alignment_uses_trigger_price_fallback_without_duplicate_submit(self) -> None:
         runtime = AutoTradeRuntime(
@@ -224,7 +487,7 @@ class TradePageRegressionTests(unittest.TestCase):
         called = {"run_trigger_cycle_once": False, "refresh_controls": False}
         page._poll_telegram_bot_updates = lambda: None
         page._poll_signal_inbox_file = lambda: None
-        page._fetch_loop_account_snapshot = lambda: ([], [])
+        page._fetch_loop_account_snapshot = lambda **_kwargs: ([], [])
         page._run_fill_sync_pass = lambda **_kwargs: None
         page._apply_price_guard_for_loop = lambda **_kwargs: None
         page._execute_safety_action_if_needed = lambda **_kwargs: None
@@ -250,6 +513,100 @@ class TradePageRegressionTests(unittest.TestCase):
         self.assertEqual(reason, "POSITION_MODE_UNKNOWN")
         self.assertEqual(failure, "position_mode_unknown")
         self.assertFalse(reset)
+
+    def test_pre_order_setup_hook_maps_aggressive_mode_to_two_x_leverage(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            pending_trigger_candidates={
+                "BTCUSDT": TriggerCandidate(
+                    symbol="BTCUSDT",
+                    trigger_kind="FIRST_ENTRY",
+                    target_price=100.0,
+                    received_at_local=1,
+                    message_id=10,
+                    entry_mode="AGGRESSIVE",
+                )
+            },
+        )
+        page = _make_trade_page_stub(runtime)
+        captured: dict[str, object] = {}
+
+        def _ensure_symbol_setup(
+            *,
+            symbol: str,
+            entry_mode: str,
+            target_leverage: int,
+            loop_label: str,
+        ) -> tuple[bool, str, str]:
+            captured["symbol"] = symbol
+            captured["entry_mode"] = entry_mode
+            captured["target_leverage"] = target_leverage
+            captured["loop_label"] = loop_label
+            return True, "SYMBOL_SETUP_ALREADY_ALIGNED", "-"
+
+        page._ensure_symbol_trading_setup_for_entry = _ensure_symbol_setup
+
+        ok, reason, failure, reset = page._run_pre_order_setup_hook(
+            "BTCUSDT",
+            "FIRST_ENTRY",
+            "stage15-pre-order-aggressive",
+        )
+        self.assertTrue(ok)
+        self.assertEqual(reason, "SYMBOL_SETUP_ALREADY_ALIGNED")
+        self.assertEqual(failure, "-")
+        self.assertFalse(reset)
+        self.assertEqual(captured["symbol"], "BTCUSDT")
+        self.assertEqual(captured["entry_mode"], "AGGRESSIVE")
+        self.assertEqual(captured["target_leverage"], 2)
+
+    def test_pre_order_setup_hook_maps_conservative_mode_to_one_x_leverage(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            pending_trigger_candidates={
+                "BTCUSDT": TriggerCandidate(
+                    symbol="BTCUSDT",
+                    trigger_kind="FIRST_ENTRY",
+                    target_price=100.0,
+                    received_at_local=1,
+                    message_id=10,
+                    entry_mode="CONSERVATIVE",
+                )
+            },
+        )
+        page = _make_trade_page_stub(runtime)
+        captured: dict[str, object] = {}
+
+        def _ensure_symbol_setup(
+            *,
+            symbol: str,
+            entry_mode: str,
+            target_leverage: int,
+            loop_label: str,
+        ) -> tuple[bool, str, str]:
+            captured["symbol"] = symbol
+            captured["entry_mode"] = entry_mode
+            captured["target_leverage"] = target_leverage
+            captured["loop_label"] = loop_label
+            return True, "SYMBOL_SETUP_ALREADY_ALIGNED", "-"
+
+        page._ensure_symbol_trading_setup_for_entry = _ensure_symbol_setup
+
+        ok, reason, failure, reset = page._run_pre_order_setup_hook(
+            "BTCUSDT",
+            "FIRST_ENTRY",
+            "stage15-pre-order-conservative",
+        )
+        self.assertTrue(ok)
+        self.assertEqual(reason, "SYMBOL_SETUP_ALREADY_ALIGNED")
+        self.assertEqual(failure, "-")
+        self.assertFalse(reset)
+        self.assertEqual(captured["symbol"], "BTCUSDT")
+        self.assertEqual(captured["entry_mode"], "CONSERVATIVE")
+        self.assertEqual(captured["target_leverage"], 1)
 
     def test_cancel_exit_orders_for_symbol_keeps_entry_orders(self) -> None:
         page = _make_trade_page_stub()
@@ -381,6 +738,71 @@ class TradePageRegressionTests(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(result.reason_code, "RECOVERY_RECONCILE_DONE")
         self.assertEqual(list(result.canceled_symbols), [])
+
+    def test_position_zero_reconciles_immediately_with_cancel_all(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE1",
+            active_symbol="DYMUSDT",
+        )
+        page = _make_trade_page_stub(runtime)
+        page._last_position_qty_by_symbol = {"DYMUSDT": 2930.5}
+        page._position_zero_confirm_streak_by_symbol = {"DYMUSDT": 1}
+
+        cancel_all_calls: list[dict[str, object]] = []
+
+        def _cancel_all(**kwargs):
+            cancel_all_calls.append(kwargs)
+            return True, "-"
+
+        page._cancel_all_open_orders_for_symbol = _cancel_all
+        page._cancel_open_orders_for_symbols = lambda **_kwargs: self.fail("fallback cancel should not run")
+        page._fetch_open_orders = lambda **_kwargs: []
+        page._fetch_open_positions = lambda **_kwargs: []
+
+        updated, _, _ = page._handle_position_quantity_reconciliation(
+            runtime,
+            symbol="DYMUSDT",
+            open_orders=[],
+            positions=[],
+            loop_label="stage15-qty-zero-immediate",
+        )
+
+        self.assertEqual(len(cancel_all_calls), 1)
+        self.assertEqual(updated.symbol_state, "IDLE")
+        self.assertIsNone(updated.active_symbol)
+        self.assertNotIn("DYMUSDT", page._last_position_qty_by_symbol)
+        self.assertNotIn("DYMUSDT", page._position_zero_confirm_streak_by_symbol)
+
+    def test_position_zero_uses_fallback_cancel_when_cancel_all_fails(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE1",
+            active_symbol="DYMUSDT",
+        )
+        page = _make_trade_page_stub(runtime)
+        page._last_position_qty_by_symbol = {"DYMUSDT": 2930.5}
+
+        page._cancel_all_open_orders_for_symbol = lambda **_kwargs: (False, "network_error")
+        fallback_calls: list[dict[str, object]] = []
+        page._cancel_open_orders_for_symbols = lambda **kwargs: fallback_calls.append(kwargs)
+        page._fetch_open_orders = lambda **_kwargs: []
+        page._fetch_open_positions = lambda **_kwargs: []
+
+        _updated, _, _ = page._handle_position_quantity_reconciliation(
+            runtime,
+            symbol="DYMUSDT",
+            open_orders=[],
+            positions=[],
+            loop_label="stage15-qty-zero-fallback",
+        )
+
+        self.assertEqual(len(fallback_calls), 1)
+        self.assertEqual(fallback_calls[0].get("symbols"), ["DYMUSDT"])
 
 
 if __name__ == "__main__":

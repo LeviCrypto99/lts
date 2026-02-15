@@ -1,10 +1,12 @@
-VERSION = "1.9.5"
+VERSION = "1.9.6"
 UPDATE_INFO_URL = "https://raw.githubusercontent.com/LeviCrypto99/lts/main/version.json"
 UPDATE_TIMEOUT_SEC = 5
 UPDATE_AUTH_TOKEN_ENV = "LTS_UPDATE_TOKEN"
 UPDATER_URL = ""
 ALLOW_LAUNCH_ON_UPDATE_CHECK_FAILURE = True
 UPDATE_CHECK_STRICT_MODE_ENV = "LTS_UPDATE_STRICT_MODE"
+LOG_ROTATE_MAX_BYTES = 5 * 1024 * 1024
+LOG_ROTATE_BACKUP_COUNT = 0
 
 # Signal source defaults baked into the client build.
 # Users should be able to run EXE without extra environment setup.

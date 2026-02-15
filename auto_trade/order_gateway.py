@@ -110,13 +110,13 @@ def _apply_position_mode_rules(
     if position_mode not in ("ONE_WAY", "HEDGE"):
         return False, "INVALID_POSITION_MODE", "position_mode must be ONE_WAY or HEDGE"
 
-    is_stop_family = request.order_type in ("STOP_MARKET", "TAKE_PROFIT_MARKET", "STOP", "TAKE_PROFIT")
+    is_stop_market_family = request.order_type in ("STOP_MARKET", "TAKE_PROFIT_MARKET")
     close_position_requested = bool(request.close_position)
-    if close_position_requested and not is_stop_family:
+    if close_position_requested and not is_stop_market_family:
         return (
             False,
             "CLOSE_POSITION_UNSUPPORTED_ORDER_TYPE",
-            "closePosition is only allowed for STOP_MARKET/TAKE_PROFIT_MARKET/STOP/TAKE_PROFIT",
+            "closePosition is only allowed for STOP_MARKET/TAKE_PROFIT_MARKET",
         )
 
     if request.purpose == "ENTRY" and close_position_requested:
@@ -125,7 +125,7 @@ def _apply_position_mode_rules(
     if position_mode == "HEDGE":
         params["positionSide"] = "SHORT"
         params.pop("reduceOnly", None)
-        if request.purpose == "EXIT" and is_stop_family:
+        if request.purpose == "EXIT" and is_stop_market_family:
             params["closePosition"] = True
             params.pop("quantity", None)
         else:
@@ -138,7 +138,7 @@ def _apply_position_mode_rules(
         params.pop("closePosition", None)
         return True, "MODE_RULE_APPLIED_ONE_WAY_ENTRY", "-"
 
-    if is_stop_family:
+    if is_stop_market_family:
         params["closePosition"] = True
         params.pop("reduceOnly", None)
         params.pop("quantity", None)
@@ -206,12 +206,13 @@ def prepare_create_order(
     adjusted_stop_price: Optional[float] = None
     adjusted_quantity: Optional[float] = None
 
-    if request.order_type == "LIMIT":
+    is_limit_style_order = request.order_type in ("LIMIT", "STOP", "TAKE_PROFIT")
+    if is_limit_style_order:
         if request.price is None:
             return OrderPreparationResult(
                 ok=False,
                 reason_code="LIMIT_PRICE_REQUIRED",
-                failure_reason="price is required for LIMIT order",
+                failure_reason=f"price is required for {request.order_type} order",
                 prepared_params={},
                 adjusted_price=None,
                 adjusted_stop_price=None,
@@ -234,7 +235,10 @@ def prepare_create_order(
                 notional=None,
             )
         params["price"] = adjusted_price
-        params["timeInForce"] = "GTC" if request.purpose == "ENTRY" else (request.time_in_force or "GTC")
+        if request.order_type == "LIMIT":
+            params["timeInForce"] = "GTC" if request.purpose == "ENTRY" else (request.time_in_force or "GTC")
+        else:
+            params["timeInForce"] = request.time_in_force or "GTC"
     elif request.time_in_force:
         params["timeInForce"] = request.time_in_force
 
@@ -269,7 +273,7 @@ def prepare_create_order(
         params["workingType"] = "MARK_PRICE"
 
     quantity_required = not bool(request.close_position)
-    if request.purpose == "EXIT" and request.order_type in ("STOP_MARKET", "TAKE_PROFIT_MARKET", "STOP", "TAKE_PROFIT"):
+    if request.purpose == "EXIT" and request.order_type in ("STOP_MARKET", "TAKE_PROFIT_MARKET"):
         quantity_required = False
 
     if quantity_required:

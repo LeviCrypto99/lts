@@ -63,11 +63,11 @@ def evaluate_common_filters(
 
     direction = _normalize_direction(ranking_direction)
     if direction == "상승":
-        if 1 <= int(ranking_position) <= 10:
+        if 1 <= int(ranking_position) <= 5:
             return CommonFilterResult(
                 passed=False,
-                reason_code="RANKING_TOP10_RISE",
-                failure_reason="rising rank is in top 10",
+                reason_code="RANKING_TOP5_RISE",
+                failure_reason="rising rank is in top 5",
             )
     elif direction == "하락":
         pass

@@ -18,6 +18,8 @@ from typing import Any, Callable, Dict, Mapping, Optional, Tuple
 
 import requests
 import config
+from log_rotation import append_rotating_log_line
+from runtime_paths import get_log_path
 
 from PIL import Image, ImageDraw, ImageTk
 from auto_trade import (
@@ -103,10 +105,11 @@ BUTTON_HOVER_ANIM_STEPS = 6
 UI_TEXT_COLOR = "#f6f8fc"
 HIGHLIGHT_TEXT = "#ff0000"
 WALLET_VALUE_COLOR = "#00ff7f"
-TRADE_LOG_PATH = Path(tempfile.gettempdir()) / "LTS-Trade.log"
+TRADE_LOG_PATH = get_log_path("LTS-Trade.log")
 AUTO_TRADE_PERSIST_PATH = Path(tempfile.gettempdir()) / "LTS-auto-trade-state.json"
 AUTO_TRADE_SIGNAL_INBOX_PATH = Path(tempfile.gettempdir()) / "LTS-auto-trade-signal-inbox.jsonl"
 SIGNAL_LOOP_INTERVAL_SEC = 1.0
+TP_TRIGGER_SUBMISSION_GUARD_SEC = 20.0
 EXCHANGE_INFO_CACHE_TTL_SEC = 60
 ACCOUNT_SNAPSHOT_CACHE_TTL_SEC = 0.9
 ACCOUNT_SNAPSHOT_STALE_FALLBACK_SEC = 30
@@ -152,6 +155,12 @@ FUTURES_ALGO_ORDER_PATH = "/fapi/v1/algoOrder"
 FUTURES_OPEN_ALGO_ORDERS_PATH = "/fapi/v1/openAlgoOrders"
 FUTURES_CANCEL_ALL_OPEN_ALGO_ORDERS_PATH = "/fapi/v1/algoOpenOrders"
 ALGO_ORDER_TYPES = {"STOP_MARKET", "TAKE_PROFIT_MARKET", "STOP", "TAKE_PROFIT", "TRAILING_STOP_MARKET"}
+ENTRY_MODE_AGGRESSIVE = "AGGRESSIVE"
+ENTRY_MODE_CONSERVATIVE = "CONSERVATIVE"
+ENTRY_MODE_TO_TARGET_LEVERAGE = {
+    ENTRY_MODE_AGGRESSIVE: 2,
+    ENTRY_MODE_CONSERVATIVE: 1,
+}
 
 # Base layout coordinates (scaled from image/ex_image/ex_image.png).
 CHART_RECT = (49, 112, 770, 446)
@@ -272,7 +281,7 @@ RESET_SETTINGS_BUTTON_RECT = (420, 352, 630, 388)
 DEFAULT_MDD = "15%"
 DEFAULT_TP_RATIO = "5%"
 DEFAULT_RISK_FILTER = "보수적"
-TP_RATIO_OPTIONS = ["3%", "5%"]
+TP_RATIO_OPTIONS = ["0.5%", "3%", "5%"]
 
 
 def _hex_to_rgba(value: str, alpha: int) -> Tuple[int, int, int, int]:
@@ -349,8 +358,7 @@ def _log_trade(message: str) -> None:
     try:
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         line = f"[{timestamp}] {message}\n"
-        with open(TRADE_LOG_PATH, "a", encoding="utf-8") as handle:
-            handle.write(line)
+        append_rotating_log_line(TRADE_LOG_PATH, line)
     except Exception:
         pass
 
@@ -531,6 +539,7 @@ class TradePage(tk.Frame):
         self._entry_order_ref_by_symbol: dict[str, int] = {}
         self._second_entry_skip_latch: set[str] = set()
         self._second_entry_fully_filled_symbols: set[str] = set()
+        self._tp_trigger_submit_guard_by_symbol: dict[str, dict[str, float]] = {}
         self._last_position_qty_by_symbol: dict[str, float] = {}
         self._position_zero_confirm_streak_by_symbol: dict[str, int] = {}
         self._last_safety_action_code = ""
@@ -1377,14 +1386,14 @@ class TradePage(tk.Frame):
             success = self._submit_tp_limit_once(
                 symbol=target,
                 positions=positions,
-                loop_label=f"{loop_label}-tp-limit",
+                loop_label=f"{loop_label}-tp-trigger",
             )
             _log_trade(
                 "Exit rebuild order result: "
-                f"symbol={target} type=TP_LIMIT success={success} loop={loop_label}"
+                f"symbol={target} type=TP_TRIGGER success={success} loop={loop_label}"
             )
             if not success:
-                return False, "tp_limit_registration_failed"
+                return False, "tp_trigger_registration_failed"
 
         if templates["breakeven_limit"]:
             success = self._submit_breakeven_limit_once(
@@ -1535,29 +1544,30 @@ class TradePage(tk.Frame):
         *,
         minimum: Optional[int] = None,
         maximum: Optional[int] = None,
+        log_scope: str = "Signal relay config",
     ) -> int:
         raw = os.environ.get(key)
         if raw is None:
-            _log_trade(f"Signal relay config default used: key={key} value={default} reason=missing")
+            _log_trade(f"{log_scope} default used: key={key} value={default} reason=missing")
             return default
         try:
             value = int(raw)
         except ValueError:
-            _log_trade(f"Signal relay config default used: key={key} value={default} reason=invalid_int raw={raw!r}")
+            _log_trade(f"{log_scope} default used: key={key} value={default} reason=invalid_int raw={raw!r}")
             return default
         if minimum is not None and value < minimum:
             _log_trade(
-                "Signal relay config default used: "
+                f"{log_scope} default used: "
                 f"key={key} value={default} reason=below_minimum raw={value} minimum={minimum}"
             )
             return default
         if maximum is not None and value > maximum:
             _log_trade(
-                "Signal relay config default used: "
+                f"{log_scope} default used: "
                 f"key={key} value={default} reason=above_maximum raw={value} maximum={maximum}"
             )
             return default
-        _log_trade(f"Signal relay config loaded: key={key} value={value}")
+        _log_trade(f"{log_scope} loaded: key={key} value={value}")
         return value
 
     @staticmethod
@@ -3662,29 +3672,27 @@ class TradePage(tk.Frame):
                         f"reason=entry_order_pending loop={loop_label}"
                     )
                     return runtime, open_orders, positions
-            if not self._has_recent_account_snapshot():
+            previous_streak = int(self._position_zero_confirm_streak_by_symbol.pop(target, 0))
+            if previous_streak > 0:
                 _log_trade(
-                    "Position zero confirmation deferred: "
-                    f"symbol={target} reason=account_snapshot_unavailable "
+                    "Position zero confirmation bypassed for immediate cancel: "
+                    f"symbol={target} previous_streak={previous_streak} "
                     f"state={runtime.symbol_state} loop={loop_label}"
                 )
-                return runtime, open_orders, positions
-            required = max(1, int(POSITION_ZERO_CONFIRM_REQUIRED_SNAPSHOTS))
-            streak = int(self._position_zero_confirm_streak_by_symbol.get(target, 0)) + 1
-            self._position_zero_confirm_streak_by_symbol[target] = streak
-            if streak < required:
-                _log_trade(
-                    "Position zero confirmation pending: "
-                    f"symbol={target} streak={streak}/{required} previous_qty={previous_qty} "
-                    f"state={runtime.symbol_state} loop={loop_label}"
-                )
-                return runtime, open_orders, positions
-            self._position_zero_confirm_streak_by_symbol.pop(target, None)
-
-            self._cancel_open_orders_for_symbols(
-                symbols=[target],
-                loop_label=f"{loop_label}-qty-zero-cancel",
+            canceled_all, cancel_reason = self._cancel_all_open_orders_for_symbol(
+                symbol=target,
+                loop_label=f"{loop_label}-qty-zero-cancel-all",
             )
+            _log_trade(
+                "Position zero immediate cancel-all result: "
+                f"symbol={target} success={canceled_all} reason={cancel_reason} "
+                f"state={runtime.symbol_state} loop={loop_label}"
+            )
+            if not canceled_all:
+                self._cancel_open_orders_for_symbols(
+                    symbols=[target],
+                    loop_label=f"{loop_label}-qty-zero-cancel-fallback",
+                )
             open_orders = self._fetch_open_orders() or []
             refreshed_positions = self._fetch_open_positions() or []
             self._entry_order_ref_by_symbol.pop(target, None)
@@ -3694,6 +3702,7 @@ class TradePage(tk.Frame):
             self._oco_last_filled_exit_order_by_symbol.pop(target, None)
             self._pending_oco_retry_symbols.discard(target)
             self._last_position_qty_by_symbol.pop(target, None)
+            self._tp_trigger_submit_guard_by_symbol.pop(target, None)
             current = replace(
                 runtime,
                 symbol_state="IDLE",
@@ -3723,6 +3732,7 @@ class TradePage(tk.Frame):
 
         if runtime.symbol_state not in ("PHASE1", "PHASE2"):
             self._last_position_qty_by_symbol[target] = current_qty
+            self._tp_trigger_submit_guard_by_symbol.pop(target, None)
             _log_trade(
                 "Position quantity change noted without exit rebuild: "
                 f"symbol={target} state={runtime.symbol_state} loop={loop_label}"
@@ -4107,6 +4117,7 @@ class TradePage(tk.Frame):
         if not target:
             return runtime
         if runtime.symbol_state not in ("PHASE1", "PHASE2"):
+            self._tp_trigger_submit_guard_by_symbol.pop(target, None)
             return runtime
 
         position = self._get_symbol_position(positions, target)
@@ -4156,8 +4167,11 @@ class TradePage(tk.Frame):
             return runtime
 
         entry_orders, exit_orders = self._classify_orders_for_symbol(target, open_orders)
-        tp_limit_order_ids: list[int] = []
-        tp_limit_prices: list[float] = []
+        tp_trigger_order_ids: list[int] = []
+        tp_trigger_prices: list[float] = []
+        tp_trigger_trigger_prices: list[float] = []
+        tp_market_order_ids: list[int] = []
+        legacy_tp_limit_order_ids: list[int] = []
         breakeven_limit_order_ids: list[int] = []
         breakeven_limit_prices: list[float] = []
         breakeven_stop_order_ids: list[int] = []
@@ -4172,14 +4186,33 @@ class TradePage(tk.Frame):
             side = str(row.get("side") or "").strip().upper()
             if side != close_side:
                 continue
+            if order_type == "TAKE_PROFIT":
+                trigger_price, stop_source = self._select_effective_stop_price(row)
+                order_price = self._safe_float(row.get("price"))
+                if trigger_price is None or trigger_price <= 0:
+                    continue
+                if order_price is None or order_price <= 0:
+                    continue
+                if stop_source and stop_source != "stopPrice":
+                    _log_trade(
+                        "Phase policy TP trigger price fallback used: "
+                        f"symbol={target} order_id={order_id} source={stop_source} "
+                        f"trigger_price={trigger_price} loop={loop_label}"
+                    )
+                tp_trigger_order_ids.append(order_id)
+                tp_trigger_prices.append(float(order_price))
+                tp_trigger_trigger_prices.append(float(trigger_price))
+                continue
+            if order_type == "TAKE_PROFIT_MARKET":
+                tp_market_order_ids.append(order_id)
+                continue
             if order_type == "LIMIT":
                 price = self._safe_float(row.get("price"))
                 if price is None or price <= 0:
                     continue
                 is_tp_limit = (price < breakeven_target - tolerance) if is_short else (price > breakeven_target + tolerance)
                 if is_tp_limit:
-                    tp_limit_order_ids.append(order_id)
-                    tp_limit_prices.append(float(price))
+                    legacy_tp_limit_order_ids.append(order_id)
                 else:
                     breakeven_limit_order_ids.append(order_id)
                     breakeven_limit_prices.append(float(price))
@@ -4201,8 +4234,20 @@ class TradePage(tk.Frame):
                 mdd_stop_order_ids.append(order_id)
                 mdd_stop_prices.append(float(stop_price))
 
-        tp_limit_aligned = bool(tp_limit_order_ids) and all(
-            abs(float(price) - float(tp_target)) <= tolerance for price in tp_limit_prices
+        tp_trigger_target = round_price_by_tick_size(
+            float(tp_target) * (1.001 if is_short else 0.999),
+            tick_size,
+        )
+        if tp_trigger_target is None or tp_trigger_target <= 0:
+            _log_trade(
+                "Phase exit policy skipped: "
+                f"symbol={target} reason=tp_trigger_rounding_failed tp_target={tp_target} tick_size={tick_size}"
+            )
+            return runtime
+        tp_trigger_aligned = (
+            len(tp_trigger_order_ids) == 1
+            and abs(float(tp_trigger_prices[0]) - float(tp_target)) <= tolerance
+            and abs(float(tp_trigger_trigger_prices[0]) - float(tp_trigger_target)) <= tolerance * 2
         )
         breakeven_limit_aligned = bool(breakeven_limit_order_ids) and all(
             abs(float(price) - float(breakeven_target)) <= tolerance
@@ -4229,39 +4274,91 @@ class TradePage(tk.Frame):
                     reason="phase1_disable_mdd_stop",
                 )
                 mdd_stop_order_ids = []
-            if tp_limit_order_ids and not tp_limit_aligned:
+            if tp_market_order_ids:
                 self._cancel_orders_by_ids(
                     symbol=target,
-                    order_ids=tp_limit_order_ids,
+                    order_ids=tp_market_order_ids,
                     loop_label=loop_label,
-                    reason="phase1_refresh_tp_limit",
+                    reason="phase1_replace_tp_market_with_tp_trigger",
                 )
-                tp_limit_order_ids = []
-            tp_trigger_threshold = float(tp_target) * (1.001 if is_short else 0.999)
-            tp_trigger_hit = mark_price <= tp_trigger_threshold if is_short else mark_price >= tp_trigger_threshold
-            if tp_trigger_hit and not tp_limit_order_ids:
+                tp_market_order_ids = []
+            if tp_trigger_order_ids and not tp_trigger_aligned:
+                self._cancel_orders_by_ids(
+                    symbol=target,
+                    order_ids=tp_trigger_order_ids,
+                    loop_label=loop_label,
+                    reason="phase1_refresh_tp_trigger_order",
+                )
+                tp_trigger_order_ids = []
+            if legacy_tp_limit_order_ids:
+                # Conditional TP orders can materialize as regular reduceOnly LIMITs after trigger activation.
+                # Keep them as valid phase1 exit orders instead of force-replacing with a new trigger request.
+                self._tp_trigger_submit_guard_by_symbol.pop(target, None)
+                _log_trade(
+                    "Phase1 TP LIMIT order detected and kept: "
+                    f"symbol={target} count={len(legacy_tp_limit_order_ids)} loop={loop_label}"
+                )
+                return runtime
+            if tp_trigger_aligned:
+                self._tp_trigger_submit_guard_by_symbol.pop(target, None)
+            if not tp_trigger_aligned:
+                guard = self._tp_trigger_submit_guard_by_symbol.get(target)
+                if guard:
+                    guard_age = max(0.0, time.time() - float(guard.get("submitted_at", 0.0)))
+                    same_target = abs(float(guard.get("target_price", 0.0)) - float(tp_target)) <= tolerance
+                    same_trigger = abs(float(guard.get("trigger_price", 0.0)) - float(tp_trigger_target)) <= tolerance * 2
+                    same_qty = abs(float(guard.get("quantity", 0.0)) - abs(float(position_amt))) <= max(
+                        float(filter_rule.step_size),
+                        1e-12,
+                    )
+                    if (
+                        guard_age <= float(TP_TRIGGER_SUBMISSION_GUARD_SEC)
+                        and same_target
+                        and same_trigger
+                        and same_qty
+                    ):
+                        _log_trade(
+                            "Phase1 TP trigger submit skipped by guard: "
+                            f"symbol={target} age_sec={guard_age:.2f} "
+                            f"target={tp_target} trigger={tp_trigger_target} loop={loop_label}"
+                        )
+                        return runtime
+                    self._tp_trigger_submit_guard_by_symbol.pop(target, None)
                 submitted = self._submit_tp_limit_once(
                     symbol=target,
                     positions=positions,
-                    loop_label=f"{loop_label}-phase1-tp-limit",
+                    loop_label=f"{loop_label}-phase1-tp-trigger",
                     target_price_override=float(tp_target),
+                    trigger_price_override=float(tp_trigger_target),
                 )
+                if submitted:
+                    self._tp_trigger_submit_guard_by_symbol[target] = {
+                        "submitted_at": float(time.time()),
+                        "target_price": float(tp_target),
+                        "trigger_price": float(tp_trigger_target),
+                        "quantity": abs(float(position_amt)),
+                    }
                 _log_trade(
-                    "Phase1 TP trigger evaluated: "
-                    f"symbol={target} mark_price={mark_price} threshold={tp_trigger_threshold} "
+                    "Phase1 TP trigger order ensured: "
+                    f"symbol={target} mark_price={mark_price} trigger={tp_trigger_target} "
                     f"target={tp_target} submitted={submitted}"
                 )
             return runtime
 
         # PHASE2 policy.
-        if tp_limit_order_ids:
+        self._tp_trigger_submit_guard_by_symbol.pop(target, None)
+        phase2_tp_cancel_ids = [
+            order_id
+            for order_id in (tp_trigger_order_ids + tp_market_order_ids + legacy_tp_limit_order_ids)
+            if int(order_id) > 0
+        ]
+        if phase2_tp_cancel_ids:
             self._cancel_orders_by_ids(
                 symbol=target,
-                order_ids=tp_limit_order_ids,
+                order_ids=phase2_tp_cancel_ids,
                 loop_label=loop_label,
-                reason="phase2_disable_tp_limit",
+                reason="phase2_disable_phase1_tp_orders",
             )
-            tp_limit_order_ids = []
         if breakeven_stop_order_ids:
             self._cancel_orders_by_ids(
                 symbol=target,
@@ -4878,6 +4975,7 @@ class TradePage(tk.Frame):
         positions: list[dict],
         loop_label: str,
         target_price_override: Optional[float] = None,
+        trigger_price_override: Optional[float] = None,
     ) -> bool:
         position = self._get_symbol_position(positions, symbol)
         if position is None:
@@ -4899,6 +4997,12 @@ class TradePage(tk.Frame):
             target_price = float(target_price_override)
         if target_price <= 0:
             return False
+        if trigger_price_override is None:
+            trigger_price = target_price * (1.001 if is_short else 0.999)
+        else:
+            trigger_price = float(trigger_price_override)
+        if trigger_price <= 0:
+            return False
         side = "BUY" if is_short else "SELL"
         quantity = abs(position_amt)
 
@@ -4909,6 +5013,10 @@ class TradePage(tk.Frame):
         if rounded_target_price is None or rounded_target_price <= 0:
             return False
         target_price = float(rounded_target_price)
+        rounded_trigger_price = round_price_by_tick_size(float(trigger_price), float(filter_rule.tick_size))
+        if rounded_trigger_price is None or rounded_trigger_price <= 0:
+            return False
+        trigger_price = float(rounded_trigger_price)
         position_mode = self._current_position_mode()
         if position_mode not in ("ONE_WAY", "HEDGE"):
             return False
@@ -4916,10 +5024,11 @@ class TradePage(tk.Frame):
         request = OrderCreateRequest(
             symbol=symbol,
             side=side,
-            order_type="LIMIT",
+            order_type="TAKE_PROFIT",
             purpose="EXIT",
             quantity=quantity,
             price=target_price,
+            stop_price=trigger_price,
             reference_price=target_price,
             time_in_force="GTC",
         )
@@ -4932,8 +5041,8 @@ class TradePage(tk.Frame):
             loop_label=loop_label,
         )
         _log_trade(
-            "TP LIMIT result: "
-            f"symbol={symbol} target_price={target_price} qty={quantity} "
+            "TP trigger result: "
+            f"symbol={symbol} trigger_price={trigger_price} target_price={target_price} qty={quantity} "
             f"success={retry.success} reason={retry.reason_code} attempts={retry.attempts}"
         )
         if not retry.success and self._is_exit_filter_failure_reason(retry.reason_code):
@@ -4943,17 +5052,26 @@ class TradePage(tk.Frame):
                 filter_rule=filter_rule,
                 position_amt=position_amt,
                 positions=positions,
-                order_context="TP_LIMIT",
+                order_context="TP_TRIGGER",
                 loop_label=loop_label,
             )
         elif not retry.success and not self._is_transient_gateway_failure_reason(retry.reason_code):
+            last_result = getattr(retry, "last_result", None)
+            last_error_code = getattr(last_result, "error_code", None)
+            if last_error_code == -2021:
+                _log_trade(
+                    "TP trigger rejected as immediate-trigger: "
+                    f"symbol={symbol} error_code={last_error_code} "
+                    "fallback_market_exit_skipped=True"
+                )
+                return False
             fallback_success = self._submit_market_exit_for_symbol(
                 symbol=symbol,
                 positions=positions,
-                loop_label=f"{loop_label}-limit-reject-market-fallback",
+                loop_label=f"{loop_label}-trigger-reject-market-fallback",
             )
             _log_trade(
-                "TP LIMIT reject fallback market-exit attempted: "
+                "TP trigger reject fallback market-exit attempted: "
                 f"symbol={symbol} reason={retry.reason_code} success={fallback_success} loop={loop_label}"
             )
         return retry.success
@@ -5461,16 +5579,65 @@ class TradePage(tk.Frame):
         )
         return True, leverage, margin_type, "-"
 
-    def _set_symbol_leverage_one(
+    @staticmethod
+    def _normalize_entry_mode(value: object) -> str:
+        normalized = str(value or "").strip().upper()
+        if normalized in ENTRY_MODE_TO_TARGET_LEVERAGE:
+            return normalized
+        return "-"
+
+    def _resolve_entry_mode_for_symbol_setup(
         self,
         *,
         symbol: str,
+        trigger_kind: str,
+        loop_label: str,
+    ) -> str:
+        target = str(symbol or "").strip().upper()
+        normalized_trigger = str(trigger_kind or "").strip().upper()
+        mode = "-"
+        mode_source = "fallback"
+        with self._auto_trade_runtime_lock:
+            runtime = self._orchestrator_runtime
+            candidate = runtime.pending_trigger_candidates.get(target)
+        if candidate is not None:
+            candidate_trigger = str(candidate.trigger_kind or "").strip().upper()
+            if candidate_trigger == normalized_trigger:
+                candidate_mode = self._normalize_entry_mode(candidate.entry_mode)
+                if candidate_mode != "-":
+                    mode = candidate_mode
+                    mode_source = "pending_candidate"
+        if mode == "-":
+            fallback_mode = self._normalize_entry_mode(self._selected_entry_mode())
+            if fallback_mode != "-":
+                mode = fallback_mode
+                mode_source = "ui_selected_mode"
+            else:
+                mode = ENTRY_MODE_CONSERVATIVE
+                mode_source = "safe_default"
+        _log_trade(
+            "Pre-order entry mode resolved: "
+            f"symbol={target} trigger={normalized_trigger or '-'} mode={mode} source={mode_source} loop={loop_label}"
+        )
+        return mode
+
+    @staticmethod
+    def _resolve_target_leverage_for_entry_mode(entry_mode: str) -> int:
+        normalized = str(entry_mode or "").strip().upper()
+        return int(ENTRY_MODE_TO_TARGET_LEVERAGE.get(normalized, 1))
+
+    def _set_symbol_leverage_target(
+        self,
+        *,
+        symbol: str,
+        target_leverage: int,
         loop_label: str,
     ) -> tuple[bool, bool, str, str]:
+        leverage_value = max(1, int(target_leverage))
         payload = self._binance_signed_post(
             "https://fapi.binance.com",
             LEVERAGE_SET_PATH,
-            {"symbol": symbol, "leverage": 1},
+            {"symbol": symbol, "leverage": leverage_value},
         )
         if payload is None:
             self._update_rate_limit_tracking(
@@ -5490,9 +5657,10 @@ class TradePage(tk.Frame):
                 )
                 _log_trade(
                     "Pre-order leverage already set: "
-                    f"symbol={symbol} error_code={error_code} message={error_message or '-'} loop={loop_label}"
+                    f"symbol={symbol} target_leverage={leverage_value} "
+                    f"error_code={error_code} message={error_message or '-'} loop={loop_label}"
                 )
-                return True, False, "LEVERAGE_ALREADY_ONE", "-"
+                return True, False, "LEVERAGE_ALREADY_TARGET", "-"
             reason_code = self._map_exchange_reason_code(error_code, error_message)
             self._update_rate_limit_tracking(
                 success=False,
@@ -5506,7 +5674,8 @@ class TradePage(tk.Frame):
             failure_reason = f"error_code={error_code} message={error_message or '-'}"
             _log_trade(
                 "Pre-order leverage set failed: "
-                f"symbol={symbol} reason={reason_code} open_order_blocked={open_order_blocked} "
+                f"symbol={symbol} target_leverage={leverage_value} "
+                f"reason={reason_code} open_order_blocked={open_order_blocked} "
                 f"{failure_reason} loop={loop_label}"
             )
             return False, open_order_blocked, f"LEVERAGE_SET_FAILED_{reason_code}", failure_reason
@@ -5518,7 +5687,7 @@ class TradePage(tk.Frame):
         )
         _log_trade(
             "Pre-order leverage set success: "
-            f"symbol={symbol} payload={payload!r} loop={loop_label}"
+            f"symbol={symbol} target_leverage={leverage_value} payload={payload!r} loop={loop_label}"
         )
         return True, False, "LEVERAGE_SET_OK", "-"
 
@@ -5587,18 +5756,22 @@ class TradePage(tk.Frame):
         self,
         *,
         symbol: str,
-        leverage: int,
+        current_leverage: int,
+        target_leverage: int,
+        entry_mode: str,
         margin_type: str,
         loop_label: str,
     ) -> tuple[bool, bool, str, str]:
         target = str(symbol or "").strip().upper()
         current_margin_type = str(margin_type or "").strip().upper()
-        if int(leverage) == 1 and current_margin_type == "ISOLATED":
+        normalized_entry_mode = self._normalize_entry_mode(entry_mode)
+        if int(current_leverage) == int(target_leverage) and current_margin_type == "ISOLATED":
             return True, False, "SYMBOL_SETUP_ALREADY_ALIGNED", "-"
 
-        if int(leverage) != 1:
-            ok, open_order_blocked, reason_code, failure_reason = self._set_symbol_leverage_one(
+        if int(current_leverage) != int(target_leverage):
+            ok, open_order_blocked, reason_code, failure_reason = self._set_symbol_leverage_target(
                 symbol=target,
+                target_leverage=int(target_leverage),
                 loop_label=f"{loop_label}-set-leverage",
             )
             if not ok:
@@ -5612,15 +5785,24 @@ class TradePage(tk.Frame):
             if not ok:
                 return False, open_order_blocked, reason_code, failure_reason
 
+        _log_trade(
+            "Pre-order symbol setup aligned with mode: "
+            f"symbol={target} entry_mode={normalized_entry_mode} "
+            f"target_leverage={int(target_leverage)} margin_type=ISOLATED loop={loop_label}"
+        )
         return True, False, "SYMBOL_SETUP_UPDATED", "-"
 
     def _ensure_symbol_trading_setup_for_entry(
         self,
         *,
         symbol: str,
+        entry_mode: str,
+        target_leverage: int,
         loop_label: str,
     ) -> tuple[bool, str, str]:
         target = str(symbol or "").strip().upper()
+        normalized_entry_mode = self._normalize_entry_mode(entry_mode)
+        desired_leverage = max(1, int(target_leverage))
         snapshot_ok, leverage, margin_type, snapshot_failure = self._fetch_symbol_leverage_and_margin_type(
             symbol=target,
             loop_label=f"{loop_label}-snapshot",
@@ -5628,14 +5810,16 @@ class TradePage(tk.Frame):
         if not snapshot_ok:
             _log_trade(
                 "Pre-order setup snapshot failed: "
-                f"symbol={target} failure={snapshot_failure} loop={loop_label}"
+                f"symbol={target} entry_mode={normalized_entry_mode} "
+                f"target_leverage={desired_leverage} failure={snapshot_failure} loop={loop_label}"
             )
             return False, "SYMBOL_SETUP_FETCH_FAILED", snapshot_failure
 
-        if int(leverage) == 1 and str(margin_type).upper() == "ISOLATED":
+        if int(leverage) == desired_leverage and str(margin_type).upper() == "ISOLATED":
             _log_trade(
                 "Pre-order setup skipped (already aligned): "
-                f"symbol={target} leverage={leverage} margin_type={margin_type} loop={loop_label}"
+                f"symbol={target} entry_mode={normalized_entry_mode} "
+                f"target_leverage={desired_leverage} leverage={leverage} margin_type={margin_type} loop={loop_label}"
             )
             return True, "SYMBOL_SETUP_ALREADY_ALIGNED", "-"
 
@@ -5643,21 +5827,26 @@ class TradePage(tk.Frame):
         for attempt in (1, 2):
             setup_ok, open_order_blocked, reason_code, failure_reason = self._apply_symbol_trading_setup_once(
                 symbol=target,
-                leverage=leverage,
+                current_leverage=leverage,
+                target_leverage=desired_leverage,
+                entry_mode=normalized_entry_mode,
                 margin_type=margin_type,
                 loop_label=f"{loop_label}-attempt-{attempt}",
             )
             if setup_ok:
                 _log_trade(
                     "Pre-order setup applied: "
-                    f"symbol={target} attempt={attempt} reason={reason_code} loop={loop_label}"
+                    f"symbol={target} entry_mode={normalized_entry_mode} "
+                    f"target_leverage={desired_leverage} attempt={attempt} reason={reason_code} loop={loop_label}"
                 )
                 return True, reason_code, "-"
             if open_order_blocked and not cancel_attempted:
                 cancel_attempted = True
                 _log_trade(
                     "Pre-order setup blocked by open orders; retrying after symbol cancel: "
-                    f"symbol={target} reason={reason_code} failure={failure_reason} loop={loop_label}"
+                    f"symbol={target} entry_mode={normalized_entry_mode} "
+                    f"target_leverage={desired_leverage} reason={reason_code} failure={failure_reason} "
+                    f"loop={loop_label}"
                 )
                 self._cancel_open_orders_for_symbols(
                     symbols=[target],
@@ -5681,11 +5870,25 @@ class TradePage(tk.Frame):
         loop_label: str,
     ) -> tuple[bool, str, str, bool]:
         target = str(symbol or "").strip().upper()
+        normalized_trigger = str(trigger_kind or "").strip().upper()
         if not target:
             return False, "INVALID_SYMBOL", "symbol_empty", False
+        entry_mode = self._resolve_entry_mode_for_symbol_setup(
+            symbol=target,
+            trigger_kind=normalized_trigger,
+            loop_label=loop_label,
+        )
+        target_leverage = self._resolve_target_leverage_for_entry_mode(entry_mode)
+        _log_trade(
+            "Pre-order target leverage resolved: "
+            f"symbol={target} trigger={normalized_trigger or '-'} "
+            f"entry_mode={entry_mode} target_leverage={target_leverage} loop={loop_label}"
+        )
         setup_ok, reason_code, failure_reason = self._ensure_symbol_trading_setup_for_entry(
             symbol=target,
-            loop_label=f"{loop_label}-pre-order-{str(trigger_kind or '').strip().upper()}",
+            entry_mode=entry_mode,
+            target_leverage=target_leverage,
+            loop_label=f"{loop_label}-pre-order-{normalized_trigger}",
         )
         if setup_ok:
             return True, reason_code, "-", False
@@ -5821,7 +6024,11 @@ class TradePage(tk.Frame):
 
         status = str(normalized.get("status") or "").strip().upper()
         if not status:
-            fallback_status = str(normalized.get("orderStatus") or "").strip().upper()
+            fallback_status = str(
+                normalized.get("orderStatus")
+                or normalized.get("algoStatus")
+                or ""
+            ).strip().upper()
             if fallback_status:
                 status = fallback_status
                 normalized["status"] = fallback_status
@@ -5829,6 +6036,35 @@ class TradePage(tk.Frame):
         order_type = str(normalized.get("type") or "").strip().upper()
         if order_type:
             normalized["type"] = order_type
+        else:
+            fallback_type = str(
+                normalized.get("orderType")
+                or normalized.get("origType")
+                or ""
+            ).strip().upper()
+            if fallback_type:
+                order_type = fallback_type
+                normalized["type"] = fallback_type
+                normalized["_type_source"] = "orderType" if normalized.get("orderType") else "origType"
+
+        side = str(normalized.get("side") or "").strip().upper()
+        if not side:
+            fallback_side = str(
+                normalized.get("orderSide")
+                or normalized.get("S")
+                or ""
+            ).strip().upper()
+            if fallback_side:
+                normalized["side"] = fallback_side
+
+        orig_qty = TradePage._safe_float(normalized.get("origQty"))
+        if (orig_qty is None or orig_qty <= 0.0) and is_algo_order:
+            qty_fallback = TradePage._safe_float(
+                normalized.get("quantity")
+                or normalized.get("origQuantity")
+            )
+            if qty_fallback is not None and qty_fallback > 0.0:
+                normalized["origQty"] = str(float(qty_fallback))
 
         update_time = 0
         try:
@@ -5836,7 +6072,7 @@ class TradePage(tk.Frame):
         except (TypeError, ValueError):
             update_time = 0
         if update_time <= 0:
-            for key in ("time", "timestamp", "workingTime"):
+            for key in ("time", "timestamp", "workingTime", "createTime"):
                 try:
                     candidate = int(normalized.get(key) or 0)
                 except (TypeError, ValueError):
@@ -5870,11 +6106,18 @@ class TradePage(tk.Frame):
                 symbol = str(normalized.get("symbol") or "").strip().upper()
                 order_id = self._safe_int(normalized.get("orderId"))
                 stop_source = str(normalized.get("_stop_price_source") or "").strip()
+                type_source = str(normalized.get("_type_source") or "").strip()
                 if stop_source:
                     _log_trade(
                         "Open-order stop price fallback applied: "
                         f"symbol={symbol} order_id={order_id} source={stop_source} "
                         f"stop_price={normalized.get('stopPrice')} loop={loop_label}"
+                    )
+                if type_source:
+                    _log_trade(
+                        "Open-order type fallback applied: "
+                        f"symbol={symbol} order_id={order_id} source={type_source} "
+                        f"type={normalized.get('type')} loop={loop_label}"
                     )
                 client_order_id = str(
                     normalized.get("clientOrderId")

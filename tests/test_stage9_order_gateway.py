@@ -92,6 +92,48 @@ class OrderPreparationTests(unittest.TestCase):
         self.assertNotIn("quantity", result.prepared_params)
         self.assertNotIn("reduceOnly", result.prepared_params)
 
+    def test_one_way_exit_take_profit_keeps_quantity_and_reduce_only(self) -> None:
+        request = OrderCreateRequest(
+            symbol="ETHUSDT",
+            side="BUY",
+            order_type="TAKE_PROFIT",
+            purpose="EXIT",
+            quantity=2.5,
+            price=119.94,
+            stop_price=120.14,
+        )
+        result = prepare_create_order(
+            request,
+            filter_rules=self.filters,
+            position_mode="ONE_WAY",
+        )
+        self.assertTrue(result.ok)
+        self.assertEqual(result.prepared_params["price"], 119.9)
+        self.assertEqual(result.prepared_params["stopPrice"], 120.1)
+        self.assertEqual(result.prepared_params["quantity"], 2.5)
+        self.assertEqual(result.prepared_params["workingType"], "MARK_PRICE")
+        self.assertEqual(result.prepared_params["reduceOnly"], True)
+        self.assertNotIn("closePosition", result.prepared_params)
+
+    def test_reject_close_position_for_take_profit_limit(self) -> None:
+        request = OrderCreateRequest(
+            symbol="ETHUSDT",
+            side="BUY",
+            order_type="TAKE_PROFIT",
+            purpose="EXIT",
+            quantity=2.5,
+            price=119.94,
+            stop_price=120.14,
+            close_position=True,
+        )
+        result = prepare_create_order(
+            request,
+            filter_rules=self.filters,
+            position_mode="ONE_WAY",
+        )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason_code, "CLOSE_POSITION_UNSUPPORTED_ORDER_TYPE")
+
     def test_hedge_entry_sets_position_side_short(self) -> None:
         request = OrderCreateRequest(
             symbol="BTCUSDT",

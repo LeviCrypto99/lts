@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import time
 import zlib
 from typing import Any, Callable, Mapping, Optional, Sequence
 
@@ -87,6 +88,18 @@ def _normalize(value: Any) -> str:
 
 def _normalize_symbol(value: str) -> str:
     return (value or "").strip().upper()
+
+
+def _to_epoch_millis(value: Any) -> Optional[int]:
+    try:
+        parsed = int(float(value))
+    except (TypeError, ValueError):
+        return None
+    if parsed <= 0:
+        return None
+    if parsed >= 1_000_000_000_000:
+        return parsed
+    return parsed * 1000
 
 
 def _state_label(runtime: AutoTradeRuntime) -> str:
@@ -689,10 +702,15 @@ def handle_leading_market_signal(
         )
         return current, result
 
+    now_eval_ms = int(time.time() * 1000)
+    received_eval_ms = _to_epoch_millis(received_at_local)
+    evaluation_time_ms = max(now_eval_ms, received_eval_ms) if received_eval_ms is not None else now_eval_ms
+
     target_result = calculate_entry_target_with_logging(
         mode=entry_mode,
         candles=candles,
         symbol=symbol,
+        evaluation_time_ms=evaluation_time_ms,
     )
     if not target_result.ok or target_result.target_price is None:
         result = LeadingSignalProcessResult(

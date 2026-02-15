@@ -2,7 +2,6 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -15,12 +14,13 @@ import tkinter as tk
 import requests
 from PIL import Image, ImageDraw, ImageTk
 
+from log_rotation import append_rotating_log_line
+from runtime_paths import get_log_path
 from trade_page import TradePage
 
 BASE_WIDTH = 1328
 BASE_HEIGHT = 800
 
-LOGO_POS = (BASE_WIDTH / 2, 156)
 TITLE_POS = (BASE_WIDTH / 2, 267)
 API_LABEL_POS = (267, 295)
 API_ENTRY_POS = (267, 324)
@@ -30,6 +30,7 @@ NOTE_POS = (BASE_WIDTH / 2, 492)
 LOGIN_BTN_POS = (BASE_WIDTH / 2, 545)
 REQUIRED_POS = (BASE_WIDTH / 2, 620)
 REQUIRED2_POS = (BASE_WIDTH / 2, 655)
+TITLE_HINT_PANEL_SIZE = (600, 56)
 
 INFO_PANEL_POS = (29, 32)
 INFO_PANEL_SIZE = (371, 174)
@@ -44,6 +45,8 @@ LOGIN_W = 417
 LOGIN_H = 60
 HELP_BTN_W = 278
 HELP_BTN_H = 39
+HELP_SECONDARY_COLUMN_GAP = 96
+HELP_BUTTON_CLUSTER_SHIFT_X = 60
 TOP_ICON_GAP = 38
 TOP_ICON_ROW_OFFSET_X = 16
 EXIT_ICON_OFFSET_X = 12
@@ -71,6 +74,8 @@ PANEL_FILL = "#0b1220"
 PANEL_BORDER = "#c4cedf"
 PANEL_ALPHA = 165
 PANEL_BORDER_ALPHA = 210
+TITLE_HINT_PANEL_ALPHA = 165
+TITLE_HINT_PANEL_BORDER_ALPHA = 210
 MONTH_COLOR = "#f4c36a"
 
 FONT_FAMILY = "Malgun Gothic"
@@ -78,7 +83,7 @@ SUBSCRIBER_WEBHOOK_URL = (
     "https://script.google.com/macros/s/AKfycbyKBEsD_GQ125wrjPm8kUrcRvnZSuZ4DlHZTg-lEr1X_UX-CiY2U9W9g3Pd6JBc6xIS/exec"
 )
 SUBSCRIBER_REQUEST_TIMEOUT_SEC = 8
-LOGIN_LOG_PATH = Path(tempfile.gettempdir()) / "LTS-Login.log"
+LOGIN_LOG_PATH = get_log_path("LTS-Login.log")
 
 # Subscriber request window (ex_image.png) layout constants.
 SUB_TITLEBAR_OFFSET = 24
@@ -125,12 +130,14 @@ SUB_SUBMIT_TEXT_POS = (585, 527 - SUB_TITLEBAR_OFFSET)
 SUB_HELP_LEFT_TEXT_POS = (261, 570 - SUB_TITLEBAR_OFFSET)
 SUB_HELP_RIGHT_TEXT_POS = (618, 570 - SUB_TITLEBAR_OFFSET)
 
+BINANCE_GUIDE_WINDOW_WIDTH = 940
+BINANCE_GUIDE_WINDOW_HEIGHT = 210
+
 
 def _log_login(message: str) -> None:
     try:
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        with open(LOGIN_LOG_PATH, "a", encoding="utf-8") as handle:
-            handle.write(f"[{timestamp}] {message}\n")
+        append_rotating_log_line(LOGIN_LOG_PATH, f"[{timestamp}] {message}\n")
     except Exception:
         pass
 
@@ -969,6 +976,182 @@ class SubscriberRequestWindow(tk.Toplevel):
 
 
 
+class BinanceAccountGuideWindow(tk.Toplevel):
+    def __init__(self, master: tk.Widget, background_enabled: bool = True) -> None:
+        super().__init__(master)
+        parent = master.winfo_toplevel()
+        self._background_enabled = background_enabled
+        self.title("바이낸스 계정 생성 가이드북")
+        self.resizable(False, False)
+        self.transient(parent)
+        self._parent = parent
+        self._parent_focus_bind_id = parent.bind("<FocusIn>", self._on_parent_focus, add="+")
+        self.bind("<FocusIn>", self._on_self_focus)
+        self._center_over_parent(parent)
+        self._fonts = {
+            "question": tkfont.Font(self, family=FONT_FAMILY, size=12, weight="bold"),
+            "button": tkfont.Font(self, family=FONT_FAMILY, size=11, weight="bold"),
+        }
+        self._build_ui()
+        self.set_background_enabled(background_enabled)
+        _log_login("binance_account_guide_window_opened")
+
+    def destroy(self) -> None:
+        try:
+            if getattr(self, "_parent", None) is not None and getattr(self, "_parent_focus_bind_id", None):
+                try:
+                    self._parent.unbind("<FocusIn>", self._parent_focus_bind_id)
+                except tk.TclError:
+                    pass
+        finally:
+            super().destroy()
+
+    def _on_parent_focus(self, _event: Optional[tk.Event] = None) -> None:
+        if self.winfo_exists():
+            self.lift()
+
+    def _on_self_focus(self, _event: Optional[tk.Event] = None) -> None:
+        if self.winfo_exists():
+            self.lift()
+
+    def _center_over_parent(self, parent: tk.Tk) -> None:
+        parent.update_idletasks()
+        try:
+            base_x = parent.winfo_x()
+            base_y = parent.winfo_y()
+            base_w = parent.winfo_width()
+            base_h = parent.winfo_height()
+            x = base_x + max(0, (base_w - BINANCE_GUIDE_WINDOW_WIDTH) // 2)
+            y = base_y + max(0, (base_h - BINANCE_GUIDE_WINDOW_HEIGHT) // 2)
+        except tk.TclError:
+            x = 0
+            y = 0
+        self.geometry(f"{BINANCE_GUIDE_WINDOW_WIDTH}x{BINANCE_GUIDE_WINDOW_HEIGHT}+{x}+{y}")
+
+    def _build_ui(self) -> None:
+        self._container = tk.Frame(self, bd=0, highlightthickness=0)
+        self._container.pack(fill="both", expand=True, padx=18, pady=16)
+
+        self._columns = tk.Frame(self._container, bd=0, highlightthickness=0)
+        self._columns.pack(fill="both", expand=True)
+        self._columns.grid_rowconfigure(0, weight=1)
+        self._columns.grid_columnconfigure(0, weight=1)
+        self._columns.grid_columnconfigure(1, weight=1)
+
+        self._left_frame = tk.Frame(self._columns, bd=0, highlightthickness=0)
+        self._left_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        self._right_frame = tk.Frame(self._columns, bd=0, highlightthickness=0)
+        self._right_frame.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+        for frame in (self._left_frame, self._right_frame):
+            frame.grid_columnconfigure(0, weight=1)
+            frame.grid_rowconfigure(0, weight=1)
+            frame.grid_rowconfigure(3, weight=1)
+
+        self._left_question = tk.Label(
+            self._left_frame,
+            text="✅ 바이낸스 기존 계정이 있으신가요?",
+            font=self._fonts["question"],
+            fg=UI_TEXT_COLOR,
+            anchor="center",
+            justify="center",
+        )
+        self._left_question.grid(row=1, column=0, sticky="ew", pady=(0, 16), padx=20)
+
+        self._right_question = tk.Label(
+            self._right_frame,
+            text="❌ 바이낸스 기존 계정이 없으신가요?",
+            font=self._fonts["question"],
+            fg=UI_TEXT_COLOR,
+            anchor="center",
+            justify="center",
+        )
+        self._right_question.grid(row=1, column=0, sticky="ew", pady=(0, 16), padx=20)
+
+        self._left_button = tk.Button(
+            self._left_frame,
+            text="기존 계정이 있는 경우 클릭!",
+            font=self._fonts["button"],
+            bg=BUTTON_BG,
+            fg=BUTTON_FG,
+            activebackground="#1a1a1a",
+            activeforeground=BUTTON_FG,
+            bd=0,
+            relief="flat",
+            highlightthickness=0,
+            cursor="hand2",
+            command=self._open_has_account_guide,
+        )
+        self._left_button.grid(row=2, column=0, sticky="ew", ipady=9, padx=20)
+
+        self._right_button = tk.Button(
+            self._right_frame,
+            text="기존 계정이 없는 경우 클릭!",
+            font=self._fonts["button"],
+            bg=BUTTON_BG,
+            fg=BUTTON_FG,
+            activebackground="#1a1a1a",
+            activeforeground=BUTTON_FG,
+            bd=0,
+            relief="flat",
+            highlightthickness=0,
+            cursor="hand2",
+            command=self._open_no_account_guide,
+        )
+        self._right_button.grid(row=2, column=0, sticky="ew", ipady=9, padx=20)
+        _log_login("binance_account_guide_window_layout: centered_option_blocks")
+
+    def set_background_enabled(self, enabled: bool) -> None:
+        self._background_enabled = enabled
+        bg_color = BACKGROUND_OFF_COLOR
+        self.configure(bg=bg_color)
+        self._container.configure(bg=bg_color)
+        self._columns.configure(bg=bg_color)
+        self._left_frame.configure(bg=bg_color)
+        self._right_frame.configure(bg=bg_color)
+        self._left_question.configure(bg=bg_color)
+        self._right_question.configure(bg=bg_color)
+
+    def _open_has_account_guide(self) -> None:
+        _log_login("binance_account_guide_option_clicked: option=has_account")
+        self._open_guide_pdf(
+            option="has_account",
+            filename="binance_sign_up_guide_if_already_has_account.pdf",
+        )
+
+    def _open_no_account_guide(self) -> None:
+        _log_login("binance_account_guide_option_clicked: option=no_account")
+        self._open_guide_pdf(
+            option="no_account",
+            filename="binance_sign_up_guide_if_already_has_no_account.pdf",
+        )
+
+    def _open_guide_pdf(self, option: str, filename: str) -> None:
+        base_dir = Path(__file__).resolve().parent
+        pdf_path = base_dir / "image" / "login_page" / filename
+        if not pdf_path.exists():
+            _log_login(f"binance_account_guide_pdf_missing: option={option} path={pdf_path}")
+            messagebox.showerror("파일 없음", f"PDF 파일을 찾을 수 없습니다:\n{pdf_path}", parent=self)
+            return
+        try:
+            self._open_file(pdf_path)
+            _log_login(f"binance_account_guide_pdf_opened: option={option} path={pdf_path}")
+            self.destroy()
+        except Exception as exc:
+            _log_login(
+                f"binance_account_guide_pdf_open_failed: option={option} path={pdf_path} error={exc}"
+            )
+            messagebox.showerror("열기 실패", f"PDF를 열 수 없습니다:\n{exc}", parent=self)
+
+    @staticmethod
+    def _open_file(path: Path) -> None:
+        if sys.platform.startswith("win"):
+            os.startfile(path)  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(path)])
+        else:
+            subprocess.Popen(["xdg-open", str(path)])
+
+
 class LoginPage(tk.Frame):
     def __init__(self, master: tk.Widget, current_version: str = "", latest_version: str = "") -> None:
         super().__init__(master, bg=CANVAS_BG)
@@ -981,6 +1164,7 @@ class LoginPage(tk.Frame):
         self._required_var = tk.BooleanVar(value=False)
         self._required2_var = tk.BooleanVar(value=False)
         self._subscriber_window: Optional[SubscriberRequestWindow] = None
+        self._binance_account_guide_window: Optional[BinanceAccountGuideWindow] = None
         self._background_enabled = True
         self._bg_toggle_original = self._load_background_toggle_icon()
         self._bg_toggle_photo: Optional[ImageTk.PhotoImage] = None
@@ -1020,10 +1204,9 @@ class LoginPage(tk.Frame):
         self._last_bg_size: Optional[Tuple[int, int]] = None
         self.bg_item = self.canvas.create_image(0, 0, anchor="nw")
 
-        self.logo_original = self._load_logo()
-        self.logo_photo: Optional[ImageTk.PhotoImage] = None
-        self._last_logo_scale: Optional[float] = None
-        self.logo_item = self.canvas.create_image(0, 0, anchor="center")
+        self.title_hint_panel_photo: Optional[ImageTk.PhotoImage] = None
+        self._last_title_hint_panel_size: Optional[Tuple[int, int]] = None
+        self.title_hint_panel_item = self.canvas.create_image(0, 0, anchor="center")
 
         self.info_panel_photo: Optional[ImageTk.PhotoImage] = None
         self._last_info_panel_size: Optional[Tuple[int, int]] = None
@@ -1093,6 +1276,22 @@ class LoginPage(tk.Frame):
             font=self.fonts["help"],
             anchor="nw",
         )
+        self.help_title3_id = self.canvas.create_text(
+            0,
+            0,
+            text="📚자동매매 연결에 대한 가이드가 필요하신가요?",
+            fill=UI_TEXT_COLOR,
+            font=self.fonts["help"],
+            anchor="nw",
+        )
+        self.help_title4_id = self.canvas.create_text(
+            0,
+            0,
+            text="🚀아직 바이낸스 계정이 없으신가요?",
+            fill=UI_TEXT_COLOR,
+            font=self.fonts["help"],
+            anchor="nw",
+        )
 
         self.bg_toggle_item = self.canvas.create_image(0, 0, anchor="ne", tags=("bg_toggle",))
         self.canvas.tag_bind("bg_toggle", "<Button-1>", self._toggle_background)
@@ -1112,6 +1311,7 @@ class LoginPage(tk.Frame):
             font=self.fonts["title"],
             anchor="center",
         )
+        _log_login("title_hint_panel enabled: wrapped api key prompt with translucent panel")
         self.api_label_id = self.canvas.create_text(
             0,
             0,
@@ -1184,8 +1384,26 @@ class LoginPage(tk.Frame):
             radius=12,
             command=self._open_subscriber_request,
         )
+        self.help_button3 = RoundedButton(
+            self.canvas,
+            text="📚LTS 가이드북",
+            font=self.fonts["help_button"],
+            radius=12,
+            command=self._open_lts_guidebook,
+        )
+        self.help_button4 = RoundedButton(
+            self.canvas,
+            text="🚀바이낸스 계정 생성 가이드북",
+            font=self.fonts["help_button"],
+            radius=12,
+            command=self._open_binance_account_guide,
+        )
         self.help_button1.set_state("normal")
         self.help_button2.set_state("normal")
+        self.help_button3.set_state("normal")
+        self.help_button4.set_state("normal")
+        _log_login("secondary guide buttons initialized: lts_guidebook, binance_account_guide")
+        _log_login(f"help_button_cluster_shift applied: shift_x={HELP_BUTTON_CLUSTER_SHIFT_X}")
         self._apply_background_mode()
 
         self._bind_checkbox(self.required_text_id, self._toggle_required)
@@ -1197,11 +1415,6 @@ class LoginPage(tk.Frame):
 
         self.canvas.bind("<Configure>", self._on_resize)
         self._layout()
-
-    def _load_logo(self) -> Image.Image:
-        base_dir = Path(__file__).resolve().parent
-        logo_path = base_dir / "image" / "login_page" / "logo1.png"
-        return Image.open(logo_path).convert("RGBA")
 
     def _load_background(self) -> Image.Image:
         base_dir = Path(__file__).resolve().parent
@@ -1248,6 +1461,44 @@ class LoginPage(tk.Frame):
         finally:
             self._subscriber_window = None
 
+    def _open_lts_guidebook(self) -> None:
+        _log_login("guide_button_clicked: kind=lts_guidebook")
+        base_dir = Path(__file__).resolve().parent
+        pdf_path = base_dir / "image" / "login_page" / "lts_connect_guide.pdf"
+        if not pdf_path.exists():
+            _log_login(f"guide_pdf_missing: kind=lts_guidebook path={pdf_path}")
+            messagebox.showerror("파일 없음", f"PDF 파일을 찾을 수 없습니다:\n{pdf_path}")
+            return
+        try:
+            self._open_file(pdf_path)
+            _log_login(f"guide_pdf_opened: kind=lts_guidebook path={pdf_path}")
+        except Exception as exc:
+            _log_login(f"guide_pdf_open_failed: kind=lts_guidebook path={pdf_path} error={exc}")
+            messagebox.showerror("열기 실패", f"PDF를 열 수 없습니다:\n{exc}")
+
+    def _open_binance_account_guide(self) -> None:
+        _log_login("guide_button_clicked: kind=binance_account_guide")
+        if self._binance_account_guide_window is not None and self._binance_account_guide_window.winfo_exists():
+            _log_login("binance_account_guide_window_focus_existing")
+            self._binance_account_guide_window.lift()
+            self._binance_account_guide_window.focus_force()
+            return
+        self._binance_account_guide_window = BinanceAccountGuideWindow(
+            self.root,
+            background_enabled=self._background_enabled,
+        )
+        self._binance_account_guide_window.protocol("WM_DELETE_WINDOW", self._close_binance_account_guide)
+        _log_login("binance_account_guide_window_created")
+
+    def _close_binance_account_guide(self) -> None:
+        if self._binance_account_guide_window is None:
+            return
+        try:
+            self._binance_account_guide_window.destroy()
+        finally:
+            self._binance_account_guide_window = None
+            _log_login("binance_account_guide_window_closed")
+
     def _open_file(self, path: Path) -> None:
         if sys.platform.startswith("win"):
             os.startfile(path)  # type: ignore[attr-defined]
@@ -1262,6 +1513,11 @@ class LoginPage(tk.Frame):
         self._layout()
         if self._subscriber_window is not None and self._subscriber_window.winfo_exists():
             self._subscriber_window.set_background_enabled(self._background_enabled)
+        if (
+            self._binance_account_guide_window is not None
+            and self._binance_account_guide_window.winfo_exists()
+        ):
+            self._binance_account_guide_window.set_background_enabled(self._background_enabled)
 
     def _request_exit(self, _event: Optional[tk.Event] = None) -> None:
         exit_manager = getattr(self.root, "_exit_manager", None)
@@ -1280,6 +1536,8 @@ class LoginPage(tk.Frame):
         self.login_button.configure(bg=bg_color)
         self.help_button1.configure(bg=bg_color)
         self.help_button2.configure(bg=bg_color)
+        self.help_button3.configure(bg=bg_color)
+        self.help_button4.configure(bg=bg_color)
         if self._background_enabled:
             self._last_bg_size = None
         else:
@@ -1493,18 +1751,6 @@ class LoginPage(tk.Frame):
             size = max(8, int(base_size * scale))
             self.fonts[name].configure(size=size)
 
-    def _update_logo(self, scale: float) -> None:
-        if self._last_logo_scale == scale:
-            return
-        self._last_logo_scale = scale
-        logo_scale = 0.5
-        target_w = max(1, int(self.logo_original.width * scale * logo_scale))
-        target_h = max(1, int(self.logo_original.height * scale * logo_scale))
-        resample = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
-        resized = self.logo_original.resize((target_w, target_h), resample)
-        self.logo_photo = ImageTk.PhotoImage(resized)
-        self.canvas.itemconfigure(self.logo_item, image=self.logo_photo)
-
     def _update_background(self, width: int, height: int) -> None:
         if width <= 0 or height <= 0:
             return
@@ -1580,6 +1826,35 @@ class LoginPage(tk.Frame):
         self.info_panel_photo = ImageTk.PhotoImage(img)
         self.canvas.itemconfigure(self.info_panel_item, image=self.info_panel_photo)
 
+    def _update_title_hint_panel(self, width: int, height: int, scale: float) -> None:
+        size = (max(1, int(width)), max(1, int(height)))
+        if self._last_title_hint_panel_size == size:
+            return
+        self._last_title_hint_panel_size = size
+        radius = max(6, int(14 * scale))
+        border = max(1, int(2 * scale))
+        img = Image.new("RGBA", size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        inset = max(0, border // 2)
+        rect = (inset, inset, size[0] - inset - 1, size[1] - inset - 1)
+        if hasattr(draw, "rounded_rectangle"):
+            draw.rounded_rectangle(
+                rect,
+                radius=radius,
+                fill=_hex_to_rgba(PANEL_FILL, TITLE_HINT_PANEL_ALPHA),
+                outline=_hex_to_rgba(PANEL_BORDER, TITLE_HINT_PANEL_BORDER_ALPHA),
+                width=border,
+            )
+        else:
+            draw.rectangle(
+                rect,
+                fill=_hex_to_rgba(PANEL_FILL, TITLE_HINT_PANEL_ALPHA),
+                outline=_hex_to_rgba(PANEL_BORDER, TITLE_HINT_PANEL_BORDER_ALPHA),
+                width=border,
+            )
+        self.title_hint_panel_photo = ImageTk.PhotoImage(img)
+        self.canvas.itemconfigure(self.title_hint_panel_item, image=self.title_hint_panel_photo)
+
     def _layout(self) -> None:
         width = max(1, self.canvas.winfo_width())
         height = max(1, self.canvas.winfo_height())
@@ -1589,7 +1864,6 @@ class LoginPage(tk.Frame):
         pad_y = (height - BASE_HEIGHT * scale) / 2
 
         self._set_font_scale(scale)
-        self._update_logo(scale)
         self._update_background_toggle_icon(scale)
         self._update_exit_icon(scale)
         self.canvas.coords(
@@ -1625,28 +1899,39 @@ class LoginPage(tk.Frame):
         help_x = pad_x + HELP_PANEL_POS[0] * scale
         help_y = pad_y + (HELP_PANEL_POS[1] + self._anim_offset) * scale
         help_pad_x = max(8, int(12 * scale))
+        left_column_offset = (HELP_BTN_W + HELP_SECONDARY_COLUMN_GAP) * scale
+        help_shift_x = HELP_BUTTON_CLUSTER_SHIFT_X * scale
+        help_x_right = help_x + help_pad_x + help_shift_x
+        help_x_left = help_x_right - left_column_offset
         help_cursor_y = help_y
-        self.canvas.coords(self.help_title1_id, help_x + help_pad_x, help_cursor_y)
+        self.canvas.coords(self.help_title1_id, help_x_right, help_cursor_y)
+        self.canvas.coords(self.help_title3_id, help_x_left, help_cursor_y)
         help_cursor_y += max(10, int(22 * scale))
         btn_w = HELP_BTN_W * scale
         btn_h = HELP_BTN_H * scale
-        self.help_button1.place(x=help_x + help_pad_x, y=help_cursor_y, width=btn_w, height=btn_h, anchor="nw")
+        self.help_button1.place(x=help_x_right, y=help_cursor_y, width=btn_w, height=btn_h, anchor="nw")
         self.help_button1.resize(btn_w, btn_h, scale)
+        self.help_button3.place(x=help_x_left, y=help_cursor_y, width=btn_w, height=btn_h, anchor="nw")
+        self.help_button3.resize(btn_w, btn_h, scale)
         help_cursor_y += btn_h + max(10, int(16 * scale))
-        self.canvas.coords(self.help_title2_id, help_x + help_pad_x, help_cursor_y)
+        self.canvas.coords(self.help_title2_id, help_x_right, help_cursor_y)
+        self.canvas.coords(self.help_title4_id, help_x_left, help_cursor_y)
         help_cursor_y += max(10, int(22 * scale))
-        self.help_button2.place(x=help_x + help_pad_x, y=help_cursor_y, width=btn_w, height=btn_h, anchor="nw")
+        self.help_button2.place(x=help_x_right, y=help_cursor_y, width=btn_w, height=btn_h, anchor="nw")
         self.help_button2.resize(btn_w, btn_h, scale)
+        self.help_button4.place(x=help_x_left, y=help_cursor_y, width=btn_w, height=btn_h, anchor="nw")
+        self.help_button4.resize(btn_w, btn_h, scale)
 
-        self.canvas.coords(
-            self.logo_item,
-            pad_x + LOGO_POS[0] * scale,
-            pad_y + (LOGO_POS[1] + self._anim_offset) * scale,
-        )
+        title_x = pad_x + TITLE_POS[0] * scale
+        title_y = pad_y + (TITLE_POS[1] + FORM_OFFSET_Y + self._anim_offset) * scale
+        title_panel_w = TITLE_HINT_PANEL_SIZE[0] * scale
+        title_panel_h = TITLE_HINT_PANEL_SIZE[1] * scale
+        self._update_title_hint_panel(int(title_panel_w), int(title_panel_h), scale)
+        self.canvas.coords(self.title_hint_panel_item, title_x, title_y)
         self.canvas.coords(
             self.title_text_id,
-            pad_x + TITLE_POS[0] * scale,
-            pad_y + (TITLE_POS[1] + FORM_OFFSET_Y + self._anim_offset) * scale,
+            title_x,
+            title_y,
         )
         self.canvas.coords(
             self.api_label_id,
@@ -1699,7 +1984,9 @@ class LoginPage(tk.Frame):
         )
 
         wrap = max(240, int(ENTRY_W * scale))
-        self.canvas.itemconfigure(self.title_text_id, width=wrap)
+        title_wrap = max(180, int(title_panel_w - max(32, 48 * scale)))
+        self.canvas.itemconfigure(self.title_text_id, width=title_wrap)
         self.canvas.itemconfigure(self.note_text_id, width=wrap)
         self.canvas.itemconfigure(self.required_text_id, width=wrap)
         self.canvas.itemconfigure(self.required2_text_id, width=wrap)
+        self.canvas.tag_raise(self.title_text_id, self.title_hint_panel_item)

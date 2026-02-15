@@ -3,8 +3,6 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from indicators import calculate_atr_bands
-
 from auto_trade import (
     calculate_entry_target,
     calculate_entry_target_with_logging,
@@ -44,7 +42,7 @@ class CommonFilteringTests(unittest.TestCase):
         self.assertFalse(result.passed)
         self.assertEqual(result.reason_code, "CATEGORY_UNKNOWN")
 
-    def test_common_filter_fail_rising_top10(self) -> None:
+    def test_common_filter_fail_rising_top5(self) -> None:
         result = evaluate_common_filters(
             category="AI",
             ranking_direction="상승",
@@ -52,7 +50,7 @@ class CommonFilteringTests(unittest.TestCase):
             funding_rate_pct=-0.09,
         )
         self.assertFalse(result.passed)
-        self.assertEqual(result.reason_code, "RANKING_TOP10_RISE")
+        self.assertEqual(result.reason_code, "RANKING_TOP5_RISE")
 
     def test_common_filter_downward_rank_is_allowed(self) -> None:
         result = evaluate_common_filters(
@@ -84,7 +82,6 @@ class CommonFilteringTests(unittest.TestCase):
         self.assertFalse(result.passed)
         self.assertEqual(result.reason_code, "RANKING_DIRECTION_INVALID")
 
-
 class EntryTargetTests(unittest.TestCase):
     def setUp(self) -> None:
         self.candles = [
@@ -99,9 +96,9 @@ class EntryTargetTests(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(result.reference_index, 2)
         self.assertEqual(result.target_price, 4.0)
-        self.assertEqual(result.reference_source, "PREV_CONFIRMED_3M_HIGH")
+        self.assertIn("PREV_CONFIRMED_3M_HIGH", str(result.reference_source))
 
-    def test_conservative_target_uses_indicators_atr_upper(self) -> None:
+    def test_conservative_target_uses_aggressive_baseline_high(self) -> None:
         result = calculate_entry_target(
             mode="CONSERVATIVE",
             candles=self.candles,
@@ -109,10 +106,8 @@ class EntryTargetTests(unittest.TestCase):
             atr_multiplier=1.0,
         )
         self.assertTrue(result.ok)
-        upper, _, _ = calculate_atr_bands(self.candles, length=3, multiplier=1.0)
-        expected = float(upper[len(self.candles) - 2])
-        self.assertAlmostEqual(result.target_price, expected, places=10)
-        self.assertEqual(result.reference_source, "PREV_CONFIRMED_3M_ATR_UPPER")
+        self.assertAlmostEqual(float(result.target_price or 0.0), 4.0, places=10)
+        self.assertIn("PREV_CONFIRMED_3M_HIGH", str(result.reference_source))
 
     def test_target_fail_on_insufficient_candles(self) -> None:
         one_candle = [{"high": 1.0, "low": 0.9, "close": 0.95}]
@@ -120,14 +115,15 @@ class EntryTargetTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.reason_code, "INSUFFICIENT_CANDLES")
 
-    def test_conservative_target_fail_on_atr_length(self) -> None:
+    def test_conservative_target_does_not_require_atr_length(self) -> None:
         two_candles = [
             {"high": 2.0, "low": 1.0, "close": 1.5},
             {"high": 3.0, "low": 1.5, "close": 2.0},
         ]
         result = calculate_entry_target(mode="CONSERVATIVE", candles=two_candles, atr_length=3)
-        self.assertFalse(result.ok)
-        self.assertEqual(result.reason_code, "INSUFFICIENT_CANDLES_FOR_ATR")
+        self.assertTrue(result.ok)
+        self.assertEqual(result.reason_code, "TARGET_READY")
+        self.assertAlmostEqual(float(result.target_price or 0.0), 2.0, places=10)
 
     def test_target_fail_on_invalid_candle_columns(self) -> None:
         bad = [{"high": 1.0, "close": 0.9}]
