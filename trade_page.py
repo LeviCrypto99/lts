@@ -53,6 +53,7 @@ from auto_trade import (
     OrderCancelRequest,
     OrderQueryRequest,
     RetryPolicy,
+    TRIGGER_BUFFER_RATIO_DEFAULT,
     floor_quantity_by_step_size,
     round_price_by_tick_size,
 )
@@ -132,7 +133,9 @@ SIGNAL_RELAY_POLL_LIMIT_ENV = "LTS_SIGNAL_RELAY_POLL_LIMIT"
 SIGNAL_RELAY_REQUEST_TIMEOUT_SEC = 5
 SIGNAL_RELAY_POLL_LIMIT = 100
 SIGNAL_RELAY_POLL_ERROR_LOG_THROTTLE_SEC = 5
-BINANCE_FUTURES_MARK_PRICE_STREAM_URL = "wss://fstream.binance.com/ws/!markPrice@arr@1s"
+# Trigger/monitoring price basis uses last traded price stream.
+BINANCE_FUTURES_MARK_PRICE_STREAM_URL = "wss://fstream.binance.com/ws/!ticker@arr"
+FUTURES_LAST_PRICE_PATH = "/fapi/v1/ticker/price"
 WS_RECONNECT_BACKOFF_SEC = 3
 BINANCE_FUTURES_USER_STREAM_BASE_URL = "wss://fstream.binance.com/ws"
 USER_STREAM_LISTEN_KEY_PATH = "/fapi/v1/listenKey"
@@ -581,6 +584,11 @@ class TradePage(tk.Frame):
             f"enabled={bool(self._telegram_bot_token and self._signal_source_mode == SIGNAL_SOURCE_MODE_TELEGRAM)} "
             f"channel_entry={self._auto_trade_settings.entry_signal_channel_id} "
             f"channel_risk={self._auto_trade_settings.risk_signal_channel_id}"
+        )
+        _log_trade(
+            "Trigger price basis configured: "
+            f"source=LAST_PRICE ws_stream=!ticker@arr rest_path={FUTURES_LAST_PRICE_PATH} "
+            f"trigger_buffer_pct={TRIGGER_BUFFER_RATIO_DEFAULT * 100:.1f}"
         )
         self._start_wallet_fetch()
         self._start_status_refresh()
@@ -1529,12 +1537,16 @@ class TradePage(tk.Frame):
     def _check_recovery_price_source_ready(self) -> bool:
         payload = self._binance_public_get(
             "https://fapi.binance.com",
-            "/fapi/v1/premiumIndex",
+            FUTURES_LAST_PRICE_PATH,
             {"symbol": "BTCUSDT"},
         )
         if not isinstance(payload, dict):
             return False
-        mark_price = self._safe_float(payload.get("markPrice"))
+        mark_price = self._safe_float(
+            payload.get("price")
+            or payload.get("lastPrice")
+            or payload.get("markPrice")
+        )
         return mark_price is not None and mark_price > 0.0
 
     @staticmethod
@@ -2450,9 +2462,18 @@ class TradePage(tk.Frame):
             symbol = str(item.get("s") or item.get("symbol") or "").strip().upper()
             if not symbol:
                 continue
-            mark_price = self._safe_float(item.get("p") or item.get("markPrice"))
+            mark_price = self._safe_float(
+                item.get("c")
+                or item.get("lastPrice")
+                or item.get("price")
+                or item.get("markPrice")
+            )
             if mark_price is None or mark_price <= 0:
-                continue
+                # Compatibility fallback when unexpected payload uses mark-price stream field.
+                if "c" not in item and "P" not in item:
+                    mark_price = self._safe_float(item.get("p"))
+                if mark_price is None or mark_price <= 0:
+                    continue
             updates[symbol] = float(mark_price)
 
         if not updates:
@@ -3374,12 +3395,16 @@ class TradePage(tk.Frame):
         for symbol in symbols:
             payload = self._binance_public_get(
                 "https://fapi.binance.com",
-                "/fapi/v1/premiumIndex",
+                FUTURES_LAST_PRICE_PATH,
                 {"symbol": symbol},
             )
             if not isinstance(payload, dict):
                 continue
-            mark_price = self._safe_float(payload.get("markPrice"))
+            mark_price = self._safe_float(
+                payload.get("price")
+                or payload.get("lastPrice")
+                or payload.get("markPrice")
+            )
             if mark_price is None or mark_price <= 0:
                 continue
             result[symbol] = float(mark_price)
@@ -3408,9 +3433,16 @@ class TradePage(tk.Frame):
         avg_entry_price = self._safe_float((target_position or {}).get("entryPrice")) or 0.0
         mark_price = self._safe_float((target_position or {}).get("markPrice")) or 0.0
         if mark_price <= 0 and symbol:
-            payload = self._binance_public_get("https://fapi.binance.com", "/fapi/v1/premiumIndex", {"symbol": symbol})
+            payload = self._binance_public_get("https://fapi.binance.com", FUTURES_LAST_PRICE_PATH, {"symbol": symbol})
             if isinstance(payload, dict):
-                mark_price = self._safe_float(payload.get("markPrice")) or 0.0
+                mark_price = (
+                    self._safe_float(
+                        payload.get("price")
+                        or payload.get("lastPrice")
+                        or payload.get("markPrice")
+                    )
+                    or 0.0
+                )
 
         has_open_entry_order = False
         has_tp_order = False

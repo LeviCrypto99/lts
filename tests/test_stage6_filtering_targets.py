@@ -42,6 +42,16 @@ class CommonFilteringTests(unittest.TestCase):
         self.assertFalse(result.passed)
         self.assertEqual(result.reason_code, "CATEGORY_UNKNOWN")
 
+    def test_common_filter_fail_unknown_category_with_space_variant(self) -> None:
+        result = evaluate_common_filters(
+            category="정보 없음",
+            ranking_direction="상승",
+            ranking_position=11,
+            funding_rate_pct=-0.09,
+        )
+        self.assertFalse(result.passed)
+        self.assertEqual(result.reason_code, "CATEGORY_UNKNOWN")
+
     def test_common_filter_fail_rising_top5(self) -> None:
         result = evaluate_common_filters(
             category="AI",

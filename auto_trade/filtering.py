@@ -30,6 +30,11 @@ def _normalized_category_lower(category: str) -> str:
     return (category or "").strip().lower()
 
 
+def _normalized_category_compact(category: str) -> str:
+    # Normalize whitespace variants so "정보 없음" and "정보없음" are treated equally.
+    return "".join(_normalized_category_lower(category).split())
+
+
 def _match_excluded_keyword(category: str) -> Optional[str]:
     lowered = _normalized_category_lower(category)
     for keyword in _CATEGORY_EXCLUDED_KEYWORDS:
@@ -54,11 +59,12 @@ def evaluate_common_filters(
         )
 
     normalized_category = _normalized_category_lower(category)
-    if normalized_category == "정보없음":
+    normalized_category_compact = _normalized_category_compact(category)
+    if normalized_category_compact == "정보없음":
         return CommonFilterResult(
             passed=False,
             reason_code="CATEGORY_UNKNOWN",
-            failure_reason="category is 정보없음",
+            failure_reason=f"category is 정보없음 variant: {normalized_category or '-'}",
         )
 
     direction = _normalize_direction(ranking_direction)

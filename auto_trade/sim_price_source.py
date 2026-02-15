@@ -4,7 +4,7 @@ from collections import deque
 from typing import Any, Mapping, Optional, Sequence
 
 from .event_logging import StructuredLogEvent, log_structured_event
-from .trigger_engine import evaluate_trigger_loop
+from .trigger_engine import TRIGGER_BUFFER_RATIO_DEFAULT, evaluate_trigger_loop
 from .trigger_models import SimulationStepResult, TriggerCandidate, TriggerSimulationReport
 
 
@@ -45,7 +45,7 @@ def run_trigger_simulation(
     *,
     candidates: Sequence[TriggerCandidate],
     price_source: SimulatedPriceSource,
-    trigger_buffer_ratio: float = 0.001,
+    trigger_buffer_ratio: float = TRIGGER_BUFFER_RATIO_DEFAULT,
     stop_on_first_trigger: bool = True,
 ) -> TriggerSimulationReport:
     steps: list[SimulationStepResult] = []
@@ -84,7 +84,7 @@ def run_trigger_simulation_with_logging(
     *,
     candidates: Sequence[TriggerCandidate],
     price_source: SimulatedPriceSource,
-    trigger_buffer_ratio: float = 0.001,
+    trigger_buffer_ratio: float = TRIGGER_BUFFER_RATIO_DEFAULT,
     stop_on_first_trigger: bool = True,
     simulation_label: str = "default",
 ) -> TriggerSimulationReport:

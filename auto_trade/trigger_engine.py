@@ -6,7 +6,7 @@ from typing import Any, Mapping, Optional, Sequence
 from .event_logging import StructuredLogEvent, log_structured_event
 from .trigger_models import SymbolTriggerEvaluation, TriggerCandidate, TriggerKind, TriggerLoopResult
 
-TRIGGER_BUFFER_RATIO_DEFAULT = 0.001
+TRIGGER_BUFFER_RATIO_DEFAULT = 0.005
 
 
 def _normalize(value: Any) -> str:

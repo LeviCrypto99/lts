@@ -18,30 +18,30 @@ from auto_trade import (
 
 class TriggerThresholdTests(unittest.TestCase):
     def test_threshold_first_entry(self) -> None:
-        self.assertAlmostEqual(compute_trigger_threshold("FIRST_ENTRY", 100.0), 99.9, places=10)
+        self.assertAlmostEqual(compute_trigger_threshold("FIRST_ENTRY", 100.0), 99.5, places=10)
 
     def test_threshold_second_entry(self) -> None:
-        self.assertAlmostEqual(compute_trigger_threshold("SECOND_ENTRY", 120.0), 119.88, places=10)
+        self.assertAlmostEqual(compute_trigger_threshold("SECOND_ENTRY", 120.0), 119.4, places=10)
 
     def test_threshold_tp(self) -> None:
-        self.assertAlmostEqual(compute_trigger_threshold("TP", 95.0), 95.095, places=10)
+        self.assertAlmostEqual(compute_trigger_threshold("TP", 95.0), 95.475, places=10)
 
     def test_threshold_breakeven(self) -> None:
-        self.assertAlmostEqual(compute_trigger_threshold("BREAKEVEN", 120.0), 120.12, places=10)
+        self.assertAlmostEqual(compute_trigger_threshold("BREAKEVEN", 120.0), 120.6, places=10)
 
     def test_is_trigger_satisfied_rules(self) -> None:
         tp_threshold = compute_trigger_threshold("TP", 95.0)
         self.assertTrue(
-            is_trigger_satisfied("FIRST_ENTRY", current_mark_price=99.9, target_price=100.0)
+            is_trigger_satisfied("FIRST_ENTRY", current_mark_price=99.5, target_price=100.0)
         )
         self.assertFalse(
-            is_trigger_satisfied("FIRST_ENTRY", current_mark_price=99.89, target_price=100.0)
+            is_trigger_satisfied("FIRST_ENTRY", current_mark_price=99.49, target_price=100.0)
         )
         self.assertTrue(
             is_trigger_satisfied("TP", current_mark_price=tp_threshold, target_price=95.0)
         )
         self.assertTrue(
-            is_trigger_satisfied("BREAKEVEN", current_mark_price=120.12, target_price=120.0)
+            is_trigger_satisfied("BREAKEVEN", current_mark_price=120.6, target_price=120.0)
         )
 
 
