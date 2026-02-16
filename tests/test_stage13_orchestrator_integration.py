@@ -164,6 +164,50 @@ class OrchestratorIntegrationTests(unittest.TestCase):
         self.assertEqual(updated.pending_trigger_candidates, {})
         self.assertTrue(updated.global_state.entry_locked)
 
+    def test_trigger_cycle_first_entry_uses_aggressive_budget_multiplier(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="MONITORING",
+            pending_trigger_candidates={
+                "BTCUSDT": TriggerCandidate(
+                    symbol="BTCUSDT",
+                    trigger_kind="FIRST_ENTRY",
+                    target_price=100.0,
+                    received_at_local=1_000,
+                    message_id=102,
+                    entry_mode="AGGRESSIVE",
+                )
+            },
+        )
+        captured: dict[str, object] = {}
+
+        def _create_call(params: dict) -> GatewayCallResult:
+            captured.update(params)
+            return GatewayCallResult(ok=True, reason_code="OK")
+
+        updated, result = run_trigger_entry_cycle(
+            runtime,
+            mark_prices={"BTCUSDT": 100.0},
+            wallet_balance_usdt=1000.0,
+            available_usdt=500.0,
+            filter_rules_by_symbol={
+                "BTCUSDT": SymbolFilterRules(
+                    tick_size=0.1,
+                    step_size=0.001,
+                    min_qty=0.001,
+                    min_notional=5.0,
+                )
+            },
+            position_mode="ONE_WAY",
+            create_call=_create_call,
+            loop_label="stage13-trigger-aggressive-budget",
+        )
+        self.assertTrue(result.success)
+        self.assertEqual(updated.symbol_state, "ENTRY_ORDER")
+        self.assertEqual(captured.get("quantity"), 10.0)
+
     def test_trigger_cycle_uses_stable_client_order_id_on_retries(self) -> None:
         runtime = AutoTradeRuntime(
             settings=_default_settings(),

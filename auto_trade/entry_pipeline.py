@@ -31,7 +31,30 @@ def _is_positive_finite(value: float) -> bool:
     return math.isfinite(float(value)) and float(value) > 0.0
 
 
-def compute_first_entry_budget(wallet_balance_usdt: float) -> EntryBudgetResult:
+FIRST_ENTRY_BUDGET_BASE_RATIO = 0.5
+ENTRY_MODE_TO_FIRST_ENTRY_BUDGET_MULTIPLIER: dict[str, float] = {
+    "AGGRESSIVE": 2.0,
+    "CONSERVATIVE": 1.0,
+}
+DEFAULT_ENTRY_MODE = "CONSERVATIVE"
+
+
+def _normalize_entry_mode_token(entry_mode: Any) -> str:
+    normalized = str(entry_mode or "").strip().upper()
+    if normalized in ENTRY_MODE_TO_FIRST_ENTRY_BUDGET_MULTIPLIER:
+        return normalized
+    return DEFAULT_ENTRY_MODE
+
+
+def _resolve_first_entry_budget_multiplier(entry_mode: str) -> float:
+    normalized = _normalize_entry_mode_token(entry_mode)
+    return float(ENTRY_MODE_TO_FIRST_ENTRY_BUDGET_MULTIPLIER.get(normalized, 1.0))
+
+
+def compute_first_entry_budget(
+    wallet_balance_usdt: float,
+    entry_mode: str = DEFAULT_ENTRY_MODE,
+) -> EntryBudgetResult:
     if not _is_positive_finite(wallet_balance_usdt):
         return EntryBudgetResult(
             ok=False,
@@ -39,7 +62,8 @@ def compute_first_entry_budget(wallet_balance_usdt: float) -> EntryBudgetResult:
             reason_code="INVALID_WALLET_BALANCE",
             failure_reason="wallet balance must be positive finite number",
         )
-    budget = float(wallet_balance_usdt) * 0.5
+    mode_multiplier = _resolve_first_entry_budget_multiplier(entry_mode)
+    budget = float(wallet_balance_usdt) * float(FIRST_ENTRY_BUDGET_BASE_RATIO) * float(mode_multiplier)
     if budget <= 0:
         return EntryBudgetResult(
             ok=False,
@@ -195,6 +219,7 @@ def run_first_entry_pipeline(
     symbol: str,
     target_price: float,
     wallet_balance_usdt: float,
+    entry_mode: str = DEFAULT_ENTRY_MODE,
     filter_rules: SymbolFilterRules,
     position_mode: PositionMode,
     create_call: Callable[[Mapping[str, Any]], GatewayCallResult],
@@ -213,7 +238,10 @@ def run_first_entry_pipeline(
             raw_quantity=None,
         )
 
-    budget_result = compute_first_entry_budget(wallet_balance_usdt)
+    budget_result = compute_first_entry_budget(
+        wallet_balance_usdt,
+        entry_mode=entry_mode,
+    )
     if not budget_result.ok:
         return _reset_result(
             phase="FIRST_ENTRY",
@@ -541,14 +569,25 @@ def run_second_entry_pipeline(
     )
 
 
-def compute_first_entry_budget_with_logging(wallet_balance_usdt: float) -> EntryBudgetResult:
-    result = compute_first_entry_budget(wallet_balance_usdt)
+def compute_first_entry_budget_with_logging(
+    wallet_balance_usdt: float,
+    entry_mode: str = DEFAULT_ENTRY_MODE,
+) -> EntryBudgetResult:
+    normalized_mode = _normalize_entry_mode_token(entry_mode)
+    mode_multiplier = _resolve_first_entry_budget_multiplier(normalized_mode)
+    result = compute_first_entry_budget(
+        wallet_balance_usdt,
+        entry_mode=normalized_mode,
+    )
     log_structured_event(
         StructuredLogEvent(
             component="entry_pipeline",
             event="compute_first_entry_budget",
-            input_data=f"wallet_balance_usdt={wallet_balance_usdt}",
-            decision="wallet_balance_times_50pct",
+            input_data=(
+                f"wallet_balance_usdt={wallet_balance_usdt} "
+                f"entry_mode={normalized_mode}"
+            ),
+            decision="wallet_balance_times_50pct_then_apply_entry_mode_multiplier",
             result="ready" if result.ok else "rejected",
             state_before="budget_pending",
             state_after="budget_ready" if result.ok else "budget_rejected",
@@ -556,6 +595,8 @@ def compute_first_entry_budget_with_logging(wallet_balance_usdt: float) -> Entry
         ),
         reason_code=result.reason_code,
         budget_usdt=result.budget_usdt if result.budget_usdt is not None else "-",
+        entry_mode=normalized_mode,
+        mode_multiplier=mode_multiplier,
     )
     return result
 
@@ -592,6 +633,7 @@ def run_first_entry_pipeline_with_logging(
     symbol: str,
     target_price: float,
     wallet_balance_usdt: float,
+    entry_mode: str = DEFAULT_ENTRY_MODE,
     filter_rules: SymbolFilterRules,
     position_mode: PositionMode,
     create_call: Callable[[Mapping[str, Any]], GatewayCallResult],
@@ -599,11 +641,14 @@ def run_first_entry_pipeline_with_logging(
     new_client_order_id: Optional[str] = None,
     loop_label: str = "loop",
 ) -> EntryPipelineResult:
+    normalized_mode = _normalize_entry_mode_token(entry_mode)
+    mode_multiplier = _resolve_first_entry_budget_multiplier(normalized_mode)
     result = run_first_entry_pipeline(
         current_state=current_state,
         symbol=symbol,
         target_price=target_price,
         wallet_balance_usdt=wallet_balance_usdt,
+        entry_mode=normalized_mode,
         filter_rules=filter_rules,
         position_mode=position_mode,
         create_call=create_call,
@@ -616,7 +661,8 @@ def run_first_entry_pipeline_with_logging(
             event="run_first_entry_pipeline",
             input_data=(
                 f"symbol={_normalize(symbol)} target_price={target_price} "
-                f"wallet_balance_usdt={wallet_balance_usdt} state={current_state}"
+                f"wallet_balance_usdt={wallet_balance_usdt} entry_mode={normalized_mode} "
+                f"state={current_state}"
             ),
             decision="build_first_entry_order_and_apply_failure_policy",
             result="submitted" if result.success else "failed",
@@ -631,6 +677,8 @@ def run_first_entry_pipeline_with_logging(
         gateway_attempts=result.gateway_attempts,
         budget_usdt=result.budget_usdt if result.budget_usdt is not None else "-",
         raw_quantity=result.raw_quantity if result.raw_quantity is not None else "-",
+        entry_mode=normalized_mode,
+        mode_multiplier=mode_multiplier,
     )
     return result
 

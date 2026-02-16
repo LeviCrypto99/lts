@@ -90,6 +90,13 @@ def _normalize_symbol(value: str) -> str:
     return (value or "").strip().upper()
 
 
+def _normalize_entry_mode(value: Any) -> EntryMode:
+    normalized = str(value or "").strip().upper()
+    if normalized == "AGGRESSIVE":
+        return "AGGRESSIVE"
+    return "CONSERVATIVE"
+
+
 def _to_epoch_millis(value: Any) -> Optional[int]:
     try:
         parsed = int(float(value))
@@ -1151,12 +1158,14 @@ def run_trigger_entry_cycle(
         trigger_kind=str(selected.trigger_kind),
         message_id=int(selected.message_id),
     )
+    selected_entry_mode = _normalize_entry_mode(selected.entry_mode)
     if selected.trigger_kind == "FIRST_ENTRY":
         pipeline = run_first_entry_pipeline_with_logging(
             current_state=runtime.symbol_state,
             symbol=selected_symbol,
             target_price=selected.target_price,
             wallet_balance_usdt=wallet_balance_usdt,
+            entry_mode=selected_entry_mode,
             filter_rules=filter_rules,
             position_mode=position_mode,
             create_call=create_call,
@@ -1242,7 +1251,8 @@ def run_trigger_entry_cycle(
         event="run_trigger_entry_cycle",
         input_data=(
             f"selected_symbol={selected_symbol} trigger_kind={selected.trigger_kind} "
-            f"wallet_balance_usdt={wallet_balance_usdt} available_usdt={available_usdt}"
+            f"entry_mode={selected_entry_mode} wallet_balance_usdt={wallet_balance_usdt} "
+            f"available_usdt={available_usdt}"
         ),
         decision="run_entry_pipeline_for_selected_trigger",
         result="success" if result.success else "failed",
