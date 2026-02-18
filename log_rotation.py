@@ -36,6 +36,23 @@ def _backup_path(path: Path, index: int) -> Path:
     return path.with_name(f"{path.name}.{index}")
 
 
+def _existing_backup_indexes(path: Path) -> list[int]:
+    indexes: list[int] = []
+    prefix = f"{path.name}."
+    try:
+        for item in path.parent.glob(f"{path.name}.*"):
+            name = item.name
+            if not name.startswith(prefix):
+                continue
+            suffix = name[len(prefix) :]
+            if suffix.isdigit():
+                indexes.append(int(suffix))
+    except Exception:
+        return []
+    indexes.sort()
+    return indexes
+
+
 def _try_remove(path: Path) -> None:
     try:
         path.unlink()
@@ -73,6 +90,10 @@ def _rotate(path: Path, backup_count: int) -> Path | None:
     if backup_count <= 0:
         _try_remove(path)
         return None
+
+    for idx in _existing_backup_indexes(path):
+        if idx > backup_count:
+            _try_remove(_backup_path(path, idx))
 
     _try_remove(_backup_path(path, backup_count))
     for idx in range(backup_count - 1, 0, -1):

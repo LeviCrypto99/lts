@@ -340,7 +340,7 @@ def plan_risk_management_action(
             submit_breakeven_stop_market=True,
             keep_tp_order=has_tp_order,
             # For positive-PNL risk signals, TP should be armed by phase1 trigger-order logic
-            # (0.1% buffer + target price) instead of immediate limit submission.
+            # (0.5% buffer + target price) instead of immediate limit submission.
             create_tp_limit_once=False,
             keep_phase2_breakeven_limit=False,
             keep_existing_mdd_stop=False,

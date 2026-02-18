@@ -8,6 +8,7 @@ from auto_trade import (
     AutoTradeSettings,
     ExchangeSnapshot,
     GatewayCallResult,
+    GlobalState,
     PersistentRecoveryState,
     RetryPolicy,
     SymbolFilterRules,
@@ -163,6 +164,88 @@ class OrchestratorIntegrationTests(unittest.TestCase):
         self.assertEqual(updated.symbol_state, "ENTRY_ORDER")
         self.assertEqual(updated.pending_trigger_candidates, {})
         self.assertTrue(updated.global_state.entry_locked)
+
+    def test_trigger_cycle_allows_second_entry_when_only_exit_orders_are_open(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            global_state=GlobalState(has_any_position=True, has_any_open_order=True),
+            symbol_state="PHASE1",
+            active_symbol="BTCUSDT",
+            pending_trigger_candidates={
+                "BTCUSDT": TriggerCandidate(
+                    symbol="BTCUSDT",
+                    trigger_kind="SECOND_ENTRY",
+                    target_price=100.0,
+                    received_at_local=1_000,
+                    message_id=401,
+                )
+            },
+        )
+        updated, result = run_trigger_entry_cycle(
+            runtime,
+            mark_prices={"BTCUSDT": 100.0},
+            wallet_balance_usdt=1000.0,
+            available_usdt=500.0,
+            filter_rules_by_symbol={
+                "BTCUSDT": SymbolFilterRules(
+                    tick_size=0.1,
+                    step_size=0.001,
+                    min_qty=0.001,
+                    min_notional=5.0,
+                )
+            },
+            position_mode="ONE_WAY",
+            create_call=lambda _params: GatewayCallResult(ok=True, reason_code="OK"),
+            has_open_entry_order_for_symbol=lambda _symbol: False,
+            loop_label="stage13-trigger-second-entry-exit-only-open",
+        )
+        self.assertTrue(result.attempted)
+        self.assertTrue(result.success)
+        self.assertEqual(result.selected_trigger_kind, "SECOND_ENTRY")
+        self.assertTrue(updated.second_entry_order_pending)
+
+    def test_trigger_cycle_blocks_second_entry_when_open_entry_order_exists(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            global_state=GlobalState(has_any_position=True, has_any_open_order=True),
+            symbol_state="PHASE1",
+            active_symbol="BTCUSDT",
+            pending_trigger_candidates={
+                "BTCUSDT": TriggerCandidate(
+                    symbol="BTCUSDT",
+                    trigger_kind="SECOND_ENTRY",
+                    target_price=100.0,
+                    received_at_local=1_000,
+                    message_id=402,
+                )
+            },
+        )
+        updated, result = run_trigger_entry_cycle(
+            runtime,
+            mark_prices={"BTCUSDT": 100.0},
+            wallet_balance_usdt=1000.0,
+            available_usdt=500.0,
+            filter_rules_by_symbol={
+                "BTCUSDT": SymbolFilterRules(
+                    tick_size=0.1,
+                    step_size=0.001,
+                    min_qty=0.001,
+                    min_notional=5.0,
+                )
+            },
+            position_mode="ONE_WAY",
+            create_call=lambda _params: GatewayCallResult(ok=True, reason_code="OK"),
+            has_open_entry_order_for_symbol=lambda _symbol: True,
+            loop_label="stage13-trigger-second-entry-entry-open",
+        )
+        self.assertFalse(result.attempted)
+        self.assertFalse(result.success)
+        self.assertEqual(result.reason_code, "GLOBAL_BLOCKED_OR_NEW_ORDER_LOCKED")
+        self.assertEqual(updated, runtime)
 
     def test_trigger_cycle_first_entry_uses_aggressive_budget_multiplier(self) -> None:
         runtime = AutoTradeRuntime(
@@ -597,6 +680,35 @@ class OrchestratorIntegrationTests(unittest.TestCase):
         self.assertTrue(result.actionable)
         self.assertEqual(result.action_code, "MARKET_EXIT_PRIORITY")
         self.assertEqual(updated.symbol_state, "ENTRY_ORDER")
+
+    def test_risk_signal_phase2_negative_pnl_prioritizes_market_exit(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE2",
+            active_symbol="BTCUSDT",
+        )
+        updated, result = handle_risk_management_signal(
+            runtime,
+            channel_id=runtime.settings.risk_signal_channel_id,
+            message_id=302,
+            message_text="리스크 알림\nBinance: BTCUSDT.P",
+            avg_entry_price=100.0,
+            mark_price=110.0,
+            has_position=True,
+            has_open_entry_order=False,
+            has_tp_order=False,
+            second_entry_fully_filled=True,
+            exchange_info=_exchange_info(),
+            loop_label="stage13-risk-phase2-negative-market-exit",
+        )
+        self.assertTrue(result.accepted)
+        self.assertTrue(result.actionable)
+        self.assertEqual(result.action_code, "MARKET_EXIT_PRIORITY")
+        self.assertEqual(result.reason_code, "RISK_PNL_LE_ZERO_MARKET_EXIT")
+        self.assertTrue(result.submit_market_exit)
+        self.assertEqual(updated.symbol_state, "PHASE2")
 
     def test_risk_signal_symbol_validation_failure_is_ignored(self) -> None:
         runtime = AutoTradeRuntime(

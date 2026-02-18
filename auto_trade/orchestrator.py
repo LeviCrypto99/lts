@@ -177,14 +177,20 @@ def _build_entry_client_order_id(
     return client_order_id[:36]
 
 
-def _can_allow_second_entry_while_entry_locked(runtime: AutoTradeRuntime) -> bool:
+def _can_allow_second_entry_while_entry_locked(
+    runtime: AutoTradeRuntime,
+    *,
+    has_open_entry_order_active_symbol: Optional[bool] = None,
+) -> bool:
     if runtime.global_state.safety_locked:
         return False
     if runtime.symbol_state != "PHASE1":
         return False
     if runtime.second_entry_order_pending:
         return False
-    if runtime.global_state.has_any_open_order:
+    if has_open_entry_order_active_symbol is None:
+        has_open_entry_order_active_symbol = runtime.global_state.has_any_open_order
+    if has_open_entry_order_active_symbol:
         return False
     if not runtime.global_state.has_any_position:
         return False
@@ -851,6 +857,7 @@ def run_trigger_entry_cycle(
     filter_rules_by_symbol: Mapping[str, SymbolFilterRules],
     position_mode: PositionMode,
     create_call: Callable[[Mapping[str, Any]], GatewayCallResult],
+    has_open_entry_order_for_symbol: Optional[Callable[[str], bool]] = None,
     pre_order_setup: Optional[Callable[[str, str, str], tuple[bool, str, str, bool]]] = None,
     refresh_available_usdt: Optional[Callable[[], float]] = None,
     retry_policy: Optional[RetryPolicy] = None,
@@ -882,8 +889,32 @@ def run_trigger_entry_cycle(
         return runtime, result
 
     allow_second_entry_under_entry_lock = False
+    has_open_entry_order_active_symbol: Optional[bool] = None
     if runtime.global_state.global_blocked:
-        allow_second_entry_under_entry_lock = _can_allow_second_entry_while_entry_locked(runtime)
+        active_symbol = _normalize_symbol(str(runtime.active_symbol or ""))
+        if has_open_entry_order_for_symbol is not None and active_symbol:
+            try:
+                has_open_entry_order_active_symbol = bool(has_open_entry_order_for_symbol(active_symbol))
+            except Exception as exc:
+                _log_orchestrator_event(
+                    event="run_trigger_entry_cycle",
+                    input_data=(
+                        f"pending_candidates={len(runtime.pending_trigger_candidates)} "
+                        f"active_symbol={active_symbol}"
+                    ),
+                    decision="check_open_entry_order_for_second_entry_gate",
+                    result="error",
+                    state_before=_state_label(runtime),
+                    state_after=_state_label(runtime),
+                    failure_reason="OPEN_ENTRY_ORDER_CHECK_FAILED",
+                    loop_label=loop_label,
+                    error=repr(exc),
+                )
+                has_open_entry_order_active_symbol = None
+        allow_second_entry_under_entry_lock = _can_allow_second_entry_while_entry_locked(
+            runtime,
+            has_open_entry_order_active_symbol=has_open_entry_order_active_symbol,
+        )
         if allow_second_entry_under_entry_lock:
             _log_orchestrator_event(
                 event="run_trigger_entry_cycle",
@@ -901,6 +932,11 @@ def run_trigger_entry_cycle(
                 safety_locked=runtime.global_state.safety_locked,
                 has_any_position=runtime.global_state.has_any_position,
                 has_any_open_order=runtime.global_state.has_any_open_order,
+                has_open_entry_order_active_symbol=(
+                    has_open_entry_order_active_symbol
+                    if has_open_entry_order_active_symbol is not None
+                    else "-"
+                ),
             )
 
     if (
@@ -929,6 +965,11 @@ def run_trigger_entry_cycle(
             state_after=_state_label(runtime),
             failure_reason=result.reason_code,
             loop_label=loop_label,
+            has_open_entry_order_active_symbol=(
+                has_open_entry_order_active_symbol
+                if has_open_entry_order_active_symbol is not None
+                else "-"
+            ),
         )
         return runtime, result
 

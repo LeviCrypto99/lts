@@ -149,6 +149,7 @@ SIGNED_REQUEST_TIME_SYNC_RETRY_COUNT = 1
 AUTH_ERROR_POPUP_THROTTLE_SEC = 60
 POSITION_RISK_PATH = "/fapi/v2/positionRisk"
 POSITION_MODE_PATH = "/fapi/v1/positionSide/dual"
+MULTI_ASSETS_MARGIN_MODE_PATH = "/fapi/v1/multiAssetsMargin"
 LEVERAGE_SET_PATH = "/fapi/v1/leverage"
 MARGIN_TYPE_SET_PATH = "/fapi/v1/marginType"
 FUTURES_ORDER_PATH = "/fapi/v1/order"
@@ -381,6 +382,7 @@ class TradePage(tk.Frame):
         self._background_enabled = background_enabled
         self._api_key = api_key.strip()
         self._secret_key = secret_key.strip()
+        self._single_asset_mode_ready = False
         self._bg_toggle_original = self._load_background_toggle_icon()
         self._bg_toggle_photo: Optional[ImageTk.PhotoImage] = None
         self._last_bg_toggle_size: Optional[int] = None
@@ -1258,7 +1260,14 @@ class TradePage(tk.Frame):
             if side and side != close_side:
                 continue
             order_type = str(row.get("type") or "").strip().upper()
-            if order_type in ("TAKE_PROFIT_MARKET", "TAKE_PROFIT"):
+            if order_type == "TAKE_PROFIT":
+                price = self._safe_float(row.get("price"))
+                if price is not None and float(price) > 0.0 and abs(float(price) - float(entry_price)) <= tolerance * 2:
+                    templates["breakeven_limit"] = True
+                else:
+                    templates["tp_limit"] = True
+                continue
+            if order_type == "TAKE_PROFIT_MARKET":
                 templates["tp_limit"] = True
                 continue
             if order_type == "LIMIT":
@@ -1404,17 +1413,33 @@ class TradePage(tk.Frame):
                 return False, "tp_trigger_registration_failed"
 
         if templates["breakeven_limit"]:
-            success = self._submit_breakeven_limit_once(
-                symbol=target,
-                positions=positions,
-                loop_label=f"{loop_label}-breakeven-limit",
-            )
-            _log_trade(
-                "Exit rebuild order result: "
-                f"symbol={target} type=BREAKEVEN_LIMIT success={success} loop={loop_label}"
-            )
-            if not success:
-                return False, "breakeven_limit_registration_failed"
+            if str(runtime_symbol_state or "").strip().upper() == "PHASE2":
+                trigger_price = float(entry_price) * (1.005 if float(position_amt) < 0.0 else 0.995)
+                success = self._submit_tp_limit_once(
+                    symbol=target,
+                    positions=positions,
+                    loop_label=f"{loop_label}-phase2-breakeven-tp-trigger",
+                    target_price_override=float(entry_price),
+                    trigger_price_override=float(trigger_price),
+                )
+                _log_trade(
+                    "Exit rebuild order result: "
+                    f"symbol={target} type=PHASE2_BREAKEVEN_TP_TRIGGER success={success} loop={loop_label}"
+                )
+                if not success:
+                    return False, "phase2_breakeven_tp_trigger_registration_failed"
+            else:
+                success = self._submit_breakeven_limit_once(
+                    symbol=target,
+                    positions=positions,
+                    loop_label=f"{loop_label}-breakeven-limit",
+                )
+                _log_trade(
+                    "Exit rebuild order result: "
+                    f"symbol={target} type=BREAKEVEN_LIMIT success={success} loop={loop_label}"
+                )
+                if not success:
+                    return False, "breakeven_limit_registration_failed"
 
         return True, "-"
 
@@ -3301,6 +3326,7 @@ class TradePage(tk.Frame):
                 # Position mode is unresolved; pre-order hook will reject before pipeline execution.
                 position_mode="ONE_WAY",
                 create_call=self._gateway_create_order_call,
+                has_open_entry_order_for_symbol=self._has_open_entry_order_for_symbol,
                 pre_order_setup=self._reject_pre_order_when_position_mode_unknown,
                 loop_label="signal-loop-trigger-mode-unknown",
             )
@@ -3324,6 +3350,7 @@ class TradePage(tk.Frame):
             filter_rules_by_symbol=filter_rules,
             position_mode=position_mode,
             create_call=self._gateway_create_order_call,
+            has_open_entry_order_for_symbol=self._has_open_entry_order_for_symbol,
             pre_order_setup=self._run_pre_order_setup_hook,
             loop_label="signal-loop-trigger",
         )
@@ -3347,6 +3374,20 @@ class TradePage(tk.Frame):
             f"reason={result.reason_code} pipeline={result.pipeline_reason_code} "
             f"symbol={result.selected_symbol} trigger={result.selected_trigger_kind}"
         )
+
+    def _has_open_entry_order_for_symbol(self, symbol: str) -> bool:
+        target = str(symbol or "").strip().upper()
+        if not target:
+            return False
+        open_orders = self._fetch_open_orders() or []
+        entry_orders, _ = self._classify_orders_for_symbol(target, open_orders)
+        has_open_entry_order = bool(entry_orders)
+        if has_open_entry_order:
+            _log_trade(
+                "Second-entry gate blocked by open entry orders: "
+                f"symbol={target} entry_order_count={len(entry_orders)} open_order_count={len(open_orders)}"
+            )
+        return has_open_entry_order
 
     def _build_filter_rules_by_symbols(self, symbols: list[str]) -> dict[str, SymbolFilterRules]:
         rules: dict[str, SymbolFilterRules] = {}
@@ -4202,6 +4243,9 @@ class TradePage(tk.Frame):
         tp_trigger_order_ids: list[int] = []
         tp_trigger_prices: list[float] = []
         tp_trigger_trigger_prices: list[float] = []
+        phase2_breakeven_tp_trigger_order_ids: list[int] = []
+        phase2_breakeven_tp_trigger_prices: list[float] = []
+        phase2_breakeven_tp_trigger_trigger_prices: list[float] = []
         tp_market_order_ids: list[int] = []
         legacy_tp_limit_order_ids: list[int] = []
         breakeven_limit_order_ids: list[int] = []
@@ -4209,6 +4253,18 @@ class TradePage(tk.Frame):
         breakeven_stop_order_ids: list[int] = []
         mdd_stop_order_ids: list[int] = []
         mdd_stop_prices: list[float] = []
+
+        breakeven_trigger_target = round_price_by_tick_size(
+            float(breakeven_target) * (1.005 if is_short else 0.995),
+            tick_size,
+        )
+        if breakeven_trigger_target is None or breakeven_trigger_target <= 0:
+            _log_trade(
+                "Phase exit policy skipped: "
+                f"symbol={target} reason=breakeven_trigger_rounding_failed breakeven_target={breakeven_target} "
+                f"tick_size={tick_size}"
+            )
+            return runtime
 
         for row in exit_orders:
             order_id = self._safe_int(row.get("orderId"))
@@ -4231,9 +4287,18 @@ class TradePage(tk.Frame):
                         f"symbol={target} order_id={order_id} source={stop_source} "
                         f"trigger_price={trigger_price} loop={loop_label}"
                     )
-                tp_trigger_order_ids.append(order_id)
-                tp_trigger_prices.append(float(order_price))
-                tp_trigger_trigger_prices.append(float(trigger_price))
+                is_phase2_breakeven_trigger = (
+                    abs(float(order_price) - float(breakeven_target)) <= tolerance
+                    and abs(float(trigger_price) - float(breakeven_trigger_target)) <= tolerance * 2
+                )
+                if is_phase2_breakeven_trigger:
+                    phase2_breakeven_tp_trigger_order_ids.append(order_id)
+                    phase2_breakeven_tp_trigger_prices.append(float(order_price))
+                    phase2_breakeven_tp_trigger_trigger_prices.append(float(trigger_price))
+                else:
+                    tp_trigger_order_ids.append(order_id)
+                    tp_trigger_prices.append(float(order_price))
+                    tp_trigger_trigger_prices.append(float(trigger_price))
                 continue
             if order_type == "TAKE_PROFIT_MARKET":
                 tp_market_order_ids.append(order_id)
@@ -4267,7 +4332,7 @@ class TradePage(tk.Frame):
                 mdd_stop_prices.append(float(stop_price))
 
         tp_trigger_target = round_price_by_tick_size(
-            float(tp_target) * (1.001 if is_short else 0.999),
+            float(tp_target) * (1.005 if is_short else 0.995),
             tick_size,
         )
         if tp_trigger_target is None or tp_trigger_target <= 0:
@@ -4281,9 +4346,11 @@ class TradePage(tk.Frame):
             and abs(float(tp_trigger_prices[0]) - float(tp_target)) <= tolerance
             and abs(float(tp_trigger_trigger_prices[0]) - float(tp_trigger_target)) <= tolerance * 2
         )
-        breakeven_limit_aligned = bool(breakeven_limit_order_ids) and all(
-            abs(float(price) - float(breakeven_target)) <= tolerance
-            for price in breakeven_limit_prices
+        phase2_breakeven_trigger_aligned = (
+            len(phase2_breakeven_tp_trigger_order_ids) == 1
+            and abs(float(phase2_breakeven_tp_trigger_prices[0]) - float(breakeven_target)) <= tolerance
+            and abs(float(phase2_breakeven_tp_trigger_trigger_prices[0]) - float(breakeven_trigger_target))
+            <= tolerance * 2
         )
         mdd_stop_aligned = bool(mdd_stop_order_ids) and all(
             abs(float(price) - float(mdd_target)) <= tolerance * 2 for price in mdd_stop_prices
@@ -4298,6 +4365,14 @@ class TradePage(tk.Frame):
                     reason="phase1_disable_breakeven_limit",
                 )
                 breakeven_limit_order_ids = []
+            if phase2_breakeven_tp_trigger_order_ids:
+                self._cancel_orders_by_ids(
+                    symbol=target,
+                    order_ids=phase2_breakeven_tp_trigger_order_ids,
+                    loop_label=loop_label,
+                    reason="phase1_disable_phase2_breakeven_tp_trigger",
+                )
+                phase2_breakeven_tp_trigger_order_ids = []
             if mdd_stop_order_ids:
                 self._cancel_orders_by_ids(
                     symbol=target,
@@ -4378,7 +4453,6 @@ class TradePage(tk.Frame):
             return runtime
 
         # PHASE2 policy.
-        self._tp_trigger_submit_guard_by_symbol.pop(target, None)
         phase2_tp_cancel_ids = [
             order_id
             for order_id in (tp_trigger_order_ids + tp_market_order_ids + legacy_tp_limit_order_ids)
@@ -4399,39 +4473,67 @@ class TradePage(tk.Frame):
                 reason="phase2_disable_breakeven_stop",
             )
             breakeven_stop_order_ids = []
-        if breakeven_limit_order_ids and not breakeven_limit_aligned:
+
+        if phase2_breakeven_tp_trigger_order_ids and not phase2_breakeven_trigger_aligned:
+            self._cancel_orders_by_ids(
+                symbol=target,
+                order_ids=phase2_breakeven_tp_trigger_order_ids,
+                loop_label=loop_label,
+                reason="phase2_refresh_breakeven_tp_trigger",
+            )
+            phase2_breakeven_tp_trigger_order_ids = []
+
+        if breakeven_limit_order_ids:
             self._cancel_orders_by_ids(
                 symbol=target,
                 order_ids=breakeven_limit_order_ids,
                 loop_label=loop_label,
-                reason="phase2_refresh_breakeven_limit",
+                reason="phase2_replace_breakeven_limit_with_tp_trigger",
             )
             breakeven_limit_order_ids = []
 
-        breakeven_trigger_threshold = float(breakeven_target) * (1.001 if is_short else 0.999)
-        breakeven_trigger_hit = mark_price >= breakeven_trigger_threshold if is_short else mark_price <= breakeven_trigger_threshold
-        if breakeven_trigger_hit and not breakeven_limit_order_ids:
-            if entry_orders:
-                entry_order_ids = [
-                    self._safe_int(row.get("orderId"))
-                    for row in entry_orders
-                    if self._safe_int(row.get("orderId")) > 0
-                ]
-                self._cancel_orders_by_ids(
-                    symbol=target,
-                    order_ids=entry_order_ids,
-                    loop_label=loop_label,
-                    reason="phase2_breakeven_trigger_cancel_entry",
+        if phase2_breakeven_trigger_aligned:
+            self._tp_trigger_submit_guard_by_symbol.pop(target, None)
+        else:
+            guard = self._tp_trigger_submit_guard_by_symbol.get(target)
+            if guard:
+                guard_age = max(0.0, time.time() - float(guard.get("submitted_at", 0.0)))
+                same_target = abs(float(guard.get("target_price", 0.0)) - float(breakeven_target)) <= tolerance
+                same_trigger = abs(float(guard.get("trigger_price", 0.0)) - float(breakeven_trigger_target)) <= tolerance * 2
+                same_qty = abs(float(guard.get("quantity", 0.0)) - abs(float(position_amt))) <= max(
+                    float(filter_rule.step_size),
+                    1e-12,
                 )
-            submitted = self._submit_breakeven_limit_once(
+                if (
+                    guard_age <= float(TP_TRIGGER_SUBMISSION_GUARD_SEC)
+                    and same_target
+                    and same_trigger
+                    and same_qty
+                ):
+                    _log_trade(
+                        "Phase2 breakeven TP trigger submit skipped by guard: "
+                        f"symbol={target} age_sec={guard_age:.2f} target={breakeven_target} "
+                        f"trigger={breakeven_trigger_target} loop={loop_label}"
+                    )
+                    return runtime
+                self._tp_trigger_submit_guard_by_symbol.pop(target, None)
+            submitted = self._submit_tp_limit_once(
                 symbol=target,
                 positions=positions,
-                loop_label=f"{loop_label}-phase2-breakeven-limit",
+                loop_label=f"{loop_label}-phase2-breakeven-tp-trigger",
                 target_price_override=float(breakeven_target),
+                trigger_price_override=float(breakeven_trigger_target),
             )
+            if submitted:
+                self._tp_trigger_submit_guard_by_symbol[target] = {
+                    "submitted_at": float(time.time()),
+                    "target_price": float(breakeven_target),
+                    "trigger_price": float(breakeven_trigger_target),
+                    "quantity": abs(float(position_amt)),
+                }
             _log_trade(
-                "Phase2 breakeven trigger evaluated: "
-                f"symbol={target} mark_price={mark_price} threshold={breakeven_trigger_threshold} "
+                "Phase2 breakeven TP trigger ensured: "
+                f"symbol={target} mark_price={mark_price} trigger={breakeven_trigger_target} "
                 f"target={breakeven_target} submitted={submitted}"
             )
 
@@ -5030,7 +5132,7 @@ class TradePage(tk.Frame):
         if target_price <= 0:
             return False
         if trigger_price_override is None:
-            trigger_price = target_price * (1.001 if is_short else 0.999)
+            trigger_price = target_price * (1.005 if is_short else 0.995)
         else:
             trigger_price = float(trigger_price_override)
         if trigger_price <= 0:
@@ -5481,6 +5583,88 @@ class TradePage(tk.Frame):
             return "UNKNOWN"
         payload = self._binance_signed_get("https://fapi.binance.com", POSITION_MODE_PATH)
         return self._parse_position_mode(payload)
+
+    @staticmethod
+    def _parse_multi_assets_margin_mode(payload: object) -> Optional[bool]:
+        if not isinstance(payload, dict):
+            return None
+        raw = payload.get("multiAssetsMargin")
+        if isinstance(raw, bool):
+            return raw
+        if isinstance(raw, str):
+            lowered = raw.strip().lower()
+            if lowered in ("true", "false"):
+                return lowered == "true"
+        return None
+
+    def _fetch_multi_assets_margin_mode(self) -> tuple[Optional[bool], str]:
+        if not self._api_key or not self._secret_key:
+            return None, "api_credentials_missing"
+        payload = self._binance_signed_get("https://fapi.binance.com", MULTI_ASSETS_MARGIN_MODE_PATH)
+        if payload is None:
+            return None, "multi_assets_mode_fetch_response_none"
+        mode = self._parse_multi_assets_margin_mode(payload)
+        if mode is not None:
+            return mode, "-"
+        error_code, error_message = self._extract_exchange_error_from_payload(payload)
+        if error_code < 0:
+            reason_code = self._map_exchange_reason_code(error_code, error_message)
+            return (
+                None,
+                f"multi_assets_mode_fetch_failed_{reason_code}:error_code={error_code} message={error_message or '-'}",
+            )
+        return None, f"multi_assets_mode_fetch_unexpected_payload_type:{type(payload).__name__}"
+
+    def _set_multi_assets_margin_mode(self, *, enabled: bool) -> tuple[bool, str, str]:
+        payload = self._binance_signed_post(
+            "https://fapi.binance.com",
+            MULTI_ASSETS_MARGIN_MODE_PATH,
+            {"multiAssetsMargin": "true" if enabled else "false"},
+        )
+        if payload is None:
+            return False, "MULTI_ASSETS_MODE_SET_FAILED_NETWORK_ERROR", "multi_assets_mode_set_response_none"
+        error_code, error_message = self._extract_exchange_error_from_payload(payload)
+        if error_code < 0:
+            reason_code = self._map_exchange_reason_code(error_code, error_message)
+            return (
+                False,
+                f"MULTI_ASSETS_MODE_SET_FAILED_{reason_code}",
+                f"error_code={error_code} message={error_message or '-'}",
+            )
+        return True, "MULTI_ASSETS_MODE_SET_OK", "-"
+
+    def _ensure_single_asset_mode_on_login(self) -> bool:
+        if not self._api_key or not self._secret_key:
+            _log_trade("Login asset mode sync skipped: reason=api_credentials_missing")
+            self._single_asset_mode_ready = False
+            return False
+        _log_trade("Login asset mode sync started: target=single_asset")
+        current_mode, fetch_failure = self._fetch_multi_assets_margin_mode()
+        if current_mode is None:
+            _log_trade(
+                "Login asset mode sync skipped: "
+                f"reason=multi_assets_mode_fetch_failed failure={fetch_failure}"
+            )
+            self._single_asset_mode_ready = False
+            return False
+        if current_mode is False:
+            _log_trade("Login asset mode sync skipped: reason=already_single_asset")
+            self._single_asset_mode_ready = True
+            return True
+        ok, reason_code, failure_reason = self._set_multi_assets_margin_mode(enabled=False)
+        if not ok:
+            _log_trade(
+                "Login asset mode sync failed: "
+                f"reason={reason_code} failure={failure_reason}"
+            )
+            self._single_asset_mode_ready = False
+            return False
+        _log_trade(
+            "Login asset mode sync applied: "
+            f"previous_mode=multi_asset current_mode=single_asset reason={reason_code}"
+        )
+        self._single_asset_mode_ready = True
+        return True
 
     @staticmethod
     def _extract_exchange_error_from_payload(payload: object) -> tuple[int, str]:
@@ -7436,6 +7620,9 @@ class TradePage(tk.Frame):
 
     def _fetch_wallet_balance(self) -> None:
         try:
+            if not self._ensure_single_asset_mode_on_login():
+                _log_trade("Wallet fetch skipped: reason=single_asset_mode_not_ready")
+                return
             restrictions = self._fetch_api_restrictions()
             if not restrictions:
                 self._set_wallet_failure_async()
@@ -8081,10 +8268,15 @@ class TradePage(tk.Frame):
 
     def _refresh_status(self) -> None:
         try:
-            balance = self._fetch_futures_balance()
-            positions = self._fetch_open_positions()
-            if balance is not None:
-                self._sync_wallet_balance_to_sheet(balance)
+            if not self._single_asset_mode_ready and not self._ensure_single_asset_mode_on_login():
+                _log_trade("Status refresh skipped: reason=single_asset_mode_not_ready")
+                balance = None
+                positions = None
+            else:
+                balance = self._fetch_futures_balance()
+                positions = self._fetch_open_positions()
+                if balance is not None:
+                    self._sync_wallet_balance_to_sheet(balance)
         except Exception:
             balance = None
             positions = None
@@ -8098,7 +8290,6 @@ class TradePage(tk.Frame):
             self._start_status_refresh()
 
         self.after(0, apply)
-
 
 class ClosePositionWindow(tk.Toplevel):
     def __init__(self, master: TradePage, position: dict) -> None:

@@ -102,6 +102,7 @@ def _make_trade_page_stub(runtime: AutoTradeRuntime | None = None) -> TradePage:
     page._auto_trade_runtime_lock = threading.Lock()
     page._signal_queue_lock = threading.Lock()
     page._signal_event_queue = []
+    page._single_asset_mode_ready = False
     page._signal_source_mode = trade_page.SIGNAL_SOURCE_MODE_TELEGRAM
     page._entry_order_ref_by_symbol = {}
     page._second_entry_skip_latch = set()
@@ -127,6 +128,107 @@ class TradePageRegressionTests(unittest.TestCase):
     def test_tp_ratio_options_include_half_percent(self) -> None:
         self.assertIn("0.5%", trade_page.TP_RATIO_OPTIONS)
         self.assertEqual(trade_page.TP_RATIO_OPTIONS, ["0.5%", "3%", "5%"])
+
+    def test_parse_multi_assets_margin_mode_handles_bool_and_string(self) -> None:
+        self.assertIs(TradePage._parse_multi_assets_margin_mode({"multiAssetsMargin": True}), True)
+        self.assertIs(TradePage._parse_multi_assets_margin_mode({"multiAssetsMargin": "false"}), False)
+        self.assertIsNone(TradePage._parse_multi_assets_margin_mode({"multiAssetsMargin": "unknown"}))
+        self.assertIsNone(TradePage._parse_multi_assets_margin_mode(None))
+
+    def test_login_asset_mode_sync_skips_when_already_single_asset(self) -> None:
+        page = _make_trade_page_stub()
+        page._api_key = "key"
+        page._secret_key = "secret"
+        page._fetch_multi_assets_margin_mode = lambda: (False, "-")
+        set_calls: list[bool] = []
+        page._set_multi_assets_margin_mode = lambda *, enabled: set_calls.append(bool(enabled)) or (True, "OK", "-")
+
+        ok = page._ensure_single_asset_mode_on_login()
+
+        self.assertTrue(ok)
+        self.assertTrue(page._single_asset_mode_ready)
+        self.assertEqual(set_calls, [])
+
+    def test_login_asset_mode_sync_sets_single_asset_when_multi_asset(self) -> None:
+        page = _make_trade_page_stub()
+        page._api_key = "key"
+        page._secret_key = "secret"
+        page._fetch_multi_assets_margin_mode = lambda: (True, "-")
+        set_calls: list[bool] = []
+        page._set_multi_assets_margin_mode = lambda *, enabled: set_calls.append(bool(enabled)) or (
+            True,
+            "MULTI_ASSETS_MODE_SET_OK",
+            "-",
+        )
+
+        ok = page._ensure_single_asset_mode_on_login()
+
+        self.assertTrue(ok)
+        self.assertTrue(page._single_asset_mode_ready)
+        self.assertEqual(set_calls, [False])
+
+    def test_fetch_wallet_balance_skips_when_single_asset_mode_not_ready(self) -> None:
+        page = _make_trade_page_stub()
+        page._api_key = "key"
+        page._secret_key = "secret"
+        calls = {
+            "restrictions": 0,
+            "wallet_failure": 0,
+        }
+
+        page._ensure_single_asset_mode_on_login = lambda: False
+
+        def _fetch_api_restrictions():
+            calls["restrictions"] += 1
+            return {"enableReading": True, "enableFutures": True}
+
+        page._fetch_api_restrictions = _fetch_api_restrictions
+        page._set_wallet_failure_async = lambda: calls.__setitem__("wallet_failure", calls["wallet_failure"] + 1)
+
+        page._fetch_wallet_balance()
+
+        self.assertEqual(calls["restrictions"], 0)
+        self.assertEqual(calls["wallet_failure"], 0)
+
+    def test_refresh_status_skips_updates_until_single_asset_mode_ready(self) -> None:
+        page = _make_trade_page_stub()
+        page._api_key = "key"
+        page._secret_key = "secret"
+        page._single_asset_mode_ready = False
+        page._refresh_in_progress = True
+        calls = {
+            "fetch_balance": 0,
+            "fetch_positions": 0,
+            "set_wallet": 0,
+            "set_positions": 0,
+            "start_refresh": 0,
+        }
+
+        page._ensure_single_asset_mode_on_login = lambda: False
+
+        def _fetch_balance():
+            calls["fetch_balance"] += 1
+            return 100.0
+
+        def _fetch_positions(*, force_refresh=False, loop_label="-"):
+            calls["fetch_positions"] += 1
+            return []
+
+        page._fetch_futures_balance = _fetch_balance
+        page._fetch_open_positions = _fetch_positions
+        page._set_wallet_value = lambda _balance: calls.__setitem__("set_wallet", calls["set_wallet"] + 1)
+        page._set_positions = lambda _positions: calls.__setitem__("set_positions", calls["set_positions"] + 1)
+        page._start_status_refresh = lambda: calls.__setitem__("start_refresh", calls["start_refresh"] + 1)
+        page.after = lambda _delay, callback: callback()
+
+        page._refresh_status()
+
+        self.assertEqual(calls["fetch_balance"], 0)
+        self.assertEqual(calls["fetch_positions"], 0)
+        self.assertEqual(calls["set_wallet"], 0)
+        self.assertEqual(calls["set_positions"], 0)
+        self.assertEqual(calls["start_refresh"], 1)
+        self.assertFalse(page._refresh_in_progress)
 
     def test_normalize_open_order_row_uses_trigger_price_when_stop_price_zero(self) -> None:
         row = TradePage._normalize_open_order_row(
@@ -233,7 +335,7 @@ class TradePageRegressionTests(unittest.TestCase):
 
         self.assertEqual(submitted.get("symbol"), "BTCUSDT")
         self.assertAlmostEqual(float(submitted.get("target_price_override") or 0.0), 99.5, places=9)
-        self.assertAlmostEqual(float(submitted.get("trigger_price_override") or 0.0), 99.6, places=9)
+        self.assertAlmostEqual(float(submitted.get("trigger_price_override") or 0.0), 100.0, places=9)
 
     def test_phase1_tp_trigger_guard_blocks_duplicate_submit_with_same_params(self) -> None:
         runtime = AutoTradeRuntime(
@@ -313,7 +415,7 @@ class TradePageRegressionTests(unittest.TestCase):
             "orderType": "TAKE_PROFIT",
             "side": "BUY",
             "price": "99.5",
-            "triggerPrice": "99.6",
+            "triggerPrice": "100.0",
             "quantity": "1.0",
             "reduceOnly": False,
             "closePosition": False,
@@ -446,6 +548,7 @@ class TradePageRegressionTests(unittest.TestCase):
             "mdd_stop",
             submit_counter["mdd_stop"] + 1,
         ) or True
+        page._submit_tp_limit_once = lambda **_kwargs: True
 
         positions = [
             {"symbol": "RIVERUSDT", "positionAmt": "-15.8", "entryPrice": "17.205", "markPrice": "17.1"},
@@ -471,6 +574,51 @@ class TradePageRegressionTests(unittest.TestCase):
         )
 
         self.assertEqual(submit_counter["mdd_stop"], 0)
+
+    def test_phase2_ensures_breakeven_tp_trigger_without_mark_threshold_gate(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE2",
+        )
+        page = _make_trade_page_stub(runtime)
+        page._saved_filter_settings = {"mdd": "15%", "tp_ratio": "3%", "risk_filter": "보수적"}
+        page._default_filter_settings = lambda: {"mdd": "15%", "tp_ratio": "3%", "risk_filter": "보수적"}
+        page._get_symbol_filter_rule = lambda _symbol: SymbolFilterRules(
+            tick_size=0.1,
+            step_size=0.001,
+            min_qty=0.001,
+            min_notional=5.0,
+        )
+        captured: dict[str, float] = {}
+        submit_counter = {"tp_trigger": 0}
+
+        def _submit_tp_limit_once(**kwargs):
+            submit_counter["tp_trigger"] += 1
+            captured["target_price_override"] = float(kwargs.get("target_price_override", 0.0))
+            captured["trigger_price_override"] = float(kwargs.get("trigger_price_override", 0.0))
+            return True
+
+        page._submit_tp_limit_once = _submit_tp_limit_once
+        page._submit_mdd_stop_market = lambda **_kwargs: self.fail("mdd stop should not be submitted")
+
+        positions = [
+            {"symbol": "BTCUSDT", "positionAmt": "1.0", "entryPrice": "100.0", "markPrice": "100.2"},
+        ]
+        open_orders: list[dict] = []
+
+        _ = page._enforce_phase_exit_policy(
+            runtime,
+            symbol="BTCUSDT",
+            open_orders=open_orders,
+            positions=positions,
+            loop_label="stage15-phase2-breakeven-trigger",
+        )
+
+        self.assertEqual(submit_counter["tp_trigger"], 1)
+        self.assertAlmostEqual(captured["target_price_override"], 100.0, places=8)
+        self.assertAlmostEqual(captured["trigger_price_override"], 99.5, places=8)
 
     def test_safety_lock_drops_signal_queue_immediately(self) -> None:
         runtime = AutoTradeRuntime(
@@ -698,7 +846,7 @@ class TradePageRegressionTests(unittest.TestCase):
             loop_label="stage15-qty-sync",
         )
 
-        self.assertEqual(submitted_order_types, ["BREAKEVEN_LIMIT"])
+        self.assertEqual(submitted_order_types, ["TP_LIMIT"])
         self.assertTrue(updated_runtime.global_state.has_any_position)
         self.assertEqual(page._last_position_qty_by_symbol["BTCUSDT"], 0.5)
 

@@ -156,6 +156,22 @@ class RiskManagementPlanTests(unittest.TestCase):
         self.assertTrue(result.submit_market_exit)
         self.assertTrue(result.cancel_entry_orders)
 
+    def test_phase2_negative_pnl_prioritizes_market_exit(self) -> None:
+        result = plan_risk_management_action(
+            current_state="PHASE2",
+            symbol_matches_active=True,
+            has_position=True,
+            has_open_entry_order=False,
+            pnl_branch="PNL_NEGATIVE",
+            has_tp_order=False,
+            second_entry_fully_filled=True,
+        )
+        self.assertTrue(result.actionable)
+        self.assertEqual(result.action_code, "MARKET_EXIT_PRIORITY")
+        self.assertEqual(result.reason_code, "RISK_PNL_LE_ZERO_MARKET_EXIT")
+        self.assertTrue(result.submit_market_exit)
+        self.assertFalse(result.keep_phase2_breakeven_limit)
+
     def test_phase1_positive_pnl_stop_and_keep_existing_tp(self) -> None:
         result = plan_risk_management_action(
             current_state="PHASE1",
