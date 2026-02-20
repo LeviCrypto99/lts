@@ -36,8 +36,8 @@ RISK_MANAGEMENT_TEXT = "🥈 Binance : btcusdt.p 에서 숏 리스크관리 권�
 class ConfigTests(unittest.TestCase):
     def test_load_defaults(self) -> None:
         settings = load_auto_trade_settings({})
-        self.assertEqual(settings.entry_signal_channel_id, -1002171239233)
-        self.assertEqual(settings.risk_signal_channel_id, -1003096527269)
+        self.assertEqual(settings.entry_signal_channel_id, -1003782821900)
+        self.assertEqual(settings.risk_signal_channel_id, -1003761851285)
         self.assertEqual(settings.cooldown_minutes, 10)
         self.assertEqual(settings.second_entry_percent, 15.0)
         self.assertEqual(settings.margin_buffer_pct, 0.01)
@@ -108,30 +108,30 @@ class MessageParserTests(unittest.TestCase):
 class MessageDedupTests(unittest.TestCase):
     def test_dedup_reject_old_or_duplicate(self) -> None:
         result = check_message_id_dedup(
-            {-1002171239233: 100},
-            channel_id=-1002171239233,
+            {-1003782821900: 100},
+            channel_id=-1003782821900,
             message_id=100,
         )
         self.assertFalse(result.accepted)
         self.assertTrue(result.is_duplicate_or_old)
         self.assertEqual(result.reason_code, "OLD_OR_DUPLICATE_MESSAGE")
-        self.assertEqual(result.updated_last_message_ids[-1002171239233], 100)
+        self.assertEqual(result.updated_last_message_ids[-1003782821900], 100)
 
     def test_dedup_accept_new_message(self) -> None:
         result = check_message_id_dedup(
-            {-1002171239233: 100},
-            channel_id=-1002171239233,
+            {-1003782821900: 100},
+            channel_id=-1003782821900,
             message_id=101,
         )
         self.assertTrue(result.accepted)
         self.assertFalse(result.is_duplicate_or_old)
         self.assertEqual(result.reason_code, "NEW_MESSAGE_ACCEPTED")
-        self.assertEqual(result.updated_last_message_ids[-1002171239233], 101)
+        self.assertEqual(result.updated_last_message_ids[-1003782821900], 101)
 
     def test_dedup_reject_invalid_message_id(self) -> None:
         result = check_message_id_dedup(
             {},
-            channel_id=-1002171239233,
+            channel_id=-1003782821900,
             message_id=0,
         )
         self.assertFalse(result.accepted)
@@ -277,7 +277,7 @@ class StructuredLoggingTests(unittest.TestCase):
         with patch("auto_trade.event_logging.write_auto_trade_log_line") as mocked:
             parse_leading_market_message_with_logging(
                 LEADING_MARKET_TEXT,
-                channel_id=-1002171239233,
+                channel_id=-1003782821900,
                 message_id=123,
             )
             self.assertTrue(mocked.called)
@@ -292,7 +292,7 @@ class StructuredLoggingTests(unittest.TestCase):
         with patch("auto_trade.event_logging.write_auto_trade_log_line") as mocked:
             map_ticker_to_candidate_symbol_with_logging(
                 "btc",
-                channel_id=-1002171239233,
+                channel_id=-1003782821900,
                 message_id=123,
             )
             self.assertTrue(mocked.called)
@@ -306,8 +306,8 @@ class StructuredLoggingTests(unittest.TestCase):
     def test_dedup_wrapper_logs_required_fields(self) -> None:
         with patch("auto_trade.event_logging.write_auto_trade_log_line") as mocked:
             check_message_id_dedup_with_logging(
-                {-1002171239233: 100},
-                channel_id=-1002171239233,
+                {-1003782821900: 100},
+                channel_id=-1003782821900,
                 message_id=100,
             )
             self.assertTrue(mocked.called)

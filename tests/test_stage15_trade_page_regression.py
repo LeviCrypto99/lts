@@ -21,8 +21,8 @@ from auto_trade import (
 
 def _default_settings() -> AutoTradeSettings:
     return AutoTradeSettings(
-        entry_signal_channel_id=-1002171239233,
-        risk_signal_channel_id=-1003096527269,
+        entry_signal_channel_id=-1003782821900,
+        risk_signal_channel_id=-1003761851285,
         cooldown_minutes=10,
         second_entry_percent=15.0,
         margin_buffer_pct=0.01,

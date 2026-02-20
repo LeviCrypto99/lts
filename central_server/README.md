@@ -16,8 +16,8 @@ LTS_TELEGRAM_BOT_TOKEN=... python server.py
 
 ## Optional environment variables
 
-- `LTS_ENTRY_SIGNAL_CHANNEL_ID` (default: `-1002171239233`)
-- `LTS_RISK_SIGNAL_CHANNEL_ID` (default: `-1003096527269`)
+- `LTS_ENTRY_SIGNAL_CHANNEL_ID` (default: `-1003782821900`)
+- `LTS_RISK_SIGNAL_CHANNEL_ID` (default: `-1003761851285`)
 - `LTS_SIGNAL_RELAY_HOST` (default: `0.0.0.0`)
 - `LTS_SIGNAL_RELAY_PORT` (default: `8080`)
 - `LTS_SIGNAL_RELAY_TELEGRAM_POLL_TIMEOUT` (default: `2`)
