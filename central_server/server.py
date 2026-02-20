@@ -127,12 +127,18 @@ class RelayStore:
         self._max_events = max(100, int(max_events))
         self._lock = threading.Lock()
         self._events: Deque[RelayEvent] = deque()
-        self._next_event_id = 1
+        # Seed event ids from current epoch-ms so clients with stale high after_id
+        # can resume without requiring process restart after relay redeploys.
+        self._next_event_id = max(1, int(time.time() * 1000))
         self._latest_update_id = 0
         self._recent_message_keys: Deque[tuple[int, int]] = deque()
         self._recent_message_set: set[tuple[int, int]] = set()
         self._max_recent_keys = self._max_events * 2
-        _log(f"store initialized max_events={self._max_events} max_recent_keys={self._max_recent_keys}")
+        _log(
+            "store initialized "
+            f"max_events={self._max_events} max_recent_keys={self._max_recent_keys} "
+            f"seed_event_id={self._next_event_id}"
+        )
 
     def add_event(
         self,
