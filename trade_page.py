@@ -111,6 +111,7 @@ AUTO_TRADE_PERSIST_PATH = Path(tempfile.gettempdir()) / "LTS-auto-trade-state.js
 AUTO_TRADE_SIGNAL_INBOX_PATH = Path(tempfile.gettempdir()) / "LTS-auto-trade-signal-inbox.jsonl"
 SIGNAL_LOOP_INTERVAL_SEC = 1.0
 TP_TRIGGER_SUBMISSION_GUARD_SEC = 20.0
+ENTRY_CANCEL_SYNC_GUARD_SEC = 3.0
 EXCHANGE_INFO_CACHE_TTL_SEC = 60
 ACCOUNT_SNAPSHOT_CACHE_TTL_SEC = 0.9
 ACCOUNT_SNAPSHOT_STALE_FALLBACK_SEC = 30
@@ -542,6 +543,7 @@ class TradePage(tk.Frame):
         self._last_open_exit_order_ids_by_symbol: dict[str, set[int]] = {}
         self._pending_oco_retry_symbols: set[str] = set()
         self._entry_order_ref_by_symbol: dict[str, int] = {}
+        self._entry_cancel_sync_guard_until_by_symbol: dict[str, float] = {}
         self._second_entry_skip_latch: set[str] = set()
         self._second_entry_fully_filled_symbols: set[str] = set()
         self._tp_trigger_submit_guard_by_symbol: dict[str, dict[str, float]] = {}
@@ -3247,6 +3249,7 @@ class TradePage(tk.Frame):
                 self._second_entry_skip_latch.discard(symbol)
                 self._second_entry_fully_filled_symbols.discard(symbol)
                 self._entry_order_ref_by_symbol.pop(symbol, None)
+                self._clear_entry_cancel_sync_guard(symbol)
                 self._last_open_exit_order_ids_by_symbol.pop(symbol, None)
                 self._oco_last_filled_exit_order_by_symbol.pop(symbol, None)
             self._sync_recovery_state_from_orchestrator_locked()
@@ -3354,6 +3357,16 @@ class TradePage(tk.Frame):
             pre_order_setup=self._run_pre_order_setup_hook,
             loop_label="signal-loop-trigger",
         )
+        if (
+            result.success
+            and result.selected_symbol
+            and result.selected_trigger_kind in ("FIRST_ENTRY", "SECOND_ENTRY")
+        ):
+            self._arm_entry_cancel_sync_guard(
+                symbol=str(result.selected_symbol),
+                trigger_kind=str(result.selected_trigger_kind),
+                loop_label="signal-loop-trigger",
+            )
         with self._auto_trade_runtime_lock:
             self._orchestrator_runtime = updated
             self._sync_recovery_state_from_orchestrator_locked()
@@ -3374,6 +3387,53 @@ class TradePage(tk.Frame):
             f"reason={result.reason_code} pipeline={result.pipeline_reason_code} "
             f"symbol={result.selected_symbol} trigger={result.selected_trigger_kind}"
         )
+
+    def _arm_entry_cancel_sync_guard(
+        self,
+        *,
+        symbol: str,
+        trigger_kind: str,
+        loop_label: str,
+    ) -> None:
+        target = str(symbol or "").strip().upper()
+        if not target:
+            return
+        expires_at = time.time() + float(ENTRY_CANCEL_SYNC_GUARD_SEC)
+        self._entry_cancel_sync_guard_store()[target] = expires_at
+        _log_trade(
+            "Entry cancel sync guard armed: "
+            f"symbol={target} trigger={str(trigger_kind or '').strip().upper() or '-'} "
+            f"guard_sec={ENTRY_CANCEL_SYNC_GUARD_SEC:.1f} expires_at={expires_at:.2f} "
+            f"loop={loop_label}"
+        )
+
+    def _entry_cancel_sync_guard_store(self) -> dict[str, float]:
+        store = getattr(self, "_entry_cancel_sync_guard_until_by_symbol", None)
+        if isinstance(store, dict):
+            return store
+        store = {}
+        setattr(self, "_entry_cancel_sync_guard_until_by_symbol", store)
+        return store
+
+    def _clear_entry_cancel_sync_guard(self, symbol: str) -> None:
+        target = str(symbol or "").strip().upper()
+        if not target:
+            return
+        self._entry_cancel_sync_guard_store().pop(target, None)
+
+    def _entry_cancel_sync_guard_remaining(self, symbol: str) -> float:
+        target = str(symbol or "").strip().upper()
+        if not target:
+            return 0.0
+        store = self._entry_cancel_sync_guard_store()
+        expires_at = float(store.get(target, 0.0))
+        if expires_at <= 0.0:
+            return 0.0
+        remaining = expires_at - time.time()
+        if remaining <= 0.0:
+            store.pop(target, None)
+            return 0.0
+        return float(remaining)
 
     def _has_open_entry_order_for_symbol(self, symbol: str) -> bool:
         target = str(symbol or "").strip().upper()
@@ -3613,7 +3673,14 @@ class TradePage(tk.Frame):
                 and not entry_orders
                 and not exit_orders
             ):
-                if not self._has_recent_account_snapshot():
+                guard_remaining = self._entry_cancel_sync_guard_remaining(active_symbol)
+                if current.symbol_state == "ENTRY_ORDER" and guard_remaining > 0.0:
+                    _log_trade(
+                        "Fill sync fallback reset deferred: "
+                        f"symbol={active_symbol} state={current.symbol_state} "
+                        f"reason=entry_cancel_sync_guard remaining_sec={guard_remaining:.2f}"
+                    )
+                elif not self._has_recent_account_snapshot():
                     _log_trade(
                         "Fill sync fallback reset deferred: "
                         f"symbol={active_symbol} state={current.symbol_state} "
@@ -3632,6 +3699,7 @@ class TradePage(tk.Frame):
                         second_entry_order_pending=False,
                     )
                     self._entry_order_ref_by_symbol.pop(active_symbol, None)
+                    self._clear_entry_cancel_sync_guard(active_symbol)
                     self._second_entry_skip_latch.discard(active_symbol)
                     self._second_entry_fully_filled_symbols.discard(active_symbol)
                     self._last_open_exit_order_ids_by_symbol.pop(active_symbol, None)
@@ -3769,6 +3837,7 @@ class TradePage(tk.Frame):
             open_orders = self._fetch_open_orders() or []
             refreshed_positions = self._fetch_open_positions() or []
             self._entry_order_ref_by_symbol.pop(target, None)
+            self._clear_entry_cancel_sync_guard(target)
             self._second_entry_skip_latch.discard(target)
             self._second_entry_fully_filled_symbols.discard(target)
             self._last_open_exit_order_ids_by_symbol.pop(target, None)
@@ -3992,7 +4061,9 @@ class TradePage(tk.Frame):
         has_position: bool,
         loop_label: str,
     ) -> str:
+        target = str(symbol or "").strip().upper()
         if entry_orders:
+            self._clear_entry_cancel_sync_guard(target)
             latest = max(
                 entry_orders,
                 key=lambda row: (
@@ -4002,7 +4073,7 @@ class TradePage(tk.Frame):
             )
             order_id = self._safe_int(latest.get("orderId"))
             if order_id > 0:
-                self._entry_order_ref_by_symbol[symbol] = order_id
+                self._entry_order_ref_by_symbol[target] = order_id
             statuses = {
                 str(row.get("status") or "").strip().upper()
                 for row in entry_orders
@@ -4017,18 +4088,32 @@ class TradePage(tk.Frame):
                 return "CANCELED"
             return "NEW"
 
-        cached_order_id = self._entry_order_ref_by_symbol.get(symbol)
+        cached_order_id = self._entry_order_ref_by_symbol.get(target)
         if cached_order_id is not None:
             queried = self._query_order_status_by_id(
-                symbol=symbol,
+                symbol=target,
                 order_id=int(cached_order_id),
                 loop_label=loop_label,
             )
             if queried:
+                if queried in ("NEW", "PARTIALLY_FILLED", "FILLED"):
+                    self._clear_entry_cancel_sync_guard(target)
                 if queried in ("FILLED", "CANCELED", "REJECTED", "EXPIRED"):
-                    self._entry_order_ref_by_symbol.pop(symbol, None)
+                    self._entry_order_ref_by_symbol.pop(target, None)
+                    self._clear_entry_cancel_sync_guard(target)
                 return queried
-        return "FILLED" if has_position else "CANCELED"
+        if has_position:
+            self._clear_entry_cancel_sync_guard(target)
+            return "FILLED"
+        guard_remaining = self._entry_cancel_sync_guard_remaining(target)
+        if guard_remaining > 0.0:
+            _log_trade(
+                "Entry fill sync canceled fallback deferred: "
+                f"symbol={target} reason=entry_cancel_sync_guard "
+                f"remaining_sec={guard_remaining:.2f} loop={loop_label}"
+            )
+            return "NEW"
+        return "CANCELED"
 
     def _infer_second_entry_order_status(
         self,
@@ -4039,6 +4124,7 @@ class TradePage(tk.Frame):
         second_entry_pending: bool,
         loop_label: str,
     ) -> Optional[str]:
+        target = str(symbol or "").strip().upper()
         if entry_orders:
             statuses = {
                 str(row.get("status") or "").strip().upper()
@@ -4053,7 +4139,7 @@ class TradePage(tk.Frame):
             )
             order_id = self._safe_int(latest.get("orderId"))
             if order_id > 0:
-                self._entry_order_ref_by_symbol[symbol] = order_id
+                self._entry_order_ref_by_symbol[target] = order_id
             if "PARTIALLY_FILLED" in statuses:
                 return "PARTIALLY_FILLED"
             if "NEW" in statuses:
@@ -4067,16 +4153,17 @@ class TradePage(tk.Frame):
         if not second_entry_pending:
             return None
 
-        cached_order_id = self._entry_order_ref_by_symbol.get(symbol)
+        cached_order_id = self._entry_order_ref_by_symbol.get(target)
         if cached_order_id is not None:
             queried = self._query_order_status_by_id(
-                symbol=symbol,
+                symbol=target,
                 order_id=int(cached_order_id),
                 loop_label=loop_label,
             )
             if queried:
                 if queried in ("FILLED", "CANCELED", "REJECTED", "EXPIRED"):
-                    self._entry_order_ref_by_symbol.pop(symbol, None)
+                    self._entry_order_ref_by_symbol.pop(target, None)
+                    self._clear_entry_cancel_sync_guard(target)
                 return queried
         return "FILLED" if has_position else "CANCELED"
 
@@ -4761,6 +4848,7 @@ class TradePage(tk.Frame):
             self._second_entry_skip_latch.discard(symbol)
             self._second_entry_fully_filled_symbols.discard(symbol)
             self._entry_order_ref_by_symbol.pop(symbol, None)
+            self._clear_entry_cancel_sync_guard(symbol)
             self._last_open_exit_order_ids_by_symbol.pop(symbol, None)
             self._oco_last_filled_exit_order_by_symbol.pop(symbol, None)
             self._pending_oco_retry_symbols.discard(symbol)
@@ -4921,6 +5009,7 @@ class TradePage(tk.Frame):
                 loop_label=f"{loop_label}-order-{order_id}",
             )
         self._entry_order_ref_by_symbol.pop(symbol, None)
+        self._clear_entry_cancel_sync_guard(symbol)
 
     def _force_market_exit_all_positions(
         self,
@@ -5343,6 +5432,7 @@ class TradePage(tk.Frame):
             self._orchestrator_runtime = updated
             self._sync_recovery_state_from_orchestrator_locked()
         self._entry_order_ref_by_symbol.clear()
+        self._entry_cancel_sync_guard_until_by_symbol.clear()
         self._second_entry_skip_latch.clear()
         self._second_entry_fully_filled_symbols.clear()
         self._last_open_exit_order_ids_by_symbol.clear()

@@ -1,0 +1,8 @@
+[2026-02-18 18:38:51] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-02-18 18:38:51] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-02-18 18:38:51] help_button_cluster_shift applied: shift_x=60
+[2026-02-18 18:39:05] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-02-18 18:39:05] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-02-18 18:39:07] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-02-18 18:39:07] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-02-18 18:39:07] login_click success: api_key=UXFj***6Nx3
