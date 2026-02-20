@@ -593,9 +593,10 @@ class RelayRequestHandler(BaseHTTPRequestHandler):
 
         now = time.time()
         should_log_idle = False
-        with self._idle_signals_log_lock:
-            if now - self._idle_signals_last_log_at >= IDLE_SIGNALS_LOG_THROTTLE_SEC:
-                self._idle_signals_last_log_at = now
+        handler_cls = type(self)
+        with handler_cls._idle_signals_log_lock:
+            if now - handler_cls._idle_signals_last_log_at >= IDLE_SIGNALS_LOG_THROTTLE_SEC:
+                handler_cls._idle_signals_last_log_at = now
                 should_log_idle = True
         if should_log_idle:
             _log(
