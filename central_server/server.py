@@ -43,6 +43,7 @@ DEFAULT_MAX_RESPONSE_LIMIT = 100
 DEFAULT_SYNC_MAX_BATCHES = 300
 DEFAULT_OFFSET_PATH = "/tmp/lts-signal-relay-offset.json"
 ERROR_LOG_THROTTLE_SEC = 5
+IDLE_SIGNALS_LOG_THROTTLE_SEC = 60
 
 
 def _log(message: str) -> None:
@@ -493,9 +494,15 @@ class RelayContext:
 
 class RelayRequestHandler(BaseHTTPRequestHandler):
     context: RelayContext
+    _idle_signals_log_lock = threading.Lock()
+    _idle_signals_last_log_at = 0.0
 
     def log_message(self, format: str, *args: Any) -> None:
-        _log(f"http access client={self.client_address[0]} message={format % args}")
+        message = format % args
+        # Suppress noisy successful long-poll access logs for the hot path.
+        if self.path.startswith("/api/v1/signals") and " 200 " in message:
+            return
+        _log(f"http access client={self.client_address[0]} message={message}")
 
     def _write_json(self, status: HTTPStatus, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -575,11 +582,28 @@ class RelayRequestHandler(BaseHTTPRequestHandler):
             "timestamp": int(time.time()),
         }
         self._write_json(HTTPStatus.OK, payload)
-        _log(
-            "http signals served "
-            f"client_id={client_id} after_id={after_id} limit={normalized_limit} "
-            f"events={len(events)} next_after_id={next_after_id} latest_event_id={latest_event_id}"
-        )
+        event_count = len(events)
+        if event_count > 0:
+            _log(
+                "http signals served "
+                f"client_id={client_id} after_id={after_id} limit={normalized_limit} "
+                f"events={event_count} next_after_id={next_after_id} latest_event_id={latest_event_id}"
+            )
+            return
+
+        now = time.time()
+        should_log_idle = False
+        with self._idle_signals_log_lock:
+            if now - self._idle_signals_last_log_at >= IDLE_SIGNALS_LOG_THROTTLE_SEC:
+                self._idle_signals_last_log_at = now
+                should_log_idle = True
+        if should_log_idle:
+            _log(
+                "http signals idle "
+                f"client_id={client_id} after_id={after_id} limit={normalized_limit} "
+                f"events=0 next_after_id={next_after_id} latest_event_id={latest_event_id} "
+                f"throttle_sec={IDLE_SIGNALS_LOG_THROTTLE_SEC}"
+            )
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
