@@ -303,6 +303,37 @@ class OcoAndFiveSecondRuleTests(unittest.TestCase):
         self.assertFalse(decision.should_force_market_exit)
         self.assertEqual(decision.reason_code, "RISK_MARKET_EXIT_PRIORITY")
 
+    def test_exit_partial_fill_tracker_normalizes_millisecond_update_time(self) -> None:
+        tracker = update_exit_partial_fill_tracker(
+            ExitPartialFillTracker(),
+            is_exit_order=True,
+            order_id=9002,
+            order_status="PARTIALLY_FILLED",
+            executed_qty=2.0,
+            updated_at=1_700_000_000_000,
+        ).current
+
+        self.assertEqual(tracker.partial_started_at, 1_700_000_000)
+        self.assertEqual(tracker.last_update_at, 1_700_000_000)
+
+        early = evaluate_exit_five_second_rule(
+            tracker,
+            is_exit_order=True,
+            now=1_700_000_003,
+            stall_seconds=5,
+        )
+        self.assertFalse(early.should_force_market_exit)
+        self.assertEqual(early.reason_code, "EXIT_PARTIAL_WAITING")
+
+        trigger = evaluate_exit_five_second_rule(
+            tracker,
+            is_exit_order=True,
+            now=1_700_000_005,
+            stall_seconds=5,
+        )
+        self.assertTrue(trigger.should_force_market_exit)
+        self.assertEqual(trigger.reason_code, "EXIT_PARTIAL_STALLED_5S")
+
 
 class Stage11LoggingTests(unittest.TestCase):
     def test_execution_flow_logging_fields_exist(self) -> None:

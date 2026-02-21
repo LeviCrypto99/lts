@@ -10,6 +10,7 @@ from unittest.mock import patch
 from auto_trade import (
     AutoTradeRuntime,
     AutoTradeSettings,
+    ExitPartialFillTracker,
     ExitReconcilePlan,
     GatewayCallResult,
     GatewayRetryResult,
@@ -229,6 +230,36 @@ class TradePageRegressionTests(unittest.TestCase):
         self.assertEqual(calls["set_positions"], 0)
         self.assertEqual(calls["start_refresh"], 1)
         self.assertFalse(page._refresh_in_progress)
+
+    def test_handle_start_click_shows_wallet_limit_warning_when_balance_over_threshold(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=False,
+        )
+        page = _make_trade_page_stub(runtime)
+        page._trade_state = "stop"
+        page._auto_trade_state = types.SimpleNamespace(signal_loop_running=False)
+        page._auto_trade_starting = False
+        page._wallet_balance = 2000.0
+        page._wallet_value = "2,000.00"
+        page._wallet_unit = "USDT"
+        page._auto_trade_wallet_stop_threshold_usdt = 2000.0
+
+        warnings: list[tuple[str, str]] = []
+        page._show_warning_message = lambda *, title, message: warnings.append((title, message))
+        page._confirm_yes_no = lambda **_kwargs: self.fail("start confirmation should not open above wallet threshold")
+        page._set_trade_state = lambda _value: self.fail("trade state should not change above wallet threshold")
+        page._request_auto_trade_startup = lambda: self.fail(
+            "auto-trade startup should not be requested above wallet threshold"
+        )
+
+        page._handle_start_click()
+
+        self.assertEqual(
+            warnings,
+            [("자동매매 경고", trade_page.AUTO_TRADE_WALLET_START_WARNING_MESSAGE)],
+        )
 
     def test_normalize_open_order_row_uses_trigger_price_when_stop_price_zero(self) -> None:
         row = TradePage._normalize_open_order_row(
@@ -479,7 +510,7 @@ class TradePageRegressionTests(unittest.TestCase):
 
         self.assertEqual(cancel_reasons, [])
 
-    def test_submit_tp_trigger_immediate_reject_does_not_force_market_exit(self) -> None:
+    def test_submit_tp_trigger_immediate_reject_triggers_market_exit_fallback(self) -> None:
         runtime = AutoTradeRuntime(
             settings=_default_settings(),
             signal_loop_paused=False,
@@ -524,7 +555,7 @@ class TradePageRegressionTests(unittest.TestCase):
             )
 
         self.assertFalse(submitted)
-        self.assertFalse(market_exit_called["value"])
+        self.assertTrue(market_exit_called["value"])
 
     def test_phase2_mdd_alignment_uses_trigger_price_fallback_without_duplicate_submit(self) -> None:
         runtime = AutoTradeRuntime(
@@ -791,6 +822,83 @@ class TradePageRegressionTests(unittest.TestCase):
 
         self.assertEqual(canceled, [202])
 
+    def test_cancel_entry_orders_for_symbol_uses_cached_order_reference(self) -> None:
+        page = _make_trade_page_stub()
+        page._entry_order_ref_by_symbol["INITUSDT"] = 998877
+        canceled: list[int] = []
+        page._cancel_order_with_gateway = (
+            lambda *, symbol, order_id, loop_label: canceled.append(int(order_id)) or True
+        )
+
+        summary = page._cancel_entry_orders_for_symbol(
+            symbol="INITUSDT",
+            open_orders=[],
+            loop_label="stage15-cancel-entry-cached-ref",
+        )
+
+        self.assertEqual(canceled, [998877])
+        self.assertEqual(int(summary["attempted_count"]), 1)
+        self.assertEqual(int(summary["success_count"]), 1)
+        self.assertEqual(list(summary["failed_order_ids"]), [])
+        self.assertTrue(bool(summary["used_cached_order_ref"]))
+
+    def test_process_signal_event_defers_risk_reset_when_entry_cancel_not_confirmed(self) -> None:
+        runtime_before = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="ENTRY_ORDER",
+            active_symbol="INITUSDT",
+        )
+        runtime_after_handler = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="IDLE",
+            active_symbol=None,
+            last_message_ids={runtime_before.settings.risk_signal_channel_id: 321},
+        )
+        page = _make_trade_page_stub(runtime_before)
+        page._sync_recovery_state_from_orchestrator_locked = lambda: None
+        page._persist_auto_trade_runtime = lambda: None
+        page._build_risk_context = lambda _text, _active_symbol: {
+            "avg_entry_price": 100.0,
+            "mark_price": 100.0,
+            "has_position": False,
+            "has_open_entry_order": True,
+            "has_tp_order": False,
+            "second_entry_fully_filled": False,
+            "exchange_info": {"symbols": []},
+        }
+        page._execute_risk_signal_actions = lambda **_kwargs: (False, False)
+        result_payload = types.SimpleNamespace(
+            handled=True,
+            message_type="RISK",
+            reason_code="RISK_ENTRY_ORDER_NO_POSITION",
+            failure_reason="-",
+            symbol="INITUSDT",
+            action_code="CANCEL_ENTRY_AND_RESET",
+            reset_state=True,
+            cancel_entry_orders=True,
+        )
+
+        with patch.object(trade_page, "process_telegram_message", return_value=(runtime_after_handler, result_payload)):
+            event = {
+                "channel_id": runtime_before.settings.risk_signal_channel_id,
+                "message_id": 321,
+                "message_text": "리스크 알림\nBinance : INITUSDT.P",
+                "received_at_local": 1_777_000_000,
+            }
+            submitted = page._process_signal_event(event)
+
+        self.assertFalse(submitted)
+        self.assertEqual(page._orchestrator_runtime.symbol_state, "ENTRY_ORDER")
+        self.assertEqual(page._orchestrator_runtime.active_symbol, "INITUSDT")
+        self.assertEqual(
+            page._orchestrator_runtime.last_message_ids.get(runtime_before.settings.risk_signal_channel_id),
+            321,
+        )
+
     def test_position_quantity_rebuild_in_phase2_keeps_only_phase2_active_exit_policy(self) -> None:
         runtime = AutoTradeRuntime(
             settings=_default_settings(),
@@ -886,6 +994,62 @@ class TradePageRegressionTests(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(result.reason_code, "RECOVERY_RECONCILE_DONE")
         self.assertEqual(list(result.canceled_symbols), [])
+
+    def test_position_quantity_change_defers_exit_rebuild_during_partial_wait_window(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE1",
+            active_symbol="BTCUSDT",
+            exit_partial_tracker=ExitPartialFillTracker(
+                active=True,
+                order_id=9001,
+                partial_started_at=100,
+                last_update_at=100,
+                last_executed_qty=0.4,
+            ),
+        )
+        page = _make_trade_page_stub(runtime)
+        page._last_position_qty_by_symbol = {"BTCUSDT": 1.0}
+        page._tp_trigger_submit_guard_by_symbol = {"BTCUSDT": {"submitted_at": 10.0}}
+        page._collect_active_exit_rebuild_templates = (
+            lambda **_kwargs: self.fail("exit rebuild template scan should be deferred during 5s wait")
+        )
+        page._cancel_exit_orders_for_symbol = lambda **_kwargs: self.fail(
+            "exit orders should not be canceled during 5s wait"
+        )
+        page._fetch_open_orders = lambda: []
+        page._fetch_open_positions = lambda: []
+
+        open_orders = [
+            {
+                "symbol": "BTCUSDT",
+                "orderId": 9001,
+                "type": "TAKE_PROFIT",
+                "side": "SELL",
+                "reduceOnly": "true",
+                "status": "PARTIALLY_FILLED",
+                "executedQty": "0.4",
+                "updateTime": 100,
+            }
+        ]
+        positions = [{"symbol": "BTCUSDT", "positionAmt": "0.6", "entryPrice": "100", "markPrice": "101"}]
+
+        with patch("trade_page.time.time", return_value=103):
+            updated, updated_open_orders, updated_positions = page._handle_position_quantity_reconciliation(
+                runtime,
+                symbol="BTCUSDT",
+                open_orders=open_orders,
+                positions=positions,
+                loop_label="stage15-qty-change-defer-partial-wait",
+            )
+
+        self.assertIs(updated, runtime)
+        self.assertEqual(updated_open_orders, open_orders)
+        self.assertEqual(updated_positions, positions)
+        self.assertAlmostEqual(page._last_position_qty_by_symbol["BTCUSDT"], 0.6, places=8)
+        self.assertNotIn("BTCUSDT", page._tp_trigger_submit_guard_by_symbol)
 
     def test_position_zero_reconciles_immediately_with_cancel_all(self) -> None:
         runtime = AutoTradeRuntime(

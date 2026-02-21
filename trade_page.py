@@ -44,6 +44,7 @@ from auto_trade import (
     sync_entry_fill_flow,
     execute_oco_cancel_flow,
     update_exit_partial_and_check_five_second,
+    evaluate_exit_five_second_rule,
     get_mark_price_with_logging,
     update_account_activity_with_logging,
     create_order_with_retry_with_logging,
@@ -106,6 +107,13 @@ BUTTON_HOVER_ANIM_STEPS = 6
 UI_TEXT_COLOR = "#f6f8fc"
 HIGHLIGHT_TEXT = "#ff0000"
 WALLET_VALUE_COLOR = "#00ff7f"
+WALLET_LIMIT_EXCEEDED_COLOR = HIGHLIGHT_TEXT
+AUTO_TRADE_WALLET_STOP_THRESHOLD_USDT_DEFAULT = 2000.0
+AUTO_TRADE_WALLET_STOP_THRESHOLD_ENV = "LTS_AUTO_TRADE_WALLET_STOP_THRESHOLD_USDT"
+AUTO_TRADE_WALLET_START_WARNING_MESSAGE = (
+    "※경고 : 현재 지갑 잔액이 2000USDT 이상입니다. "
+    "AUM 관리를 위해 시드를 500~1000 USDT로 낮춰주세요."
+)
 TRADE_LOG_PATH = get_log_path("LTS-Trade.log")
 AUTO_TRADE_PERSIST_PATH = Path(tempfile.gettempdir()) / "LTS-auto-trade-state.json"
 AUTO_TRADE_SIGNAL_INBOX_PATH = Path(tempfile.gettempdir()) / "LTS-auto-trade-signal-inbox.jsonl"
@@ -458,6 +466,7 @@ class TradePage(tk.Frame):
         self._wallet_unit = "USDT"
         self._wallet_value_color = WALLET_VALUE_COLOR
         self._wallet_balance: Optional[float] = None
+        self._wallet_over_auto_stop_limit = False
         self._wallet_fetch_started = False
         self._positions: list[dict] = []
         self._position_map: Dict[str, dict] = {}
@@ -507,6 +516,12 @@ class TradePage(tk.Frame):
             SIGNAL_RELAY_POLL_LIMIT,
             minimum=1,
             maximum=500,
+        )
+        self._auto_trade_wallet_stop_threshold_usdt = self._read_env_float_or_default(
+            AUTO_TRADE_WALLET_STOP_THRESHOLD_ENV,
+            AUTO_TRADE_WALLET_STOP_THRESHOLD_USDT_DEFAULT,
+            minimum=0.0,
+            log_scope="Wallet auto-stop config",
         )
         self._signal_relay_last_poll_error_log_at = 0.0
         self._last_monitor_snapshot = ""
@@ -886,6 +901,21 @@ class TradePage(tk.Frame):
         except tk.TclError as exc:
             _log_trade(f"Info dialog failed: title={title} error={exc!r}")
 
+    def _show_warning_message(self, *, title: str, message: str) -> None:
+        showwarning = getattr(messagebox, "showwarning", None)
+        if not callable(showwarning):
+            _log_trade(
+                "Warning dialog unavailable: "
+                f"title={title} reason=showwarning_not_callable fallback=showinfo"
+            )
+            self._show_info_message(title=title, message=message)
+            return
+        try:
+            showwarning(title, message, parent=self)
+        except tk.TclError as exc:
+            _log_trade(f"Warning dialog failed: title={title} error={exc!r}")
+            self._show_info_message(title=title, message=message)
+
     def _build_start_confirmation_message(self) -> str:
         settings = self._saved_filter_settings or self._default_filter_settings()
         mdd_value = str(settings.get("mdd") or "N%")
@@ -913,13 +943,83 @@ class TradePage(tk.Frame):
             "이후 수신되는 신호에 대한 자동매매는 중지됩니다. 중지하시겠습니까?"
         )
 
-    def _clear_monitoring_targets_for_stop(self) -> tuple[int, int]:
+    def _clear_monitoring_targets_for_stop(
+        self,
+        *,
+        reason_code: str = "STOP_BUTTON_CLEAR_MONITORING",
+    ) -> tuple[int, int]:
         with self._auto_trade_runtime_lock:
             pending_count = len(self._orchestrator_runtime.pending_trigger_candidates)
             queue_count = len(self._auto_trade_monitoring_queue)
             self._auto_trade_monitoring_queue.clear()
-        self._reset_runtime_after_external_clear(reason_code="STOP_BUTTON_CLEAR_MONITORING")
+        self._reset_runtime_after_external_clear(reason_code=reason_code)
         return pending_count, queue_count
+
+    def _execute_auto_trade_stop(
+        self,
+        *,
+        stop_source: str,
+        trigger_reason: str,
+        loop_label: str,
+        clear_reason_code: str,
+    ) -> None:
+        signal_loop_stopped = self._stop_signal_loop_thread()
+        pending_count, queue_count = self._clear_monitoring_targets_for_stop(
+            reason_code=clear_reason_code,
+        )
+        dropped_events = self._clear_signal_event_queue_for_stop(loop_label=loop_label)
+
+        with self._auto_trade_runtime_lock:
+            transition = stop_signal_loop_with_logging(
+                self._auto_trade_state,
+                loop_label=loop_label,
+            )
+            self._auto_trade_state = transition.current
+            self._auto_trade_starting = False
+            self._sync_orchestrator_runtime_from_recovery_state_locked()
+        self._set_trade_state("stop")
+        self._persist_auto_trade_runtime()
+        _log_trade(
+            "Auto-trade stop executed: "
+            f"source={stop_source} trigger={trigger_reason} reason={transition.reason_code} "
+            f"recovery_locked={transition.current.recovery_locked} "
+            f"signal_loop_paused={transition.current.signal_loop_paused} "
+            f"signal_loop_stopped={signal_loop_stopped} "
+            f"cleared_pending_monitoring={pending_count} cleared_monitor_queue={queue_count} "
+            f"dropped_signal_events={dropped_events}"
+        )
+
+    def _is_wallet_over_auto_stop_limit(self, balance: float) -> bool:
+        return float(balance) >= float(self._auto_trade_wallet_stop_threshold_usdt)
+
+    def _request_wallet_limit_auto_stop_if_needed(
+        self,
+        *,
+        balance: Optional[float],
+        positions: Optional[list[dict]],
+        source: str,
+    ) -> None:
+        if balance is None or positions is None:
+            return
+        if not self._is_wallet_over_auto_stop_limit(float(balance)):
+            return
+        if positions:
+            return
+        with self._auto_trade_runtime_lock:
+            running = bool(self._auto_trade_state.signal_loop_running)
+        if not running:
+            return
+        _log_trade(
+            "Wallet limit auto-stop triggered: "
+            f"balance={float(balance):.2f} threshold={self._auto_trade_wallet_stop_threshold_usdt:.2f} "
+            f"position_count={len(positions)} source={source}"
+        )
+        self._execute_auto_trade_stop(
+            stop_source=source,
+            trigger_reason="WALLET_LIMIT_EXCEEDED",
+            loop_label=f"{source}-wallet-limit-stop",
+            clear_reason_code="WALLET_LIMIT_AUTO_STOP_CLEAR_MONITORING",
+        )
 
     def _handle_start_click(self, _event=None) -> None:
         with self._auto_trade_runtime_lock:
@@ -932,6 +1032,18 @@ class TradePage(tk.Frame):
                 f"auto_trade_starting={self._auto_trade_starting}"
             )
             self._show_info_message(title="자동매매 안내", message="이미 실행중입니다.")
+            return
+        wallet_balance = self._wallet_balance
+        if wallet_balance is not None and self._is_wallet_over_auto_stop_limit(float(wallet_balance)):
+            _log_trade(
+                "Auto-trade start blocked: "
+                f"reason=wallet_limit_warning balance={float(wallet_balance):.2f} "
+                f"threshold={self._auto_trade_wallet_stop_threshold_usdt:.2f}"
+            )
+            self._show_warning_message(
+                title="자동매매 경고",
+                message=AUTO_TRADE_WALLET_START_WARNING_MESSAGE,
+            )
             return
         message = self._build_start_confirmation_message()
         _log_trade(
@@ -974,27 +1086,11 @@ class TradePage(tk.Frame):
         if not confirmed:
             _log_trade("Auto-trade stop canceled by user.")
             return
-        signal_loop_stopped = self._stop_signal_loop_thread()
-        pending_count, queue_count = self._clear_monitoring_targets_for_stop()
-        dropped_events = self._clear_signal_event_queue_for_stop(loop_label="ui-stop")
-
-        with self._auto_trade_runtime_lock:
-            transition = stop_signal_loop_with_logging(
-                self._auto_trade_state,
-                loop_label="ui-stop",
-            )
-            self._auto_trade_state = transition.current
-            self._auto_trade_starting = False
-            self._sync_orchestrator_runtime_from_recovery_state_locked()
-        self._set_trade_state("stop")
-        self._persist_auto_trade_runtime()
-        _log_trade(
-            "Auto-trade stop requested: "
-            f"reason={transition.reason_code} recovery_locked={transition.current.recovery_locked} "
-            f"signal_loop_paused={transition.current.signal_loop_paused} "
-            f"signal_loop_stopped={signal_loop_stopped} "
-            f"cleared_pending_monitoring={pending_count} cleared_monitor_queue={queue_count} "
-            f"dropped_signal_events={dropped_events}"
+        self._execute_auto_trade_stop(
+            stop_source="ui-stop",
+            trigger_reason="USER_REQUEST",
+            loop_label="ui-stop",
+            clear_reason_code="STOP_BUTTON_CLEAR_MONITORING",
         )
 
     def _request_auto_trade_startup(self) -> None:
@@ -1593,6 +1689,39 @@ class TradePage(tk.Frame):
             value = int(raw)
         except ValueError:
             _log_trade(f"{log_scope} default used: key={key} value={default} reason=invalid_int raw={raw!r}")
+            return default
+        if minimum is not None and value < minimum:
+            _log_trade(
+                f"{log_scope} default used: "
+                f"key={key} value={default} reason=below_minimum raw={value} minimum={minimum}"
+            )
+            return default
+        if maximum is not None and value > maximum:
+            _log_trade(
+                f"{log_scope} default used: "
+                f"key={key} value={default} reason=above_maximum raw={value} maximum={maximum}"
+            )
+            return default
+        _log_trade(f"{log_scope} loaded: key={key} value={value}")
+        return value
+
+    @staticmethod
+    def _read_env_float_or_default(
+        key: str,
+        default: float,
+        *,
+        minimum: Optional[float] = None,
+        maximum: Optional[float] = None,
+        log_scope: str = "Config",
+    ) -> float:
+        raw = os.environ.get(key)
+        if raw is None:
+            _log_trade(f"{log_scope} default used: key={key} value={default} reason=missing")
+            return default
+        try:
+            value = float(raw)
+        except ValueError:
+            _log_trade(f"{log_scope} default used: key={key} value={default} reason=invalid_float raw={raw!r}")
             return default
         if minimum is not None and value < minimum:
             _log_trade(
@@ -3200,8 +3329,10 @@ class TradePage(tk.Frame):
         message_text = str(event.get("message_text", ""))
         received_at_local = int(event.get("received_at_local", int(time.time())))
         risk_market_exit_submitted = False
+        cancel_entry_reset_ready = True
         with self._auto_trade_runtime_lock:
             runtime = self._orchestrator_runtime
+        runtime_before_update = runtime
 
         if channel_id == runtime.settings.entry_signal_channel_id:
             leading_preview = parse_leading_market_message(message_text)
@@ -3254,10 +3385,26 @@ class TradePage(tk.Frame):
                 self._oco_last_filled_exit_order_by_symbol.pop(symbol, None)
             self._sync_recovery_state_from_orchestrator_locked()
         if result.message_type == "RISK" and result.handled:
-            risk_market_exit_submitted = self._execute_risk_signal_actions(
+            risk_market_exit_submitted, cancel_entry_reset_ready = self._execute_risk_signal_actions(
                 result=result,
                 loop_label="signal-loop-risk-actions",
             )
+            if result.reset_state and result.cancel_entry_orders and not cancel_entry_reset_ready:
+                with self._auto_trade_runtime_lock:
+                    current = self._orchestrator_runtime
+                    self._orchestrator_runtime = replace(
+                        runtime_before_update,
+                        last_message_ids=dict(current.last_message_ids),
+                        cooldown_by_symbol=dict(current.cooldown_by_symbol),
+                        received_at_by_symbol=dict(current.received_at_by_symbol),
+                        message_id_by_symbol=dict(current.message_id_by_symbol),
+                    )
+                    self._sync_recovery_state_from_orchestrator_locked()
+                _log_trade(
+                    "Risk reset deferred: "
+                    f"channel_id={channel_id} message_id={message_id} "
+                    f"symbol={result.symbol or '-'} reason=entry_cancel_not_confirmed"
+                )
         self._persist_auto_trade_runtime()
         _log_trade(
             "Signal processed: "
@@ -3881,6 +4028,20 @@ class TradePage(tk.Frame):
             )
             return runtime, open_orders, positions
 
+        if self._should_defer_exit_rebuild_for_partial_wait(
+            runtime,
+            symbol=target,
+            open_orders=open_orders,
+            loop_label=loop_label,
+        ):
+            self._last_position_qty_by_symbol[target] = current_qty
+            self._tp_trigger_submit_guard_by_symbol.pop(target, None)
+            _log_trade(
+                "Position quantity change baseline updated: "
+                f"symbol={target} current_qty={current_qty} reason=exit_partial_waiting loop={loop_label}"
+            )
+            return runtime, open_orders, positions
+
         active_exit_templates = self._collect_active_exit_rebuild_templates(
             symbol=target,
             position=position or {},
@@ -3924,6 +4085,48 @@ class TradePage(tk.Frame):
         )
         updated_runtime = replace(runtime, global_state=account_transition.current)
         return updated_runtime, open_orders, refreshed_positions
+
+    def _should_defer_exit_rebuild_for_partial_wait(
+        self,
+        runtime: AutoTradeRuntime,
+        *,
+        symbol: str,
+        open_orders: list[dict],
+        loop_label: str,
+    ) -> bool:
+        tracker = runtime.exit_partial_tracker
+        if not tracker.active:
+            return False
+        tracked_order_id = self._safe_int(tracker.order_id)
+        if tracked_order_id <= 0:
+            return False
+        _, exit_orders = self._classify_orders_for_symbol(symbol, open_orders)
+        tracked_order: Optional[dict[str, Any]] = None
+        for row in exit_orders:
+            order_id = self._safe_int(row.get("orderId"))
+            if order_id == tracked_order_id:
+                tracked_order = row
+                break
+        if tracked_order is None:
+            return False
+        decision = evaluate_exit_five_second_rule(
+            tracker,
+            is_exit_order=True,
+            now=int(time.time()),
+            stall_seconds=5,
+            risk_market_exit_in_same_loop=False,
+        )
+        if decision.reason_code != "EXIT_PARTIAL_WAITING":
+            return False
+        tracked_status = str(tracked_order.get("status") or "").strip().upper() or "NEW"
+        tracked_executed_qty = self._safe_float(tracked_order.get("executedQty")) or 0.0
+        _log_trade(
+            "Position quantity change exit rebuild deferred: "
+            f"symbol={symbol} order_id={tracked_order_id} order_status={tracked_status} "
+            f"executed_qty={tracked_executed_qty} remaining_seconds={decision.remaining_seconds} "
+            f"reason={decision.reason_code} loop={loop_label}"
+        )
+        return True
 
     def _resolve_active_symbol_snapshot(
         self,
@@ -4798,20 +5001,66 @@ class TradePage(tk.Frame):
         *,
         result,
         loop_label: str,
-    ) -> bool:
+    ) -> tuple[bool, bool]:
         symbol = str(result.symbol or "").strip().upper()
         if not symbol:
-            return False
+            return False, True
         open_orders, positions = self._fetch_loop_account_snapshot()
         risk_market_exit_submitted = False
+        cancel_entry_reset_ready = True
 
         if result.cancel_entry_orders:
-            self._cancel_entry_orders_for_symbol(
+            open_orders, positions = self._fetch_loop_account_snapshot(
+                force_refresh=True,
+                loop_label=f"{loop_label}-cancel-entry-pre-refresh",
+            )
+            cancel_result = self._cancel_entry_orders_for_symbol(
                 symbol=symbol,
                 open_orders=open_orders,
                 loop_label=f"{loop_label}-cancel-entry",
             )
-            open_orders, positions = self._fetch_loop_account_snapshot()
+            open_orders, positions = self._fetch_loop_account_snapshot(
+                force_refresh=True,
+                loop_label=f"{loop_label}-cancel-entry-post-refresh",
+            )
+            remaining_entry_orders, _ = self._classify_orders_for_symbol(symbol, open_orders)
+            remaining_entry_order_ids = [
+                self._safe_int(row.get("orderId"))
+                for row in remaining_entry_orders
+                if self._safe_int(row.get("orderId")) > 0
+            ]
+            snapshot_ready = self._has_recent_account_snapshot()
+            if remaining_entry_orders:
+                cancel_entry_reset_ready = False
+                _log_trade(
+                    "Risk entry cancel verification failed: "
+                    f"symbol={symbol} reason=entry_orders_still_open "
+                    f"remaining_order_ids={','.join(str(value) for value in sorted(remaining_entry_order_ids)) or '-'} "
+                    f"attempted={int(cancel_result['attempted_count'])} "
+                    f"success={int(cancel_result['success_count'])} "
+                    f"failed_order_ids={','.join(str(value) for value in cancel_result['failed_order_ids']) or '-'} "
+                    f"loop={loop_label}"
+                )
+            elif not snapshot_ready:
+                cancel_entry_reset_ready = False
+                _log_trade(
+                    "Risk entry cancel verification deferred: "
+                    f"symbol={symbol} reason=account_snapshot_unavailable "
+                    f"attempted={int(cancel_result['attempted_count'])} "
+                    f"success={int(cancel_result['success_count'])} "
+                    f"failed_order_ids={','.join(str(value) for value in cancel_result['failed_order_ids']) or '-'} "
+                    f"loop={loop_label}"
+                )
+            else:
+                self._entry_order_ref_by_symbol.pop(symbol, None)
+                self._clear_entry_cancel_sync_guard(symbol)
+                _log_trade(
+                    "Risk entry cancel verification passed: "
+                    f"symbol={symbol} attempted={int(cancel_result['attempted_count'])} "
+                    f"success={int(cancel_result['success_count'])} "
+                    f"used_cached_ref={bool(cancel_result['used_cached_order_ref'])} "
+                    f"loop={loop_label}"
+                )
 
         if result.submit_market_exit:
             risk_market_exit_submitted = self._submit_market_exit_for_symbol(
@@ -4845,16 +5094,22 @@ class TradePage(tk.Frame):
             )
 
         if result.reset_state:
-            self._second_entry_skip_latch.discard(symbol)
-            self._second_entry_fully_filled_symbols.discard(symbol)
-            self._entry_order_ref_by_symbol.pop(symbol, None)
-            self._clear_entry_cancel_sync_guard(symbol)
-            self._last_open_exit_order_ids_by_symbol.pop(symbol, None)
-            self._oco_last_filled_exit_order_by_symbol.pop(symbol, None)
-            self._pending_oco_retry_symbols.discard(symbol)
-            self._last_position_qty_by_symbol.pop(symbol, None)
-            self._position_zero_confirm_streak_by_symbol.pop(symbol, None)
-        return risk_market_exit_submitted
+            if result.cancel_entry_orders and not cancel_entry_reset_ready:
+                _log_trade(
+                    "Risk state reset skipped: "
+                    f"symbol={symbol} reason=entry_cancel_not_confirmed loop={loop_label}"
+                )
+            else:
+                self._second_entry_skip_latch.discard(symbol)
+                self._second_entry_fully_filled_symbols.discard(symbol)
+                self._entry_order_ref_by_symbol.pop(symbol, None)
+                self._clear_entry_cancel_sync_guard(symbol)
+                self._last_open_exit_order_ids_by_symbol.pop(symbol, None)
+                self._oco_last_filled_exit_order_by_symbol.pop(symbol, None)
+                self._pending_oco_retry_symbols.discard(symbol)
+                self._last_position_qty_by_symbol.pop(symbol, None)
+                self._position_zero_confirm_streak_by_symbol.pop(symbol, None)
+        return risk_market_exit_submitted, cancel_entry_reset_ready
 
     def _cancel_open_orders_for_symbols(
         self,
@@ -4995,21 +5250,75 @@ class TradePage(tk.Frame):
         symbol: str,
         open_orders: list[dict],
         loop_label: str,
-    ) -> None:
-        entry_orders, _ = self._classify_orders_for_symbol(symbol, open_orders)
-        if not entry_orders:
-            return
+    ) -> dict[str, object]:
+        target = str(symbol or "").strip().upper()
+        if not target:
+            return {
+                "attempted_count": 0,
+                "success_count": 0,
+                "failed_order_ids": [],
+                "used_cached_order_ref": False,
+            }
+        entry_orders, _ = self._classify_orders_for_symbol(target, open_orders)
+        attempted_order_ids: list[int] = []
+        success_order_ids: list[int] = []
+        failed_order_ids: list[int] = []
         for row in entry_orders:
             order_id = self._safe_int(row.get("orderId"))
             if order_id <= 0:
                 continue
-            self._cancel_order_with_gateway(
-                symbol=symbol,
+            attempted_order_ids.append(int(order_id))
+            cancel_ok = self._cancel_order_with_gateway(
+                symbol=target,
                 order_id=order_id,
                 loop_label=f"{loop_label}-order-{order_id}",
             )
-        self._entry_order_ref_by_symbol.pop(symbol, None)
-        self._clear_entry_cancel_sync_guard(symbol)
+            if cancel_ok:
+                success_order_ids.append(int(order_id))
+            else:
+                failed_order_ids.append(int(order_id))
+
+        used_cached_order_ref = False
+        cached_order_id = self._safe_int(self._entry_order_ref_by_symbol.get(target))
+        if (
+            cached_order_id > 0
+            and cached_order_id not in attempted_order_ids
+            and (not entry_orders or not attempted_order_ids)
+        ):
+            used_cached_order_ref = True
+            attempted_order_ids.append(int(cached_order_id))
+            cancel_ok = self._cancel_order_with_gateway(
+                symbol=target,
+                order_id=int(cached_order_id),
+                loop_label=f"{loop_label}-cached-order-{int(cached_order_id)}",
+            )
+            if cancel_ok:
+                success_order_ids.append(int(cached_order_id))
+            else:
+                failed_order_ids.append(int(cached_order_id))
+            _log_trade(
+                "Entry-order cancel fallback attempted with cached order ref: "
+                f"symbol={target} order_id={int(cached_order_id)} success={cancel_ok} loop={loop_label}"
+            )
+
+        if not attempted_order_ids:
+            _log_trade(
+                "Entry-order cancel skipped: "
+                f"symbol={target} reason=no_entry_orders_identified loop={loop_label}"
+            )
+        _log_trade(
+            "Entry-order cancel summary: "
+            f"symbol={target} snapshot_entry_count={len(entry_orders)} "
+            f"attempted={len(attempted_order_ids)} success={len(success_order_ids)} "
+            f"failed_order_ids={','.join(str(value) for value in failed_order_ids) or '-'} "
+            f"used_cached_ref={used_cached_order_ref} loop={loop_label}"
+        )
+        return {
+            "attempted_count": len(attempted_order_ids),
+            "success_count": len(success_order_ids),
+            "failed_order_ids": failed_order_ids,
+            "used_cached_order_ref": used_cached_order_ref,
+        }
 
     def _force_market_exit_all_positions(
         self,
@@ -5285,9 +5594,8 @@ class TradePage(tk.Frame):
                 _log_trade(
                     "TP trigger rejected as immediate-trigger: "
                     f"symbol={symbol} error_code={last_error_code} "
-                    "fallback_market_exit_skipped=True"
+                    "fallback_market_exit_skipped=False"
                 )
-                return False
             fallback_success = self._submit_market_exit_for_symbol(
                 symbol=symbol,
                 positions=positions,
@@ -5295,7 +5603,8 @@ class TradePage(tk.Frame):
             )
             _log_trade(
                 "TP trigger reject fallback market-exit attempted: "
-                f"symbol={symbol} reason={retry.reason_code} success={fallback_success} loop={loop_label}"
+                f"symbol={symbol} reason={retry.reason_code} error_code={last_error_code} "
+                f"success={fallback_success} loop={loop_label}"
             )
         return retry.success
 
@@ -7726,8 +8035,18 @@ class TradePage(tk.Frame):
                 return
             self._sync_wallet_balance_to_sheet(balance)
             positions = self._fetch_open_positions()
-            self.after(0, lambda: self._set_wallet_value(balance))
-            self.after(0, lambda: self._set_positions(positions or []))
+            positions_rows = positions or []
+
+            def apply_wallet_snapshot() -> None:
+                self._set_wallet_value(balance)
+                self._set_positions(positions_rows)
+                self._request_wallet_limit_auto_stop_if_needed(
+                    balance=balance,
+                    positions=positions_rows,
+                    source="wallet-fetch",
+                )
+
+            self.after(0, apply_wallet_snapshot)
         except Exception:
             self._set_wallet_failure_async()
 
@@ -8324,10 +8643,19 @@ class TradePage(tk.Frame):
         self._close_window = ClosePositionWindow(self, position)
 
     def _set_wallet_value(self, balance: float) -> None:
-        self._wallet_balance = balance
-        self._wallet_value = f"{balance:,.2f}"
+        numeric_balance = float(balance)
+        over_limit = self._is_wallet_over_auto_stop_limit(numeric_balance)
+        self._wallet_balance = numeric_balance
+        self._wallet_value = f"{numeric_balance:,.2f}"
         self._wallet_unit = "USDT"
-        self._wallet_value_color = WALLET_VALUE_COLOR
+        self._wallet_value_color = WALLET_LIMIT_EXCEEDED_COLOR if over_limit else WALLET_VALUE_COLOR
+        if over_limit != self._wallet_over_auto_stop_limit:
+            self._wallet_over_auto_stop_limit = over_limit
+            _log_trade(
+                "Wallet auto-stop threshold state changed: "
+                f"over_limit={over_limit} balance={numeric_balance:.2f} "
+                f"threshold={self._auto_trade_wallet_stop_threshold_usdt:.2f}"
+            )
         self._layout()
 
     def _set_wallet_failure(self) -> None:
@@ -8335,6 +8663,7 @@ class TradePage(tk.Frame):
         self._wallet_value = "연결실패"
         self._wallet_unit = ""
         self._wallet_value_color = HIGHLIGHT_TEXT
+        self._wallet_over_auto_stop_limit = False
         self._positions = []
         self._layout()
 
@@ -8376,6 +8705,12 @@ class TradePage(tk.Frame):
                 self._set_wallet_value(balance)
             if positions is not None:
                 self._set_positions(positions)
+            if balance is not None and positions is not None:
+                self._request_wallet_limit_auto_stop_if_needed(
+                    balance=balance,
+                    positions=positions,
+                    source="status-refresh",
+                )
             self._refresh_in_progress = False
             self._start_status_refresh()
 

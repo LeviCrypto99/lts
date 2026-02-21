@@ -32,6 +32,18 @@ def _is_positive_finite(value: float) -> bool:
     return math.isfinite(float(value)) and float(value) > 0.0
 
 
+def _to_epoch_seconds(value: Any) -> Optional[int]:
+    try:
+        parsed = int(float(value))
+    except (TypeError, ValueError):
+        return None
+    if parsed <= 0:
+        return None
+    if parsed >= 1_000_000_000_000:
+        return parsed // 1000
+    return parsed
+
+
 def evaluate_pnl_branch(
     *,
     avg_entry_price: float,
@@ -436,7 +448,8 @@ def update_exit_partial_fill_tracker(
             reason_code="NOT_EXIT_ORDER",
         )
 
-    if int(updated_at) <= 0:
+    normalized_updated_at = _to_epoch_seconds(updated_at)
+    if normalized_updated_at is None:
         return ExitPartialFillUpdateResult(
             previous=tracker,
             current=tracker,
@@ -448,16 +461,16 @@ def update_exit_partial_fill_tracker(
 
     if order_status == "PARTIALLY_FILLED":
         if not tracker.active or tracker.order_id != int(order_id):
-            partial_started_at = int(updated_at)
+            partial_started_at = int(normalized_updated_at)
         elif qty > tracker.last_executed_qty:
-            partial_started_at = int(updated_at)
+            partial_started_at = int(normalized_updated_at)
         else:
             partial_started_at = tracker.partial_started_at
         current = ExitPartialFillTracker(
             active=True,
             order_id=int(order_id),
             partial_started_at=partial_started_at,
-            last_update_at=int(updated_at),
+            last_update_at=int(normalized_updated_at),
             last_executed_qty=qty,
         )
         return ExitPartialFillUpdateResult(
@@ -511,7 +524,13 @@ def evaluate_exit_five_second_rule(
             reason_code="EXIT_PARTIAL_TRACK_INACTIVE",
             remaining_seconds=0,
         )
-    elapsed = max(0, int(now) - int(tracker.partial_started_at))
+    normalized_now = _to_epoch_seconds(now)
+    normalized_partial_started_at = _to_epoch_seconds(tracker.partial_started_at)
+    if normalized_now is None:
+        normalized_now = int(now)
+    if normalized_partial_started_at is None:
+        normalized_partial_started_at = int(tracker.partial_started_at)
+    elapsed = max(0, int(normalized_now) - int(normalized_partial_started_at))
     remaining = max(0, threshold - elapsed)
     if elapsed >= threshold:
         return ExitFiveSecondRuleDecision(
