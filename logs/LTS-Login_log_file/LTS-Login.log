@@ -1,0 +1,23 @@
+[2026-02-21 23:49:56] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-02-21 23:49:56] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-02-21 23:49:56] help_button_cluster_shift applied: shift_x=60
+[2026-02-21 23:49:59] guide_button_clicked: kind=binance_account_guide
+[2026-02-21 23:50:00] binance_account_guide_window_layout: centered_option_blocks
+[2026-02-21 23:50:00] binance_account_guide_window_opened
+[2026-02-21 23:50:00] binance_account_guide_window_created
+[2026-02-21 23:50:01] binance_account_guide_window_closed
+[2026-02-21 23:50:02] guide_button_clicked: kind=lts_guidebook
+[2026-02-21 23:50:02] guide_pdf_opened: kind=lts_guidebook path=C:\Users\dudfh\AppData\Local\Temp\_MEI35122\image\login_page\lts_connect_guide.pdf
+[2026-02-21 23:50:35] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-02-21 23:50:35] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-02-21 23:50:38] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-02-21 23:50:38] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-02-21 23:50:38] login_click success: api_key=UXFj***6Nx3
+[2026-02-22 14:14:12] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-02-22 14:14:12] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-02-22 14:14:12] help_button_cluster_shift applied: shift_x=60
+[2026-02-22 14:14:19] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-02-22 14:14:19] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-02-22 14:14:22] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-02-22 14:14:22] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-02-22 14:14:22] login_click success: api_key=UXFj***6Nx3

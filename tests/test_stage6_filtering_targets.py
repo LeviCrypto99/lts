@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime
 import unittest
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from auto_trade import (
     calculate_entry_target,
@@ -9,6 +11,17 @@ from auto_trade import (
     evaluate_common_filters,
     evaluate_common_filters_with_logging,
 )
+
+_KST_TZ = ZoneInfo("Asia/Seoul")
+
+
+def _kst_epoch(hour: int, minute: int, second: int = 0) -> int:
+    return int(datetime(2026, 1, 1, hour, minute, second, tzinfo=_KST_TZ).timestamp())
+
+
+_ALLOWED_SIGNAL_TS = _kst_epoch(10, 1, 0)
+_BLOCKED_SIGNAL_TS_START = _kst_epoch(8, 30, 0)
+_BLOCKED_SIGNAL_TS_END = _kst_epoch(10, 0, 59)
 
 
 class CommonFilteringTests(unittest.TestCase):
@@ -18,9 +31,32 @@ class CommonFilteringTests(unittest.TestCase):
             ranking_direction="상승",
             ranking_position=11,
             funding_rate_pct=-0.09,
+            signal_received_at_local=_ALLOWED_SIGNAL_TS,
         )
         self.assertTrue(result.passed)
         self.assertEqual(result.reason_code, "FILTER_PASS")
+
+    def test_common_filter_fail_kst_morning_entry_block_start_inclusive(self) -> None:
+        result = evaluate_common_filters(
+            category="AI",
+            ranking_direction="상승",
+            ranking_position=11,
+            funding_rate_pct=-0.09,
+            signal_received_at_local=_BLOCKED_SIGNAL_TS_START,
+        )
+        self.assertFalse(result.passed)
+        self.assertEqual(result.reason_code, "KST_MORNING_ENTRY_BLOCK")
+
+    def test_common_filter_fail_kst_morning_entry_block_until_1000_59(self) -> None:
+        result = evaluate_common_filters(
+            category="AI",
+            ranking_direction="상승",
+            ranking_position=11,
+            funding_rate_pct=-0.09,
+            signal_received_at_local=_BLOCKED_SIGNAL_TS_END,
+        )
+        self.assertFalse(result.passed)
+        self.assertEqual(result.reason_code, "KST_MORNING_ENTRY_BLOCK")
 
     def test_common_filter_fail_excluded_category_keyword(self) -> None:
         result = evaluate_common_filters(
@@ -28,6 +64,7 @@ class CommonFilteringTests(unittest.TestCase):
             ranking_direction="상승",
             ranking_position=11,
             funding_rate_pct=-0.09,
+            signal_received_at_local=_ALLOWED_SIGNAL_TS,
         )
         self.assertFalse(result.passed)
         self.assertEqual(result.reason_code, "CATEGORY_EXCLUDED_KEYWORD")
@@ -38,6 +75,7 @@ class CommonFilteringTests(unittest.TestCase):
             ranking_direction="상승",
             ranking_position=11,
             funding_rate_pct=-0.09,
+            signal_received_at_local=_ALLOWED_SIGNAL_TS,
         )
         self.assertFalse(result.passed)
         self.assertEqual(result.reason_code, "CATEGORY_UNKNOWN")
@@ -48,6 +86,7 @@ class CommonFilteringTests(unittest.TestCase):
             ranking_direction="상승",
             ranking_position=11,
             funding_rate_pct=-0.09,
+            signal_received_at_local=_ALLOWED_SIGNAL_TS,
         )
         self.assertFalse(result.passed)
         self.assertEqual(result.reason_code, "CATEGORY_UNKNOWN")
@@ -58,6 +97,7 @@ class CommonFilteringTests(unittest.TestCase):
             ranking_direction="상승",
             ranking_position=5,
             funding_rate_pct=-0.09,
+            signal_received_at_local=_ALLOWED_SIGNAL_TS,
         )
         self.assertFalse(result.passed)
         self.assertEqual(result.reason_code, "RANKING_TOP5_RISE")
@@ -68,6 +108,7 @@ class CommonFilteringTests(unittest.TestCase):
             ranking_direction="하락",
             ranking_position=1,
             funding_rate_pct=-0.09,
+            signal_received_at_local=_ALLOWED_SIGNAL_TS,
         )
         self.assertTrue(result.passed)
         self.assertEqual(result.reason_code, "FILTER_PASS")
@@ -78,6 +119,7 @@ class CommonFilteringTests(unittest.TestCase):
             ranking_direction="상승",
             ranking_position=11,
             funding_rate_pct=-0.1,
+            signal_received_at_local=_ALLOWED_SIGNAL_TS,
         )
         self.assertFalse(result.passed)
         self.assertEqual(result.reason_code, "FUNDING_TOO_NEGATIVE")
@@ -88,9 +130,11 @@ class CommonFilteringTests(unittest.TestCase):
             ranking_direction="보합",
             ranking_position=11,
             funding_rate_pct=-0.09,
+            signal_received_at_local=_ALLOWED_SIGNAL_TS,
         )
         self.assertFalse(result.passed)
         self.assertEqual(result.reason_code, "RANKING_DIRECTION_INVALID")
+
 
 class EntryTargetTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -150,6 +194,7 @@ class Stage6LoggingTests(unittest.TestCase):
                 ranking_direction="상승",
                 ranking_position=11,
                 funding_rate_pct=-0.09,
+                signal_received_at_local=_ALLOWED_SIGNAL_TS,
                 symbol="BTCUSDT",
             )
             self.assertTrue(mocked.called)

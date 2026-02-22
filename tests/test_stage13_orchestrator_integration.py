@@ -82,7 +82,7 @@ class OrchestratorIntegrationTests(unittest.TestCase):
             channel_id=runtime.settings.entry_signal_channel_id,
             message_id=101,
             message_text=_leading_message_text(),
-            received_at_local=1_000,
+            received_at_local=1_700_000_000,
             exchange_info=_exchange_info(),
             candles=_candles(),
             entry_mode="AGGRESSIVE",
@@ -93,10 +93,10 @@ class OrchestratorIntegrationTests(unittest.TestCase):
         self.assertEqual(updated.symbol_state, "MONITORING")
         self.assertIn("BTCUSDT", updated.pending_trigger_candidates)
         self.assertEqual(updated.last_message_ids[runtime.settings.entry_signal_channel_id], 101)
-        self.assertEqual(updated.cooldown_by_symbol["BTCUSDT"], 1_000)
+        self.assertEqual(updated.cooldown_by_symbol["BTCUSDT"], 1_700_000_000)
         self.assertEqual(updated.message_id_by_symbol["BTCUSDT"], 101)
 
-    @patch("auto_trade.orchestrator.time.time", return_value=2.0)
+    @patch("auto_trade.orchestrator.time.time", return_value=1_700_000_001.0)
     def test_leading_signal_target_uses_processing_time_when_received_time_is_stale(
         self,
         _mocked_time,
@@ -116,7 +116,7 @@ class OrchestratorIntegrationTests(unittest.TestCase):
             channel_id=runtime.settings.entry_signal_channel_id,
             message_id=102,
             message_text=_leading_message_text(),
-            received_at_local=1,
+            received_at_local=1_700_000_000,
             exchange_info=_exchange_info(),
             candles=candles,
             entry_mode="AGGRESSIVE",
@@ -850,7 +850,7 @@ class OrchestratorIntegrationTests(unittest.TestCase):
             channel_id=runtime.settings.entry_signal_channel_id,
             message_id=707,
             message_text=_leading_message_text(),
-            received_at_local=2_000,
+            received_at_local=1_700_000_200,
             exchange_info=_exchange_info(),
             candles=_candles(),
             entry_mode="AGGRESSIVE",
@@ -1019,7 +1019,7 @@ class Stage13LoggingTests(unittest.TestCase):
                 channel_id=runtime.settings.entry_signal_channel_id,
                 message_id=101,
                 message_text=_leading_message_text(),
-                received_at_local=1_000,
+                received_at_local=1_700_000_300,
                 exchange_info=_exchange_info(),
                 candles=_candles(),
                 entry_mode="AGGRESSIVE",
