@@ -108,11 +108,13 @@ def _make_trade_page_stub(runtime: AutoTradeRuntime | None = None) -> TradePage:
     page._entry_order_ref_by_symbol = {}
     page._second_entry_skip_latch = set()
     page._second_entry_fully_filled_symbols = set()
+    page._phase1_tp_filled_symbols = set()
     page._last_open_exit_order_ids_by_symbol = {}
     page._oco_last_filled_exit_order_by_symbol = {}
     page._pending_oco_retry_symbols = set()
     page._position_zero_confirm_streak_by_symbol = {}
     page._tp_trigger_submit_guard_by_symbol = {}
+    page._signal_loop_snapshot_cycle_seq = 0
     page._saved_filter_settings = {"mdd": "15%", "tp_ratio": "5%"}
     page._default_filter_settings = lambda: {"mdd": "15%", "tp_ratio": "5%"}
     if runtime is None:
@@ -317,8 +319,13 @@ class TradePageRegressionTests(unittest.TestCase):
             min_qty=0.001,
             min_notional=5.0,
         )
-        submitted: dict[str, object] = {}
-        page._submit_tp_limit_once = lambda **kwargs: submitted.update(kwargs) or True
+        submitted_targets: list[float] = []
+
+        def _submit_tp_limit_once(**kwargs):
+            submitted_targets.append(float(kwargs.get("target_price_override") or 0.0))
+            return True
+
+        page._submit_tp_limit_once = _submit_tp_limit_once
 
         positions = [
             {"symbol": "BTCUSDT", "positionAmt": "1.0", "entryPrice": "100", "markPrice": "103"},
@@ -331,8 +338,9 @@ class TradePageRegressionTests(unittest.TestCase):
             loop_label="stage15-half-percent-tp",
         )
 
-        self.assertEqual(submitted.get("symbol"), "BTCUSDT")
-        self.assertAlmostEqual(float(submitted.get("target_price_override") or 0.0), 103.0, places=9)
+        self.assertEqual(len(submitted_targets), 10)
+        self.assertAlmostEqual(min(submitted_targets), 103.0, places=9)
+        self.assertAlmostEqual(max(submitted_targets), 103.9, places=9)
 
     def test_phase1_tp_target_and_trigger_use_half_percent_ratio_when_selected(self) -> None:
         runtime = AutoTradeRuntime(
@@ -350,8 +358,18 @@ class TradePageRegressionTests(unittest.TestCase):
             min_qty=0.001,
             min_notional=5.0,
         )
-        submitted: dict[str, object] = {}
-        page._submit_tp_limit_once = lambda **kwargs: submitted.update(kwargs) or True
+        submitted_pairs: list[tuple[float, float]] = []
+
+        def _submit_tp_limit_once(**kwargs):
+            submitted_pairs.append(
+                (
+                    float(kwargs.get("target_price_override") or 0.0),
+                    float(kwargs.get("trigger_price_override") or 0.0),
+                )
+            )
+            return True
+
+        page._submit_tp_limit_once = _submit_tp_limit_once
 
         positions = [
             {"symbol": "BTCUSDT", "positionAmt": "-1.0", "entryPrice": "100", "markPrice": "99.7"},
@@ -364,9 +382,13 @@ class TradePageRegressionTests(unittest.TestCase):
             loop_label="stage15-half-percent-tp",
         )
 
-        self.assertEqual(submitted.get("symbol"), "BTCUSDT")
-        self.assertAlmostEqual(float(submitted.get("target_price_override") or 0.0), 99.5, places=9)
-        self.assertAlmostEqual(float(submitted.get("trigger_price_override") or 0.0), 100.0, places=9)
+        self.assertEqual(len(submitted_pairs), 10)
+        targets = [pair[0] for pair in submitted_pairs]
+        triggers = [pair[1] for pair in submitted_pairs]
+        self.assertAlmostEqual(min(targets), 98.6, places=9)
+        self.assertAlmostEqual(max(targets), 99.5, places=9)
+        self.assertAlmostEqual(min(triggers), 99.1, places=9)
+        self.assertAlmostEqual(max(triggers), 100.0, places=9)
 
     def test_phase1_tp_trigger_guard_blocks_duplicate_submit_with_same_params(self) -> None:
         runtime = AutoTradeRuntime(
@@ -411,7 +433,7 @@ class TradePageRegressionTests(unittest.TestCase):
             loop_label="stage15-tp-guard-2",
         )
 
-        self.assertEqual(submit_counter["count"], 1)
+        self.assertEqual(submit_counter["count"], 10)
 
     def test_phase1_skips_tp_submit_when_algo_order_uses_order_type_field(self) -> None:
         runtime = AutoTradeRuntime(
@@ -463,7 +485,7 @@ class TradePageRegressionTests(unittest.TestCase):
             loop_label="stage15-phase1-algo-ordertype-aligned",
         )
 
-        self.assertEqual(submit_counter["count"], 0)
+        self.assertEqual(submit_counter["count"], 9)
 
     def test_phase1_keeps_existing_tp_limit_child_order_without_replacing(self) -> None:
         runtime = AutoTradeRuntime(
@@ -483,7 +505,8 @@ class TradePageRegressionTests(unittest.TestCase):
         )
         cancel_reasons: list[str] = []
         page._cancel_orders_by_ids = lambda **kwargs: cancel_reasons.append(str(kwargs.get("reason") or ""))
-        page._submit_tp_limit_once = lambda **_kwargs: self.fail("tp trigger should not be re-submitted")
+        submit_counter = {"count": 0}
+        page._submit_tp_limit_once = lambda **_kwargs: submit_counter.__setitem__("count", submit_counter["count"] + 1) or True
 
         positions = [
             {"symbol": "BLESSUSDT", "positionAmt": "-24069", "entryPrice": "0.005925", "markPrice": "0.005896"},
@@ -509,6 +532,7 @@ class TradePageRegressionTests(unittest.TestCase):
         )
 
         self.assertEqual(cancel_reasons, [])
+        self.assertEqual(submit_counter["count"], 9)
 
     def test_submit_tp_trigger_immediate_reject_triggers_market_exit_fallback(self) -> None:
         runtime = AutoTradeRuntime(
@@ -622,13 +646,17 @@ class TradePageRegressionTests(unittest.TestCase):
             min_qty=0.001,
             min_notional=5.0,
         )
-        captured: dict[str, float] = {}
+        submitted_pairs: list[tuple[float, float]] = []
         submit_counter = {"tp_trigger": 0}
 
         def _submit_tp_limit_once(**kwargs):
             submit_counter["tp_trigger"] += 1
-            captured["target_price_override"] = float(kwargs.get("target_price_override", 0.0))
-            captured["trigger_price_override"] = float(kwargs.get("trigger_price_override", 0.0))
+            submitted_pairs.append(
+                (
+                    float(kwargs.get("target_price_override", 0.0)),
+                    float(kwargs.get("trigger_price_override", 0.0)),
+                )
+            )
             return True
 
         page._submit_tp_limit_once = _submit_tp_limit_once
@@ -647,9 +675,13 @@ class TradePageRegressionTests(unittest.TestCase):
             loop_label="stage15-phase2-breakeven-trigger",
         )
 
-        self.assertEqual(submit_counter["tp_trigger"], 1)
-        self.assertAlmostEqual(captured["target_price_override"], 100.0, places=8)
-        self.assertAlmostEqual(captured["trigger_price_override"], 99.5, places=8)
+        self.assertEqual(submit_counter["tp_trigger"], 10)
+        targets = [pair[0] for pair in submitted_pairs]
+        triggers = [pair[1] for pair in submitted_pairs]
+        self.assertAlmostEqual(min(targets), 99.0, places=8)
+        self.assertAlmostEqual(max(targets), 99.9, places=8)
+        self.assertAlmostEqual(min(triggers), 98.5, places=8)
+        self.assertAlmostEqual(max(triggers), 99.4, places=8)
 
     def test_safety_lock_drops_signal_queue_immediately(self) -> None:
         runtime = AutoTradeRuntime(
@@ -954,7 +986,7 @@ class TradePageRegressionTests(unittest.TestCase):
             loop_label="stage15-qty-sync",
         )
 
-        self.assertEqual(submitted_order_types, ["TP_LIMIT"])
+        self.assertEqual(submitted_order_types, ["TP_LIMIT"] * 10)
         self.assertTrue(updated_runtime.global_state.has_any_position)
         self.assertEqual(page._last_position_qty_by_symbol["BTCUSDT"], 0.5)
 
@@ -1051,6 +1083,115 @@ class TradePageRegressionTests(unittest.TestCase):
         self.assertAlmostEqual(page._last_position_qty_by_symbol["BTCUSDT"], 0.6, places=8)
         self.assertNotIn("BTCUSDT", page._tp_trigger_submit_guard_by_symbol)
 
+    def test_run_exit_supervision_clears_stale_exit_partial_tracker_before_five_second_rule(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE1",
+            active_symbol="BTCUSDT",
+            exit_partial_tracker=ExitPartialFillTracker(
+                active=True,
+                order_id=777001,
+                partial_started_at=100,
+                last_update_at=100,
+                last_executed_qty=0.2,
+            ),
+        )
+        page = _make_trade_page_stub(runtime)
+        page._enforce_phase_exit_policy = lambda current, **_kwargs: current
+        page._fetch_open_orders = lambda: []
+        page._classify_orders_for_symbol = lambda _symbol, _open_orders: ([], [])
+
+        updated = page._run_exit_supervision(
+            runtime,
+            symbol="BTCUSDT",
+            open_orders=[],
+            positions=[{"symbol": "BTCUSDT", "positionAmt": "1.0", "entryPrice": "100", "markPrice": "99"}],
+            risk_market_exit_in_same_loop=False,
+            loop_label="stage15-stale-exit-tracker-clear",
+        )
+
+        self.assertFalse(updated.exit_partial_tracker.active)
+        self.assertIsNone(updated.exit_partial_tracker.order_id)
+        self.assertEqual(updated.exit_partial_tracker.partial_started_at, 0)
+        self.assertEqual(updated.exit_partial_tracker.last_update_at, 0)
+        self.assertAlmostEqual(updated.exit_partial_tracker.last_executed_qty, 0.0, places=8)
+
+    def test_run_exit_supervision_bypasses_oco_when_tp_exit_fills_in_phase1(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE1",
+            active_symbol="BTCUSDT",
+        )
+        page = _make_trade_page_stub(runtime)
+        page._enforce_phase_exit_policy = lambda current, **_kwargs: current
+        page._fetch_open_orders = lambda: [
+            {
+                "symbol": "BTCUSDT",
+                "orderId": 202,
+                "type": "TAKE_PROFIT",
+                "side": "BUY",
+                "price": "99.4",
+                "stopPrice": "99.9",
+                "status": "NEW",
+            }
+        ]
+        page._last_open_exit_order_ids_by_symbol = {"BTCUSDT": {101, 202}}
+        page._query_order_payload_by_id = (
+            lambda **kwargs: {"status": "FILLED", "type": "LIMIT"} if int(kwargs.get("order_id") or 0) == 101 else None
+        )
+
+        with patch.object(trade_page, "execute_oco_cancel_flow", side_effect=AssertionError("OCO should be bypassed")):
+            updated = page._run_exit_supervision(
+                runtime,
+                symbol="BTCUSDT",
+                open_orders=[],
+                positions=[{"symbol": "BTCUSDT", "positionAmt": "-1.0", "entryPrice": "100", "markPrice": "99.5"}],
+                risk_market_exit_in_same_loop=False,
+                loop_label="stage15-phase1-tp-oco-bypass",
+            )
+
+        self.assertEqual(updated.symbol_state, "PHASE1")
+        self.assertIn("BTCUSDT", page._phase1_tp_filled_symbols)
+        self.assertEqual(page._oco_last_filled_exit_order_by_symbol.get("BTCUSDT"), 101)
+
+    def test_phase1_enforces_breakeven_stop_after_first_tp_fill_flag(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE1",
+        )
+        page = _make_trade_page_stub(runtime)
+        page._phase1_tp_filled_symbols = {"BTCUSDT"}
+        page._saved_filter_settings = {"mdd": "15%", "tp_ratio": "0.5%", "risk_filter": "보수적"}
+        page._default_filter_settings = lambda: {"mdd": "15%", "tp_ratio": "0.5%", "risk_filter": "보수적"}
+        page._get_symbol_filter_rule = lambda _symbol: SymbolFilterRules(
+            tick_size=0.1,
+            step_size=0.001,
+            min_qty=0.001,
+            min_notional=5.0,
+        )
+        stop_submit_counter = {"count": 0}
+        page._submit_breakeven_stop_market = lambda **_kwargs: stop_submit_counter.__setitem__(
+            "count",
+            stop_submit_counter["count"] + 1,
+        ) or True
+        page._submit_tp_limit_once = lambda **_kwargs: True
+
+        _ = page._enforce_phase_exit_policy(
+            runtime,
+            symbol="BTCUSDT",
+            open_orders=[],
+            positions=[{"symbol": "BTCUSDT", "positionAmt": "-1.0", "entryPrice": "100", "markPrice": "99.5"}],
+            loop_label="stage15-phase1-first-tp-stop",
+        )
+
+        self.assertEqual(stop_submit_counter["count"], 1)
+
     def test_position_zero_reconciles_immediately_with_cancel_all(self) -> None:
         runtime = AutoTradeRuntime(
             settings=_default_settings(),
@@ -1058,6 +1199,13 @@ class TradePageRegressionTests(unittest.TestCase):
             signal_loop_running=True,
             symbol_state="PHASE1",
             active_symbol="DYMUSDT",
+            exit_partial_tracker=ExitPartialFillTracker(
+                active=True,
+                order_id=99001,
+                partial_started_at=88,
+                last_update_at=88,
+                last_executed_qty=0.9,
+            ),
         )
         page = _make_trade_page_stub(runtime)
         page._last_position_qty_by_symbol = {"DYMUSDT": 2930.5}
@@ -1087,6 +1235,11 @@ class TradePageRegressionTests(unittest.TestCase):
         self.assertIsNone(updated.active_symbol)
         self.assertNotIn("DYMUSDT", page._last_position_qty_by_symbol)
         self.assertNotIn("DYMUSDT", page._position_zero_confirm_streak_by_symbol)
+        self.assertFalse(updated.exit_partial_tracker.active)
+        self.assertIsNone(updated.exit_partial_tracker.order_id)
+        self.assertEqual(updated.exit_partial_tracker.partial_started_at, 0)
+        self.assertEqual(updated.exit_partial_tracker.last_update_at, 0)
+        self.assertAlmostEqual(updated.exit_partial_tracker.last_executed_qty, 0.0, places=8)
 
     def test_position_zero_uses_fallback_cancel_when_cancel_all_fails(self) -> None:
         runtime = AutoTradeRuntime(

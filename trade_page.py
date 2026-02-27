@@ -119,10 +119,16 @@ AUTO_TRADE_PERSIST_PATH = Path(tempfile.gettempdir()) / "LTS-auto-trade-state.js
 AUTO_TRADE_SIGNAL_INBOX_PATH = Path(tempfile.gettempdir()) / "LTS-auto-trade-signal-inbox.jsonl"
 SIGNAL_LOOP_INTERVAL_SEC = 1.0
 TP_TRIGGER_SUBMISSION_GUARD_SEC = 20.0
+TP_SPLIT_ORDER_COUNT = 10
+TP_SPLIT_STEP_RATIO = 0.001
+PHASE2_TP_START_RATIO = -0.01
+PHASE2_TP_STEP_RATIO = 0.001
 ENTRY_CANCEL_SYNC_GUARD_SEC = 3.0
 EXCHANGE_INFO_CACHE_TTL_SEC = 60
 ACCOUNT_SNAPSHOT_CACHE_TTL_SEC = 0.9
 ACCOUNT_SNAPSHOT_STALE_FALLBACK_SEC = 30
+ACCOUNT_REST_UNHEALTHY_FORCE_MIN_INTERVAL_SEC = 3.0
+FUTURES_BALANCE_CACHE_TTL_SEC = 1.5
 POSITION_ZERO_CONFIRM_REQUIRED_SNAPSHOTS = 2
 RECENT_KLINE_LIMIT = 20
 TELEGRAM_BOT_TOKEN_ENV = "LTS_TELEGRAM_BOT_TOKEN"
@@ -539,6 +545,12 @@ class TradePage(tk.Frame):
         self._last_account_rest_reconcile_at = 0.0
         self._account_snapshot_rest_backoff_until = 0.0
         self._account_snapshot_rest_backoff_sec = 0.0
+        self._account_snapshot_last_user_stream_force_at = 0.0
+        self._account_snapshot_last_user_stream_force_cycle_id = 0
+        self._signal_loop_snapshot_cycle_seq = 0
+        self._futures_balance_cache_lock = threading.Lock()
+        self._futures_balance_cache: Optional[list[dict]] = None
+        self._futures_balance_cache_at = 0.0
         self._ws_price_lock = threading.Lock()
         self._ws_price_by_symbol: dict[str, float] = {}
         self._ws_price_received_at = 0
@@ -561,7 +573,8 @@ class TradePage(tk.Frame):
         self._entry_cancel_sync_guard_until_by_symbol: dict[str, float] = {}
         self._second_entry_skip_latch: set[str] = set()
         self._second_entry_fully_filled_symbols: set[str] = set()
-        self._tp_trigger_submit_guard_by_symbol: dict[str, dict[str, float]] = {}
+        self._phase1_tp_filled_symbols: set[str] = set()
+        self._tp_trigger_submit_guard_by_symbol: dict[str, dict[str, object]] = {}
         self._last_position_qty_by_symbol: dict[str, float] = {}
         self._position_zero_confirm_streak_by_symbol: dict[str, int] = {}
         self._last_safety_action_code = ""
@@ -1300,6 +1313,176 @@ class TradePage(tk.Frame):
         return text.rstrip("0").rstrip(".")
 
     @staticmethod
+    def _allocate_split_exit_quantities(
+        total_quantity: float,
+        *,
+        split_count: int,
+        step_size: float,
+        min_qty: float,
+    ) -> list[float]:
+        qty = float(total_quantity)
+        step = float(step_size)
+        minimum = float(min_qty)
+        if qty <= 0.0 or step <= 0.0 or minimum <= 0.0 or split_count <= 0:
+            return []
+
+        total_units = int(math.floor((qty / step) + 1e-12))
+        if total_units <= 0:
+            return []
+        min_units = max(1, int(math.ceil((minimum / step) - 1e-12)))
+        max_orders_by_min = total_units // min_units
+        if max_orders_by_min <= 0:
+            return []
+
+        effective_count = min(int(split_count), int(max_orders_by_min))
+        selected_units: list[int] = []
+        for candidate_count in range(effective_count, 0, -1):
+            base_units = total_units // candidate_count
+            remainder = total_units % candidate_count
+            candidate_units = [
+                int(base_units + (1 if idx < remainder else 0))
+                for idx in range(candidate_count)
+            ]
+            if candidate_units and min(candidate_units) >= min_units:
+                selected_units = candidate_units
+                break
+        if not selected_units:
+            return []
+
+        quantities: list[float] = []
+        for units in selected_units:
+            adjusted = floor_quantity_by_step_size(float(units) * step, step)
+            if adjusted is None or adjusted < minimum - 1e-12:
+                continue
+            quantities.append(float(adjusted))
+        return quantities
+
+    @staticmethod
+    def _dedupe_prices_with_tolerance(prices: list[float], *, tolerance: float) -> list[float]:
+        unique: list[float] = []
+        margin = max(float(tolerance), 1e-12)
+        for value in prices:
+            candidate = float(value)
+            if any(abs(candidate - current) <= margin for current in unique):
+                continue
+            unique.append(candidate)
+        return unique
+
+    def _build_split_tp_plan_for_symbol(
+        self,
+        *,
+        symbol: str,
+        position_amt: float,
+        avg_entry: float,
+        tick_size: float,
+        step_size: float,
+        min_qty: float,
+        phase: str,
+        tp_ratio: float,
+        loop_label: str,
+    ) -> list[dict[str, float]]:
+        target = str(symbol or "").strip().upper()
+        state = str(phase or "").strip().upper()
+        if not target or state not in ("PHASE1", "PHASE2"):
+            return []
+        if abs(float(position_amt)) <= 1e-12 or float(avg_entry) <= 0.0:
+            return []
+        if float(tick_size) <= 0.0 or float(step_size) <= 0.0 or float(min_qty) <= 0.0:
+            return []
+
+        is_short = float(position_amt) < 0.0
+        desired_targets: list[float] = []
+        if state == "PHASE1":
+            for idx in range(TP_SPLIT_ORDER_COUNT):
+                ratio = float(tp_ratio) + (float(TP_SPLIT_STEP_RATIO) * float(idx))
+                if ratio <= 0.0:
+                    continue
+                raw_target = float(avg_entry) * (1.0 - ratio if is_short else 1.0 + ratio)
+                rounded = round_price_by_tick_size(raw_target, float(tick_size))
+                if rounded is not None and rounded > 0.0:
+                    desired_targets.append(float(rounded))
+        else:
+            for idx in range(TP_SPLIT_ORDER_COUNT):
+                pnl_ratio = float(PHASE2_TP_START_RATIO) + (float(PHASE2_TP_STEP_RATIO) * float(idx))
+                raw_target = float(avg_entry) * (1.0 - pnl_ratio if is_short else 1.0 + pnl_ratio)
+                rounded = round_price_by_tick_size(raw_target, float(tick_size))
+                if rounded is not None and rounded > 0.0:
+                    desired_targets.append(float(rounded))
+
+        desired_targets = self._dedupe_prices_with_tolerance(
+            desired_targets,
+            tolerance=max(float(tick_size) * 0.25, 1e-12),
+        )
+        if not desired_targets:
+            _log_trade(
+                "Split TP plan unavailable: "
+                f"symbol={target} state={state} reason=no_rounded_targets loop={loop_label}"
+            )
+            return []
+
+        quantities = self._allocate_split_exit_quantities(
+            abs(float(position_amt)),
+            split_count=min(TP_SPLIT_ORDER_COUNT, len(desired_targets)),
+            step_size=float(step_size),
+            min_qty=float(min_qty),
+        )
+        if not quantities:
+            _log_trade(
+                "Split TP plan unavailable: "
+                f"symbol={target} state={state} reason=quantity_allocation_failed "
+                f"position_qty={abs(float(position_amt))} step_size={step_size} min_qty={min_qty} loop={loop_label}"
+            )
+            return []
+
+        effective_count = min(len(desired_targets), len(quantities))
+        if effective_count <= 0:
+            return []
+        if effective_count < TP_SPLIT_ORDER_COUNT:
+            _log_trade(
+                "Split TP plan reduced order count: "
+                f"symbol={target} state={state} requested={TP_SPLIT_ORDER_COUNT} "
+                f"effective={effective_count} loop={loop_label}"
+            )
+
+        plan: list[dict[str, float]] = []
+        for idx in range(effective_count):
+            target_price = float(desired_targets[idx])
+            trigger_raw = float(target_price) * (1.005 if is_short else 0.995)
+            trigger_price = round_price_by_tick_size(trigger_raw, float(tick_size))
+            if trigger_price is None or trigger_price <= 0.0:
+                continue
+            quantity = float(quantities[idx])
+            if quantity <= 0.0:
+                continue
+            plan.append(
+                {
+                    "target_price": float(target_price),
+                    "trigger_price": float(trigger_price),
+                    "quantity": float(quantity),
+                }
+            )
+
+        _log_trade(
+            "Split TP plan built: "
+            f"symbol={target} state={state} order_count={len(plan)} "
+            f"target_first={plan[0]['target_price'] if plan else '-'} "
+            f"target_last={plan[-1]['target_price'] if plan else '-'} "
+            f"qty_total={sum(item['quantity'] for item in plan):.12f} loop={loop_label}"
+        )
+        return plan
+
+    @staticmethod
+    def _build_split_tp_plan_signature(*, phase: str, plan: list[dict[str, float]]) -> str:
+        state = str(phase or "").strip().upper()
+        if not plan:
+            return f"{state}|empty"
+        fragments = [
+            f"{item['target_price']:.12f}:{item['trigger_price']:.12f}:{item['quantity']:.12f}"
+            for item in plan
+        ]
+        return f"{state}|{'|'.join(fragments)}"
+
+    @staticmethod
     def _empty_exit_rebuild_templates() -> dict[str, bool]:
         return {
             "tp_limit": False,
@@ -1417,8 +1600,12 @@ class TradePage(tk.Frame):
         if state == "PHASE1":
             normalized["breakeven_limit"] = False
             normalized["mdd_stop"] = False
+            if target in self._phase1_tp_filled_symbols:
+                normalized["breakeven_stop"] = True
         elif state == "PHASE2":
-            normalized["tp_limit"] = False
+            if normalized["breakeven_limit"]:
+                normalized["tp_limit"] = True
+                normalized["breakeven_limit"] = False
             normalized["breakeven_stop"] = False
             if target not in self._second_entry_fully_filled_symbols:
                 normalized["mdd_stop"] = False
@@ -1498,34 +1685,45 @@ class TradePage(tk.Frame):
                 return False, "mdd_stop_market_registration_failed"
 
         if templates["tp_limit"]:
-            success = self._submit_tp_limit_once(
+            state = str(runtime_symbol_state or "").strip().upper()
+            filter_rule = self._get_symbol_filter_rule(target)
+            if filter_rule is None:
+                return False, "tp_split_filter_rule_missing"
+            split_plan = self._build_split_tp_plan_for_symbol(
+                symbol=target,
+                position_amt=float(position_amt),
+                avg_entry=float(entry_price),
+                tick_size=float(filter_rule.tick_size),
+                step_size=float(filter_rule.step_size),
+                min_qty=float(filter_rule.min_qty),
+                phase=state,
+                tp_ratio=self._parse_percent_text(
+                    (self._saved_filter_settings or self._default_filter_settings()).get("tp_ratio"),
+                    0.05,
+                ),
+                loop_label=f"{loop_label}-split-plan",
+            )
+            attempted, succeeded = self._submit_split_tp_triggers(
                 symbol=target,
                 positions=positions,
-                loop_label=f"{loop_label}-tp-trigger",
+                split_plan=split_plan,
+                loop_label=f"{loop_label}-tp-trigger-split",
             )
+            success = bool(attempted > 0 and attempted == succeeded)
             _log_trade(
                 "Exit rebuild order result: "
-                f"symbol={target} type=TP_TRIGGER success={success} loop={loop_label}"
+                f"symbol={target} type=TP_TRIGGER_SPLIT success={success} "
+                f"attempted={attempted} succeeded={succeeded} state={state or '-'} loop={loop_label}"
             )
             if not success:
-                return False, "tp_trigger_registration_failed"
+                return False, "tp_trigger_split_registration_failed"
 
         if templates["breakeven_limit"]:
             if str(runtime_symbol_state or "").strip().upper() == "PHASE2":
-                trigger_price = float(entry_price) * (1.005 if float(position_amt) < 0.0 else 0.995)
-                success = self._submit_tp_limit_once(
-                    symbol=target,
-                    positions=positions,
-                    loop_label=f"{loop_label}-phase2-breakeven-tp-trigger",
-                    target_price_override=float(entry_price),
-                    trigger_price_override=float(trigger_price),
-                )
                 _log_trade(
-                    "Exit rebuild order result: "
-                    f"symbol={target} type=PHASE2_BREAKEVEN_TP_TRIGGER success={success} loop={loop_label}"
+                    "Exit rebuild breakeven_limit converted to split TP in phase2: "
+                    f"symbol={target} loop={loop_label}"
                 )
-                if not success:
-                    return False, "phase2_breakeven_tp_trigger_registration_failed"
             else:
                 success = self._submit_breakeven_limit_once(
                     symbol=target,
@@ -2755,10 +2953,13 @@ class TradePage(tk.Frame):
         _log_trade("Signal loop worker exited.")
 
     def _signal_loop_tick(self) -> None:
+        self._signal_loop_snapshot_cycle_seq += 1
+        snapshot_cycle_id = self._signal_loop_snapshot_cycle_seq
         self._poll_signal_source_updates()
         self._poll_signal_inbox_file()
         open_orders, positions = self._fetch_loop_account_snapshot(
             loop_label="signal-loop-pre-sync-snapshot",
+            snapshot_cycle_id=snapshot_cycle_id,
         )
         self._run_fill_sync_pass(
             open_orders=open_orders,
@@ -2769,6 +2970,7 @@ class TradePage(tk.Frame):
 
         open_orders, positions = self._fetch_loop_account_snapshot(
             loop_label="signal-loop-price-guard-snapshot",
+            snapshot_cycle_id=snapshot_cycle_id,
         )
         guard_result = self._apply_price_guard_for_loop(
             open_orders=open_orders,
@@ -2802,6 +3004,7 @@ class TradePage(tk.Frame):
 
         open_orders, positions = self._fetch_loop_account_snapshot(
             loop_label="signal-loop-post-sync-snapshot",
+            snapshot_cycle_id=snapshot_cycle_id,
         )
         self._run_fill_sync_pass(
             open_orders=open_orders,
@@ -2837,18 +3040,22 @@ class TradePage(tk.Frame):
             f"reason={reason} loop={loop_label}"
         )
 
-    def _has_recent_account_snapshot(self) -> bool:
+    def _has_account_snapshot_within(self, *, max_age_sec: float) -> bool:
+        threshold = max(0.0, float(max_age_sec))
         now = time.time()
         with self._account_snapshot_cache_lock:
             open_orders_ready = (
                 self._open_orders_cache is not None
-                and max(0.0, now - float(self._open_orders_cache_at)) <= ACCOUNT_SNAPSHOT_STALE_FALLBACK_SEC
+                and max(0.0, now - float(self._open_orders_cache_at)) <= threshold
             )
             positions_ready = (
                 self._positions_cache is not None
-                and max(0.0, now - float(self._positions_cache_at)) <= ACCOUNT_SNAPSHOT_STALE_FALLBACK_SEC
+                and max(0.0, now - float(self._positions_cache_at)) <= threshold
             )
         return bool(open_orders_ready and positions_ready)
+
+    def _has_recent_account_snapshot(self) -> bool:
+        return self._has_account_snapshot_within(max_age_sec=ACCOUNT_SNAPSHOT_STALE_FALLBACK_SEC)
 
     @staticmethod
     def _is_rate_limit_payload(payload: object) -> bool:
@@ -2890,6 +3097,7 @@ class TradePage(tk.Frame):
         *,
         force_refresh: bool = False,
         loop_label: str = "signal-loop-snapshot",
+        snapshot_cycle_id: Optional[int] = None,
     ) -> tuple[list[dict], list[dict]]:
         if not self._api_key or not self._secret_key:
             return [], []
@@ -2903,6 +3111,16 @@ class TradePage(tk.Frame):
         if not should_force_rest and not user_stream_healthy:
             should_force_rest = True
             force_reason = "USER_STREAM_UNHEALTHY"
+            if (
+                snapshot_cycle_id is not None
+                and int(snapshot_cycle_id) == int(self._account_snapshot_last_user_stream_force_cycle_id)
+            ):
+                should_force_rest = False
+                _log_trade(
+                    "Account snapshot REST reconcile skipped in same signal-loop cycle: "
+                    f"reason=USER_STREAM_UNHEALTHY_ALREADY_FORCED cycle_id={snapshot_cycle_id} "
+                    f"loop={loop_label}"
+                )
         elif not should_force_rest and periodic_reconcile_due:
             should_force_rest = True
             force_reason = "PERIODIC_RECONCILE"
@@ -2915,16 +3133,35 @@ class TradePage(tk.Frame):
                 f"now={now:.2f} loop={loop_label}"
             )
 
-        open_orders = self._fetch_open_orders(
+        if should_force_rest and force_reason == "USER_STREAM_UNHEALTHY":
+            min_force_interval = float(ACCOUNT_REST_UNHEALTHY_FORCE_MIN_INTERVAL_SEC)
+            elapsed_since_unhealthy_force = now - float(self._account_snapshot_last_user_stream_force_at)
+            has_short_term_snapshot = self._has_account_snapshot_within(max_age_sec=min_force_interval)
+            if has_short_term_snapshot and elapsed_since_unhealthy_force < min_force_interval:
+                should_force_rest = False
+                _log_trade(
+                    "Account snapshot REST reconcile throttled: "
+                    "reason=USER_STREAM_UNHEALTHY "
+                    f"elapsed_sec={elapsed_since_unhealthy_force:.2f} "
+                    f"min_interval_sec={min_force_interval:.2f} loop={loop_label}"
+                )
+            else:
+                self._account_snapshot_last_user_stream_force_at = now
+                if snapshot_cycle_id is not None:
+                    self._account_snapshot_last_user_stream_force_cycle_id = int(snapshot_cycle_id)
+
+        open_orders, open_orders_refreshed, open_orders_rate_limited = self._fetch_open_orders_with_meta(
             force_refresh=should_force_rest,
             loop_label=f"{loop_label}-open-orders",
         )
-        positions = self._fetch_open_positions(
+        positions, positions_refreshed, positions_rate_limited = self._fetch_open_positions_with_meta(
             force_refresh=should_force_rest,
             loop_label=f"{loop_label}-positions",
         )
         if should_force_rest:
-            if open_orders is not None and positions is not None:
+            rest_refresh_applied = bool(open_orders_refreshed and positions_refreshed)
+            rate_limited = bool(open_orders_rate_limited or positions_rate_limited)
+            if rest_refresh_applied:
                 self._last_account_rest_reconcile_at = now
                 self._clear_account_rest_backoff(context=f"{loop_label}-rest-reconcile")
                 _log_trade(
@@ -2936,7 +3173,10 @@ class TradePage(tk.Frame):
                 _log_trade(
                     "Account snapshot REST reconcile incomplete: "
                     f"reason={force_reason} open_orders_ready={open_orders is not None} "
-                    f"positions_ready={positions is not None} loop={loop_label}"
+                    f"positions_ready={positions is not None} "
+                    f"open_orders_refreshed={open_orders_refreshed} "
+                    f"positions_refreshed={positions_refreshed} "
+                    f"rate_limited={rate_limited} loop={loop_label}"
                 )
         if open_orders is None or positions is None:
             _log_trade(
@@ -3379,6 +3619,7 @@ class TradePage(tk.Frame):
                 symbol = str(result.symbol).strip().upper()
                 self._second_entry_skip_latch.discard(symbol)
                 self._second_entry_fully_filled_symbols.discard(symbol)
+                self._phase1_tp_filled_symbols.discard(symbol)
                 self._entry_order_ref_by_symbol.pop(symbol, None)
                 self._clear_entry_cancel_sync_guard(symbol)
                 self._last_open_exit_order_ids_by_symbol.pop(symbol, None)
@@ -3454,9 +3695,11 @@ class TradePage(tk.Frame):
 
         wallet_balance = self._wallet_balance
         if wallet_balance is None:
-            fetched = self._fetch_futures_balance()
+            fetched = self._fetch_futures_balance(loop_label="signal-loop-trigger-wallet-balance")
             wallet_balance = fetched if fetched is not None else 0.0
-        available_balance = self._fetch_futures_available_balance()
+        available_balance = self._fetch_futures_available_balance(
+            loop_label="signal-loop-trigger-available-balance"
+        )
         if available_balance is None:
             available_balance = wallet_balance
         position_mode = runtime.position_mode
@@ -3849,6 +4092,7 @@ class TradePage(tk.Frame):
                     self._clear_entry_cancel_sync_guard(active_symbol)
                     self._second_entry_skip_latch.discard(active_symbol)
                     self._second_entry_fully_filled_symbols.discard(active_symbol)
+                    self._phase1_tp_filled_symbols.discard(active_symbol)
                     self._last_open_exit_order_ids_by_symbol.pop(active_symbol, None)
                     self._oco_last_filled_exit_order_by_symbol.pop(active_symbol, None)
 
@@ -3987,11 +4231,16 @@ class TradePage(tk.Frame):
             self._clear_entry_cancel_sync_guard(target)
             self._second_entry_skip_latch.discard(target)
             self._second_entry_fully_filled_symbols.discard(target)
+            self._phase1_tp_filled_symbols.discard(target)
             self._last_open_exit_order_ids_by_symbol.pop(target, None)
             self._oco_last_filled_exit_order_by_symbol.pop(target, None)
             self._pending_oco_retry_symbols.discard(target)
             self._last_position_qty_by_symbol.pop(target, None)
             self._tp_trigger_submit_guard_by_symbol.pop(target, None)
+            _log_trade(
+                "Exit partial tracker cleared on position-zero reset: "
+                f"symbol={target} reason=POSITION_ZERO_RESET loop={loop_label}"
+            )
             current = replace(
                 runtime,
                 symbol_state="IDLE",
@@ -3999,6 +4248,7 @@ class TradePage(tk.Frame):
                 pending_trigger_candidates={},
                 second_entry_order_pending=False,
                 new_orders_locked=runtime.new_orders_locked and bool(self._pending_oco_retry_symbols),
+                exit_partial_tracker=runtime.exit_partial_tracker.__class__(),
             )
             account_transition = update_account_activity_with_logging(
                 current.global_state,
@@ -4021,6 +4271,7 @@ class TradePage(tk.Frame):
 
         if runtime.symbol_state not in ("PHASE1", "PHASE2"):
             self._last_position_qty_by_symbol[target] = current_qty
+            self._phase1_tp_filled_symbols.discard(target)
             self._tp_trigger_submit_guard_by_symbol.pop(target, None)
             _log_trade(
                 "Position quantity change noted without exit rebuild: "
@@ -4214,6 +4465,7 @@ class TradePage(tk.Frame):
                         self._second_entry_skip_latch.discard(symbol)
                     if second_status == "FILLED":
                         self._second_entry_fully_filled_symbols.add(symbol)
+                        self._phase1_tp_filled_symbols.discard(symbol)
                     elif second_status in ("PARTIALLY_FILLED", "CANCELED", "EXPIRED", "REJECTED"):
                         self._second_entry_fully_filled_symbols.discard(symbol)
 
@@ -4225,6 +4477,8 @@ class TradePage(tk.Frame):
             )
         if current.symbol_state in ("IDLE", "ENTRY_ORDER", "PHASE1"):
             self._second_entry_fully_filled_symbols.discard(symbol)
+        if current.symbol_state != "PHASE1":
+            self._phase1_tp_filled_symbols.discard(symbol)
 
         return current
 
@@ -4481,6 +4735,7 @@ class TradePage(tk.Frame):
             return runtime
         if runtime.symbol_state not in ("PHASE1", "PHASE2"):
             self._tp_trigger_submit_guard_by_symbol.pop(target, None)
+            self._phase1_tp_filled_symbols.discard(target)
             return runtime
 
         position = self._get_symbol_position(positions, target)
@@ -4497,6 +4752,7 @@ class TradePage(tk.Frame):
             return runtime
         is_short = position_amt < 0
         close_side = "BUY" if is_short else "SELL"
+        state = str(runtime.symbol_state or "").strip().upper()
 
         filter_rule = self._get_symbol_filter_rule(target)
         if filter_rule is None:
@@ -4513,48 +4769,25 @@ class TradePage(tk.Frame):
             0.15,
         )
 
-        tp_target = round_price_by_tick_size(
-            avg_entry * (1.0 - tp_ratio if is_short else 1.0 + tp_ratio),
-            tick_size,
-        )
         breakeven_target = round_price_by_tick_size(avg_entry, tick_size)
         mdd_target = round_price_by_tick_size(
             avg_entry * (1.0 + mdd_ratio if is_short else 1.0 - mdd_ratio),
             tick_size,
         )
-        if tp_target is None or breakeven_target is None or mdd_target is None:
+        if breakeven_target is None or mdd_target is None:
             _log_trade(
                 "Phase exit policy skipped: "
                 f"symbol={target} reason=target_rounding_failed avg_entry={avg_entry} tick_size={tick_size}"
             )
             return runtime
 
-        entry_orders, exit_orders = self._classify_orders_for_symbol(target, open_orders)
-        tp_trigger_order_ids: list[int] = []
-        tp_trigger_prices: list[float] = []
-        tp_trigger_trigger_prices: list[float] = []
-        phase2_breakeven_tp_trigger_order_ids: list[int] = []
-        phase2_breakeven_tp_trigger_prices: list[float] = []
-        phase2_breakeven_tp_trigger_trigger_prices: list[float] = []
+        _entry_orders, exit_orders = self._classify_orders_for_symbol(target, open_orders)
+        tp_trigger_rows: list[dict[str, float]] = []
+        tp_limit_rows: list[dict[str, float]] = []
         tp_market_order_ids: list[int] = []
-        legacy_tp_limit_order_ids: list[int] = []
-        breakeven_limit_order_ids: list[int] = []
-        breakeven_limit_prices: list[float] = []
         breakeven_stop_order_ids: list[int] = []
         mdd_stop_order_ids: list[int] = []
         mdd_stop_prices: list[float] = []
-
-        breakeven_trigger_target = round_price_by_tick_size(
-            float(breakeven_target) * (1.005 if is_short else 0.995),
-            tick_size,
-        )
-        if breakeven_trigger_target is None or breakeven_trigger_target <= 0:
-            _log_trade(
-                "Phase exit policy skipped: "
-                f"symbol={target} reason=breakeven_trigger_rounding_failed breakeven_target={breakeven_target} "
-                f"tick_size={tick_size}"
-            )
-            return runtime
 
         for row in exit_orders:
             order_id = self._safe_int(row.get("orderId"))
@@ -4577,18 +4810,13 @@ class TradePage(tk.Frame):
                         f"symbol={target} order_id={order_id} source={stop_source} "
                         f"trigger_price={trigger_price} loop={loop_label}"
                     )
-                is_phase2_breakeven_trigger = (
-                    abs(float(order_price) - float(breakeven_target)) <= tolerance
-                    and abs(float(trigger_price) - float(breakeven_trigger_target)) <= tolerance * 2
+                tp_trigger_rows.append(
+                    {
+                        "order_id": float(order_id),
+                        "price": float(order_price),
+                        "trigger_price": float(trigger_price),
+                    }
                 )
-                if is_phase2_breakeven_trigger:
-                    phase2_breakeven_tp_trigger_order_ids.append(order_id)
-                    phase2_breakeven_tp_trigger_prices.append(float(order_price))
-                    phase2_breakeven_tp_trigger_trigger_prices.append(float(trigger_price))
-                else:
-                    tp_trigger_order_ids.append(order_id)
-                    tp_trigger_prices.append(float(order_price))
-                    tp_trigger_trigger_prices.append(float(trigger_price))
                 continue
             if order_type == "TAKE_PROFIT_MARKET":
                 tp_market_order_ids.append(order_id)
@@ -4597,12 +4825,12 @@ class TradePage(tk.Frame):
                 price = self._safe_float(row.get("price"))
                 if price is None or price <= 0:
                     continue
-                is_tp_limit = (price < breakeven_target - tolerance) if is_short else (price > breakeven_target + tolerance)
-                if is_tp_limit:
-                    legacy_tp_limit_order_ids.append(order_id)
-                else:
-                    breakeven_limit_order_ids.append(order_id)
-                    breakeven_limit_prices.append(float(price))
+                tp_limit_rows.append(
+                    {
+                        "order_id": float(order_id),
+                        "price": float(price),
+                    }
+                )
                 continue
             if order_type not in ("STOP_MARKET", "STOP"):
                 continue
@@ -4621,48 +4849,75 @@ class TradePage(tk.Frame):
                 mdd_stop_order_ids.append(order_id)
                 mdd_stop_prices.append(float(stop_price))
 
-        tp_trigger_target = round_price_by_tick_size(
-            float(tp_target) * (1.005 if is_short else 0.995),
-            tick_size,
-        )
-        if tp_trigger_target is None or tp_trigger_target <= 0:
-            _log_trade(
-                "Phase exit policy skipped: "
-                f"symbol={target} reason=tp_trigger_rounding_failed tp_target={tp_target} tick_size={tick_size}"
-            )
-            return runtime
-        tp_trigger_aligned = (
-            len(tp_trigger_order_ids) == 1
-            and abs(float(tp_trigger_prices[0]) - float(tp_target)) <= tolerance
-            and abs(float(tp_trigger_trigger_prices[0]) - float(tp_trigger_target)) <= tolerance * 2
-        )
-        phase2_breakeven_trigger_aligned = (
-            len(phase2_breakeven_tp_trigger_order_ids) == 1
-            and abs(float(phase2_breakeven_tp_trigger_prices[0]) - float(breakeven_target)) <= tolerance
-            and abs(float(phase2_breakeven_tp_trigger_trigger_prices[0]) - float(breakeven_trigger_target))
-            <= tolerance * 2
+        split_plan = self._build_split_tp_plan_for_symbol(
+            symbol=target,
+            position_amt=float(position_amt),
+            avg_entry=float(avg_entry),
+            tick_size=float(filter_rule.tick_size),
+            step_size=float(filter_rule.step_size),
+            min_qty=float(filter_rule.min_qty),
+            phase=state,
+            tp_ratio=float(tp_ratio),
+            loop_label=f"{loop_label}-plan",
         )
         mdd_stop_aligned = bool(mdd_stop_order_ids) and all(
             abs(float(price) - float(mdd_target)) <= tolerance * 2 for price in mdd_stop_prices
         )
 
-        if runtime.symbol_state == "PHASE1":
-            if breakeven_limit_order_ids:
-                self._cancel_orders_by_ids(
-                    symbol=target,
-                    order_ids=breakeven_limit_order_ids,
-                    loop_label=loop_label,
-                    reason="phase1_disable_breakeven_limit",
-                )
-                breakeven_limit_order_ids = []
-            if phase2_breakeven_tp_trigger_order_ids:
-                self._cancel_orders_by_ids(
-                    symbol=target,
-                    order_ids=phase2_breakeven_tp_trigger_order_ids,
-                    loop_label=loop_label,
-                    reason="phase1_disable_phase2_breakeven_tp_trigger",
-                )
-                phase2_breakeven_tp_trigger_order_ids = []
+        tp_trigger_used_ids: set[int] = set()
+        tp_limit_used_ids: set[int] = set()
+        missing_split_plan: list[dict[str, float]] = []
+        for desired in split_plan:
+            desired_target = float(desired.get("target_price") or 0.0)
+            desired_trigger = float(desired.get("trigger_price") or 0.0)
+            matched = False
+            for row in tp_trigger_rows:
+                order_id = int(row.get("order_id") or 0)
+                if order_id <= 0 or order_id in tp_trigger_used_ids:
+                    continue
+                if abs(float(row.get("price") or 0.0) - desired_target) > tolerance:
+                    continue
+                if abs(float(row.get("trigger_price") or 0.0) - desired_trigger) > tolerance * 2:
+                    continue
+                tp_trigger_used_ids.add(order_id)
+                matched = True
+                break
+            if matched:
+                continue
+            for row in tp_limit_rows:
+                order_id = int(row.get("order_id") or 0)
+                if order_id <= 0 or order_id in tp_limit_used_ids:
+                    continue
+                if abs(float(row.get("price") or 0.0) - desired_target) > tolerance:
+                    continue
+                tp_limit_used_ids.add(order_id)
+                matched = True
+                break
+            if not matched:
+                missing_split_plan.append(dict(desired))
+
+        stale_tp_order_ids = [
+            int(row.get("order_id") or 0)
+            for row in tp_trigger_rows
+            if int(row.get("order_id") or 0) > 0 and int(row.get("order_id") or 0) not in tp_trigger_used_ids
+        ]
+        stale_tp_order_ids.extend(
+            int(row.get("order_id") or 0)
+            for row in tp_limit_rows
+            if int(row.get("order_id") or 0) > 0 and int(row.get("order_id") or 0) not in tp_limit_used_ids
+        )
+        stale_tp_order_ids.extend(int(order_id) for order_id in tp_market_order_ids if int(order_id) > 0)
+        stale_tp_order_ids = sorted({int(value) for value in stale_tp_order_ids if int(value) > 0})
+        if stale_tp_order_ids:
+            self._cancel_orders_by_ids(
+                symbol=target,
+                order_ids=stale_tp_order_ids,
+                loop_label=loop_label,
+                reason=f"{state.lower()}_refresh_split_tp_orders",
+            )
+            self._tp_trigger_submit_guard_by_symbol.pop(target, None)
+
+        if state == "PHASE1":
             if mdd_stop_order_ids:
                 self._cancel_orders_by_ids(
                     symbol=target,
@@ -4670,91 +4925,61 @@ class TradePage(tk.Frame):
                     loop_label=loop_label,
                     reason="phase1_disable_mdd_stop",
                 )
-                mdd_stop_order_ids = []
-            if tp_market_order_ids:
-                self._cancel_orders_by_ids(
-                    symbol=target,
-                    order_ids=tp_market_order_ids,
-                    loop_label=loop_label,
-                    reason="phase1_replace_tp_market_with_tp_trigger",
-                )
-                tp_market_order_ids = []
-            if tp_trigger_order_ids and not tp_trigger_aligned:
-                self._cancel_orders_by_ids(
-                    symbol=target,
-                    order_ids=tp_trigger_order_ids,
-                    loop_label=loop_label,
-                    reason="phase1_refresh_tp_trigger_order",
-                )
-                tp_trigger_order_ids = []
-            if legacy_tp_limit_order_ids:
-                # Conditional TP orders can materialize as regular reduceOnly LIMITs after trigger activation.
-                # Keep them as valid phase1 exit orders instead of force-replacing with a new trigger request.
-                self._tp_trigger_submit_guard_by_symbol.pop(target, None)
-                _log_trade(
-                    "Phase1 TP LIMIT order detected and kept: "
-                    f"symbol={target} count={len(legacy_tp_limit_order_ids)} loop={loop_label}"
-                )
-                return runtime
-            if tp_trigger_aligned:
-                self._tp_trigger_submit_guard_by_symbol.pop(target, None)
-            if not tp_trigger_aligned:
-                guard = self._tp_trigger_submit_guard_by_symbol.get(target)
-                if guard:
-                    guard_age = max(0.0, time.time() - float(guard.get("submitted_at", 0.0)))
-                    same_target = abs(float(guard.get("target_price", 0.0)) - float(tp_target)) <= tolerance
-                    same_trigger = abs(float(guard.get("trigger_price", 0.0)) - float(tp_trigger_target)) <= tolerance * 2
-                    same_qty = abs(float(guard.get("quantity", 0.0)) - abs(float(position_amt))) <= max(
-                        float(filter_rule.step_size),
-                        1e-12,
-                    )
-                    if (
-                        guard_age <= float(TP_TRIGGER_SUBMISSION_GUARD_SEC)
-                        and same_target
-                        and same_trigger
-                        and same_qty
-                    ):
-                        _log_trade(
-                            "Phase1 TP trigger submit skipped by guard: "
-                            f"symbol={target} age_sec={guard_age:.2f} "
-                            f"target={tp_target} trigger={tp_trigger_target} loop={loop_label}"
-                        )
-                        return runtime
-                    self._tp_trigger_submit_guard_by_symbol.pop(target, None)
-                submitted = self._submit_tp_limit_once(
+
+            if target in self._phase1_tp_filled_symbols and not breakeven_stop_order_ids:
+                stop_submitted = self._submit_breakeven_stop_market(
                     symbol=target,
                     positions=positions,
-                    loop_label=f"{loop_label}-phase1-tp-trigger",
-                    target_price_override=float(tp_target),
-                    trigger_price_override=float(tp_trigger_target),
+                    loop_label=f"{loop_label}-phase1-first-tp-breakeven-stop",
                 )
-                if submitted:
+                _log_trade(
+                    "Phase1 first TP breakeven stop ensured: "
+                    f"symbol={target} submitted={stop_submitted} loop={loop_label}"
+                )
+
+            if not split_plan:
+                return runtime
+
+            if missing_split_plan:
+                plan_signature = self._build_split_tp_plan_signature(phase=state, plan=split_plan)
+                guard = self._tp_trigger_submit_guard_by_symbol.get(target)
+                if isinstance(guard, Mapping):
+                    guard_signature = str(guard.get("signature") or "")
+                    guard_age = max(0.0, time.time() - float(guard.get("submitted_at") or 0.0))
+                    if (
+                        guard_signature == plan_signature
+                        and guard_age <= float(TP_TRIGGER_SUBMISSION_GUARD_SEC)
+                        and not stale_tp_order_ids
+                    ):
+                        _log_trade(
+                            "Phase1 split TP submit skipped by guard: "
+                            f"symbol={target} age_sec={guard_age:.2f} missing={len(missing_split_plan)} loop={loop_label}"
+                        )
+                        return runtime
+                attempted, succeeded = self._submit_split_tp_triggers(
+                    symbol=target,
+                    positions=positions,
+                    split_plan=missing_split_plan,
+                    loop_label=f"{loop_label}-phase1-split-tp",
+                )
+                if attempted > 0 and succeeded == attempted:
                     self._tp_trigger_submit_guard_by_symbol[target] = {
                         "submitted_at": float(time.time()),
-                        "target_price": float(tp_target),
-                        "trigger_price": float(tp_trigger_target),
-                        "quantity": abs(float(position_amt)),
+                        "signature": plan_signature,
+                        "submitted_count": int(succeeded),
                     }
+                else:
+                    self._tp_trigger_submit_guard_by_symbol.pop(target, None)
                 _log_trade(
-                    "Phase1 TP trigger order ensured: "
-                    f"symbol={target} mark_price={mark_price} trigger={tp_trigger_target} "
-                    f"target={tp_target} submitted={submitted}"
+                    "Phase1 split TP ensured: "
+                    f"symbol={target} mark_price={mark_price} desired={len(split_plan)} missing={len(missing_split_plan)} "
+                    f"attempted={attempted} succeeded={succeeded} loop={loop_label}"
                 )
+            else:
+                self._tp_trigger_submit_guard_by_symbol.pop(target, None)
             return runtime
 
         # PHASE2 policy.
-        phase2_tp_cancel_ids = [
-            order_id
-            for order_id in (tp_trigger_order_ids + tp_market_order_ids + legacy_tp_limit_order_ids)
-            if int(order_id) > 0
-        ]
-        if phase2_tp_cancel_ids:
-            self._cancel_orders_by_ids(
-                symbol=target,
-                order_ids=phase2_tp_cancel_ids,
-                loop_label=loop_label,
-                reason="phase2_disable_phase1_tp_orders",
-            )
         if breakeven_stop_order_ids:
             self._cancel_orders_by_ids(
                 symbol=target,
@@ -4762,70 +4987,44 @@ class TradePage(tk.Frame):
                 loop_label=loop_label,
                 reason="phase2_disable_breakeven_stop",
             )
-            breakeven_stop_order_ids = []
 
-        if phase2_breakeven_tp_trigger_order_ids and not phase2_breakeven_trigger_aligned:
-            self._cancel_orders_by_ids(
-                symbol=target,
-                order_ids=phase2_breakeven_tp_trigger_order_ids,
-                loop_label=loop_label,
-                reason="phase2_refresh_breakeven_tp_trigger",
-            )
-            phase2_breakeven_tp_trigger_order_ids = []
-
-        if breakeven_limit_order_ids:
-            self._cancel_orders_by_ids(
-                symbol=target,
-                order_ids=breakeven_limit_order_ids,
-                loop_label=loop_label,
-                reason="phase2_replace_breakeven_limit_with_tp_trigger",
-            )
-            breakeven_limit_order_ids = []
-
-        if phase2_breakeven_trigger_aligned:
-            self._tp_trigger_submit_guard_by_symbol.pop(target, None)
-        else:
+        if split_plan and missing_split_plan:
+            plan_signature = self._build_split_tp_plan_signature(phase=state, plan=split_plan)
             guard = self._tp_trigger_submit_guard_by_symbol.get(target)
-            if guard:
-                guard_age = max(0.0, time.time() - float(guard.get("submitted_at", 0.0)))
-                same_target = abs(float(guard.get("target_price", 0.0)) - float(breakeven_target)) <= tolerance
-                same_trigger = abs(float(guard.get("trigger_price", 0.0)) - float(breakeven_trigger_target)) <= tolerance * 2
-                same_qty = abs(float(guard.get("quantity", 0.0)) - abs(float(position_amt))) <= max(
-                    float(filter_rule.step_size),
-                    1e-12,
-                )
+            if isinstance(guard, Mapping):
+                guard_signature = str(guard.get("signature") or "")
+                guard_age = max(0.0, time.time() - float(guard.get("submitted_at") or 0.0))
                 if (
-                    guard_age <= float(TP_TRIGGER_SUBMISSION_GUARD_SEC)
-                    and same_target
-                    and same_trigger
-                    and same_qty
+                    guard_signature == plan_signature
+                    and guard_age <= float(TP_TRIGGER_SUBMISSION_GUARD_SEC)
+                    and not stale_tp_order_ids
                 ):
                     _log_trade(
-                        "Phase2 breakeven TP trigger submit skipped by guard: "
-                        f"symbol={target} age_sec={guard_age:.2f} target={breakeven_target} "
-                        f"trigger={breakeven_trigger_target} loop={loop_label}"
+                        "Phase2 split TP submit skipped by guard: "
+                        f"symbol={target} age_sec={guard_age:.2f} missing={len(missing_split_plan)} loop={loop_label}"
                     )
                     return runtime
-                self._tp_trigger_submit_guard_by_symbol.pop(target, None)
-            submitted = self._submit_tp_limit_once(
+            attempted, succeeded = self._submit_split_tp_triggers(
                 symbol=target,
                 positions=positions,
-                loop_label=f"{loop_label}-phase2-breakeven-tp-trigger",
-                target_price_override=float(breakeven_target),
-                trigger_price_override=float(breakeven_trigger_target),
+                split_plan=missing_split_plan,
+                loop_label=f"{loop_label}-phase2-split-tp",
             )
-            if submitted:
+            if attempted > 0 and succeeded == attempted:
                 self._tp_trigger_submit_guard_by_symbol[target] = {
                     "submitted_at": float(time.time()),
-                    "target_price": float(breakeven_target),
-                    "trigger_price": float(breakeven_trigger_target),
-                    "quantity": abs(float(position_amt)),
+                    "signature": plan_signature,
+                    "submitted_count": int(succeeded),
                 }
+            else:
+                self._tp_trigger_submit_guard_by_symbol.pop(target, None)
             _log_trade(
-                "Phase2 breakeven TP trigger ensured: "
-                f"symbol={target} mark_price={mark_price} trigger={breakeven_trigger_target} "
-                f"target={breakeven_target} submitted={submitted}"
+                "Phase2 split TP ensured: "
+                f"symbol={target} mark_price={mark_price} desired={len(split_plan)} missing={len(missing_split_plan)} "
+                f"attempted={attempted} succeeded={succeeded} loop={loop_label}"
             )
+        elif split_plan:
+            self._tp_trigger_submit_guard_by_symbol.pop(target, None)
 
         second_entry_fully_filled = target in self._second_entry_fully_filled_symbols
         if second_entry_fully_filled:
@@ -4885,6 +5084,17 @@ class TradePage(tk.Frame):
             for order in exit_orders
             if self._safe_int(order.get("orderId")) > 0
         }
+        tracker = current.exit_partial_tracker
+        if tracker.active:
+            tracked_order_id = self._safe_int(tracker.order_id)
+            if tracked_order_id <= 0 or tracked_order_id not in current_exit_ids:
+                _log_trade(
+                    "Exit partial tracker cleared before five-second evaluation: "
+                    f"symbol={target} tracked_order_id={tracked_order_id} "
+                    f"active_exit_order_count={len(current_exit_ids)} "
+                    f"reason=STALE_TRACKER_ORDER_MISMATCH loop={loop_label}"
+                )
+                current = replace(current, exit_partial_tracker=tracker.__class__())
 
         for row in exit_orders:
             order_id = self._safe_int(row.get("orderId"))
@@ -4924,42 +5134,58 @@ class TradePage(tk.Frame):
         previous_exit_ids = self._last_open_exit_order_ids_by_symbol.get(target, set())
         removed_ids = sorted(previous_exit_ids - current_exit_ids)
         if removed_ids and current_exit_ids:
-            filled_order_id = self._resolve_filled_exit_order_id(
+            filled_exit = self._resolve_filled_exit_order_id(
                 symbol=target,
                 removed_order_ids=removed_ids,
                 loop_label=f"{loop_label}-oco-detect-fill",
             )
-            if (
-                filled_order_id is not None
-                and self._oco_last_filled_exit_order_by_symbol.get(target) != int(filled_order_id)
-            ):
-                current, oco_result = execute_oco_cancel_flow(
-                    current,
-                    symbol=target,
-                    filled_order_id=int(filled_order_id),
-                    open_exit_order_ids=sorted(current_exit_ids),
-                    cancel_call=self._gateway_cancel_order_call,
-                    retry_policy=self._default_retry_policy(),
-                    loop_label=f"{loop_label}-oco-cancel",
-                )
-                self._oco_last_filled_exit_order_by_symbol[target] = int(filled_order_id)
-                if oco_result.lock_new_orders:
-                    self._pending_oco_retry_symbols.add(target)
-                elif oco_result.success:
-                    self._pending_oco_retry_symbols.discard(target)
-                _log_trade(
-                    "OCO cancel flow executed: "
-                    f"symbol={target} filled_order_id={int(filled_order_id)} "
-                    f"success={oco_result.success} reason={oco_result.reason_code} "
-                    f"lock_new_orders={oco_result.lock_new_orders} "
-                    f"pending_retry_symbols={','.join(sorted(self._pending_oco_retry_symbols)) or '-'}"
-                )
-            elif filled_order_id is None:
+            if filled_exit is None:
                 _log_trade(
                     "OCO cancel skipped: "
                     f"symbol={target} removed_exit_orders={','.join(str(value) for value in removed_ids)} "
                     "reason=no_filled_exit_order_confirmed"
                 )
+            else:
+                filled_order_id = int(filled_exit.get("order_id") or 0)
+                filled_order_type = str(filled_exit.get("order_type") or "").strip().upper()
+                already_handled = self._oco_last_filled_exit_order_by_symbol.get(target) == int(filled_order_id)
+                if filled_order_id > 0 and not already_handled:
+                    if filled_order_type in ("TAKE_PROFIT", "TAKE_PROFIT_MARKET", "LIMIT"):
+                        if str(current.symbol_state or "").strip().upper() == "PHASE1":
+                            self._phase1_tp_filled_symbols.add(target)
+                            _log_trade(
+                                "Phase1 TP fill detected, breakeven stop arm enabled: "
+                                f"symbol={target} filled_order_id={filled_order_id} type={filled_order_type} "
+                                f"loop={loop_label}"
+                            )
+                        self._oco_last_filled_exit_order_by_symbol[target] = int(filled_order_id)
+                        _log_trade(
+                            "OCO cancel bypassed for split TP continuity: "
+                            f"symbol={target} filled_order_id={filled_order_id} type={filled_order_type} "
+                            f"remaining_exit_order_count={len(current_exit_ids)} loop={loop_label}"
+                        )
+                    else:
+                        current, oco_result = execute_oco_cancel_flow(
+                            current,
+                            symbol=target,
+                            filled_order_id=int(filled_order_id),
+                            open_exit_order_ids=sorted(current_exit_ids),
+                            cancel_call=self._gateway_cancel_order_call,
+                            retry_policy=self._default_retry_policy(),
+                            loop_label=f"{loop_label}-oco-cancel",
+                        )
+                        self._oco_last_filled_exit_order_by_symbol[target] = int(filled_order_id)
+                        if oco_result.lock_new_orders:
+                            self._pending_oco_retry_symbols.add(target)
+                        elif oco_result.success:
+                            self._pending_oco_retry_symbols.discard(target)
+                        _log_trade(
+                            "OCO cancel flow executed: "
+                            f"symbol={target} filled_order_id={int(filled_order_id)} "
+                            f"success={oco_result.success} reason={oco_result.reason_code} "
+                            f"lock_new_orders={oco_result.lock_new_orders} "
+                            f"pending_retry_symbols={','.join(sorted(self._pending_oco_retry_symbols)) or '-'}"
+                        )
 
         if current_exit_ids:
             self._last_open_exit_order_ids_by_symbol[target] = set(current_exit_ids)
@@ -4975,19 +5201,26 @@ class TradePage(tk.Frame):
         symbol: str,
         removed_order_ids: list[int],
         loop_label: str,
-    ) -> Optional[int]:
+    ) -> Optional[dict[str, object]]:
         for order_id in sorted((int(value) for value in removed_order_ids), reverse=True):
-            status = self._query_order_status_by_id(
+            payload = self._query_order_payload_by_id(
                 symbol=symbol,
                 order_id=int(order_id),
                 loop_label=f"{loop_label}-order-{int(order_id)}",
             )
+            status = str(payload.get("status") or "").strip().upper() if isinstance(payload, Mapping) else ""
             if status == "FILLED":
-                return int(order_id)
+                order_type = str(payload.get("type") or payload.get("orderType") or "").strip().upper()
+                return {
+                    "order_id": int(order_id),
+                    "order_type": str(order_type or "-"),
+                    "payload": dict(payload),
+                }
             if status:
                 _log_trade(
                     "Removed exit order status checked: "
-                    f"symbol={symbol} order_id={int(order_id)} status={status}"
+                    f"symbol={symbol} order_id={int(order_id)} status={status} "
+                    f"type={str(payload.get('type') or payload.get('orderType') or '-').strip().upper()}"
                 )
             else:
                 _log_trade(
@@ -5102,6 +5335,7 @@ class TradePage(tk.Frame):
             else:
                 self._second_entry_skip_latch.discard(symbol)
                 self._second_entry_fully_filled_symbols.discard(symbol)
+                self._phase1_tp_filled_symbols.discard(symbol)
                 self._entry_order_ref_by_symbol.pop(symbol, None)
                 self._clear_entry_cancel_sync_guard(symbol)
                 self._last_open_exit_order_ids_by_symbol.pop(symbol, None)
@@ -5508,6 +5742,8 @@ class TradePage(tk.Frame):
         loop_label: str,
         target_price_override: Optional[float] = None,
         trigger_price_override: Optional[float] = None,
+        quantity_override: Optional[float] = None,
+        allow_market_fallback: bool = True,
     ) -> bool:
         position = self._get_symbol_position(positions, symbol)
         if position is None:
@@ -5536,7 +5772,13 @@ class TradePage(tk.Frame):
         if trigger_price <= 0:
             return False
         side = "BUY" if is_short else "SELL"
-        quantity = abs(position_amt)
+        quantity = abs(position_amt) if quantity_override is None else abs(float(quantity_override))
+        if quantity <= 1e-12:
+            _log_trade(
+                "TP trigger skipped: "
+                f"symbol={symbol} reason=quantity_non_positive quantity={quantity} loop={loop_label}"
+            )
+            return False
 
         filter_rule = self._get_symbol_filter_rule(symbol)
         if filter_rule is None:
@@ -5594,19 +5836,67 @@ class TradePage(tk.Frame):
                 _log_trade(
                     "TP trigger rejected as immediate-trigger: "
                     f"symbol={symbol} error_code={last_error_code} "
-                    "fallback_market_exit_skipped=False"
+                    f"fallback_market_exit_skipped={not bool(allow_market_fallback)}"
                 )
-            fallback_success = self._submit_market_exit_for_symbol(
-                symbol=symbol,
-                positions=positions,
-                loop_label=f"{loop_label}-trigger-reject-market-fallback",
-            )
-            _log_trade(
-                "TP trigger reject fallback market-exit attempted: "
-                f"symbol={symbol} reason={retry.reason_code} error_code={last_error_code} "
-                f"success={fallback_success} loop={loop_label}"
-            )
+            if allow_market_fallback:
+                fallback_success = self._submit_market_exit_for_symbol(
+                    symbol=symbol,
+                    positions=positions,
+                    loop_label=f"{loop_label}-trigger-reject-market-fallback",
+                )
+                _log_trade(
+                    "TP trigger reject fallback market-exit attempted: "
+                    f"symbol={symbol} reason={retry.reason_code} error_code={last_error_code} "
+                    f"success={fallback_success} loop={loop_label}"
+                )
+            else:
+                _log_trade(
+                    "TP trigger reject fallback market-exit skipped: "
+                    f"symbol={symbol} reason={retry.reason_code} error_code={last_error_code} loop={loop_label}"
+                )
         return retry.success
+
+    def _submit_split_tp_triggers(
+        self,
+        *,
+        symbol: str,
+        positions: list[dict],
+        split_plan: list[dict[str, float]],
+        loop_label: str,
+    ) -> tuple[int, int]:
+        target = str(symbol or "").strip().upper()
+        if not target or not split_plan:
+            return 0, 0
+        attempted = 0
+        succeeded = 0
+        for idx, order in enumerate(split_plan, start=1):
+            attempted += 1
+            target_price = float(order.get("target_price") or 0.0)
+            trigger_price = float(order.get("trigger_price") or 0.0)
+            quantity = float(order.get("quantity") or 0.0)
+            if target_price <= 0.0 or trigger_price <= 0.0 or quantity <= 0.0:
+                _log_trade(
+                    "Split TP trigger skipped invalid order: "
+                    f"symbol={target} index={idx} target={target_price} trigger={trigger_price} qty={quantity} "
+                    f"loop={loop_label}"
+                )
+                continue
+            success = self._submit_tp_limit_once(
+                symbol=target,
+                positions=positions,
+                loop_label=f"{loop_label}-split-{idx}",
+                target_price_override=target_price,
+                trigger_price_override=trigger_price,
+                quantity_override=quantity,
+                allow_market_fallback=False,
+            )
+            if success:
+                succeeded += 1
+        _log_trade(
+            "Split TP trigger submit summary: "
+            f"symbol={target} attempted={attempted} succeeded={succeeded} loop={loop_label}"
+        )
+        return attempted, succeeded
 
     def _submit_breakeven_limit_once(
         self,
@@ -5707,13 +5997,13 @@ class TradePage(tk.Frame):
         )
         return retry.success
 
-    def _query_order_status_by_id(
+    def _query_order_payload_by_id(
         self,
         *,
         symbol: str,
         order_id: int,
         loop_label: str,
-    ) -> str:
+    ) -> Optional[dict]:
         retry = query_order_with_retry_with_logging(
             OrderQueryRequest(symbol=symbol, order_id=int(order_id)),
             call=self._gateway_query_order_call,
@@ -5721,8 +6011,24 @@ class TradePage(tk.Frame):
             loop_label=loop_label,
         )
         if not retry.success:
-            return ""
+            return None
         payload = retry.last_result.payload
+        if not isinstance(payload, dict):
+            return None
+        return payload
+
+    def _query_order_status_by_id(
+        self,
+        *,
+        symbol: str,
+        order_id: int,
+        loop_label: str,
+    ) -> str:
+        payload = self._query_order_payload_by_id(
+            symbol=symbol,
+            order_id=order_id,
+            loop_label=loop_label,
+        )
         if not isinstance(payload, dict):
             return ""
         status = str(payload.get("status") or "").strip().upper()
@@ -5744,6 +6050,7 @@ class TradePage(tk.Frame):
         self._entry_cancel_sync_guard_until_by_symbol.clear()
         self._second_entry_skip_latch.clear()
         self._second_entry_fully_filled_symbols.clear()
+        self._phase1_tp_filled_symbols.clear()
         self._last_open_exit_order_ids_by_symbol.clear()
         self._oco_last_filled_exit_order_by_symbol.clear()
         self._pending_oco_retry_symbols.clear()
@@ -5914,8 +6221,20 @@ class TradePage(tk.Frame):
         force_refresh: bool = False,
         loop_label: str = "-",
     ) -> Optional[list[dict]]:
+        rows, _from_rest, _rate_limited = self._fetch_open_orders_with_meta(
+            force_refresh=force_refresh,
+            loop_label=loop_label,
+        )
+        return rows
+
+    def _fetch_open_orders_with_meta(
+        self,
+        *,
+        force_refresh: bool = False,
+        loop_label: str = "-",
+    ) -> tuple[Optional[list[dict]], bool, bool]:
         if not self._api_key or not self._secret_key:
-            return []
+            return [], False, False
         now = time.time()
         cached_rows: Optional[list[dict]] = None
         cache_age = float("inf")
@@ -5937,7 +6256,7 @@ class TradePage(tk.Frame):
                     "Open orders cache reused under healthy user stream: "
                     f"age_sec={cache_age:.2f} loop={loop_label}"
                 )
-            return cached_rows
+            return cached_rows, False, False
 
         rows, rate_limited = self._fetch_open_order_rows_from_endpoints(
             loop_label=f"{loop_label}-rest-open-orders",
@@ -5946,7 +6265,13 @@ class TradePage(tk.Frame):
             with self._account_snapshot_cache_lock:
                 self._open_orders_cache = self._copy_account_rows(rows)
                 self._open_orders_cache_at = now
-            return rows
+            if force_refresh and rate_limited:
+                self._note_account_rest_backoff(context=f"open_orders:{loop_label}")
+                _log_trade(
+                    "Open orders refresh rate-limited while partial/merged rows returned: "
+                    f"loop={loop_label}"
+                )
+            return rows, True, rate_limited
         if force_refresh and rate_limited:
             self._note_account_rest_backoff(context=f"open_orders:{loop_label}")
 
@@ -5955,21 +6280,58 @@ class TradePage(tk.Frame):
                 "Open orders snapshot fallback used: "
                 f"age_sec={cache_age:.2f} force_refresh={force_refresh} loop={loop_label}"
             )
-            return cached_rows
+            return cached_rows, False, rate_limited
 
         _log_trade(
             "Open orders snapshot unavailable: "
             f"force_refresh={force_refresh} cache_age_sec={cache_age:.2f} loop={loop_label}"
         )
-        return None
+        return None, False, rate_limited
 
-    def _fetch_futures_available_balance(self) -> Optional[float]:
+    def _fetch_futures_balance_rows(
+        self,
+        *,
+        force_refresh: bool = False,
+        loop_label: str = "-",
+    ) -> Optional[list[dict]]:
         if not self._api_key or not self._secret_key:
             return None
-        data = self._binance_signed_get("https://fapi.binance.com", "/fapi/v2/balance")
-        if not isinstance(data, list):
+        now = time.time()
+        cached_rows: Optional[list[dict]] = None
+        cache_age = float("inf")
+        with self._futures_balance_cache_lock:
+            if self._futures_balance_cache is not None:
+                cached_rows = [dict(item) for item in self._futures_balance_cache if isinstance(item, dict)]
+                cache_age = max(0.0, now - float(self._futures_balance_cache_at))
+        if not force_refresh and cached_rows is not None and cache_age <= FUTURES_BALANCE_CACHE_TTL_SEC:
+            _log_trade(
+                "Futures balance cache reused: "
+                f"age_sec={cache_age:.2f} force_refresh={force_refresh} loop={loop_label}"
+            )
+            return cached_rows
+
+        payload = self._binance_signed_get("https://fapi.binance.com", "/fapi/v2/balance")
+        if not isinstance(payload, list):
             return None
-        for item in data:
+        rows = [dict(item) for item in payload if isinstance(item, dict)]
+        with self._futures_balance_cache_lock:
+            self._futures_balance_cache = [dict(item) for item in rows]
+            self._futures_balance_cache_at = now
+        return rows
+
+    def _fetch_futures_available_balance(
+        self,
+        *,
+        force_refresh: bool = False,
+        loop_label: str = "-",
+    ) -> Optional[float]:
+        rows = self._fetch_futures_balance_rows(
+            force_refresh=force_refresh,
+            loop_label=f"{loop_label}-available",
+        )
+        if rows is None:
+            return None
+        for item in rows:
             if item.get("asset") != "USDT":
                 continue
             value = self._safe_float(item.get("availableBalance"))
@@ -8029,7 +8391,7 @@ class TradePage(tk.Frame):
             if not (restrictions.get("enableReading") and restrictions.get("enableFutures")):
                 self._set_wallet_failure_async()
                 return
-            balance = self._fetch_futures_balance()
+            balance = self._fetch_futures_balance(loop_label="wallet-fetch-balance")
             if balance is None:
                 self._set_wallet_failure_async()
                 return
@@ -8053,11 +8415,19 @@ class TradePage(tk.Frame):
     def _fetch_api_restrictions(self) -> Optional[dict]:
         return self._binance_signed_get("https://api.binance.com", "/sapi/v1/account/apiRestrictions")
 
-    def _fetch_futures_balance(self) -> Optional[float]:
-        data = self._binance_signed_get("https://fapi.binance.com", "/fapi/v2/balance")
-        if not isinstance(data, list):
+    def _fetch_futures_balance(
+        self,
+        *,
+        force_refresh: bool = False,
+        loop_label: str = "-",
+    ) -> Optional[float]:
+        rows = self._fetch_futures_balance_rows(
+            force_refresh=force_refresh,
+            loop_label=f"{loop_label}-wallet",
+        )
+        if rows is None:
             return None
-        for item in data:
+        for item in rows:
             if item.get("asset") == "USDT":
                 try:
                     return float(item.get("balance", 0))
@@ -8071,8 +8441,20 @@ class TradePage(tk.Frame):
         force_refresh: bool = False,
         loop_label: str = "-",
     ) -> Optional[list[dict]]:
+        rows, _from_rest, _rate_limited = self._fetch_open_positions_with_meta(
+            force_refresh=force_refresh,
+            loop_label=loop_label,
+        )
+        return rows
+
+    def _fetch_open_positions_with_meta(
+        self,
+        *,
+        force_refresh: bool = False,
+        loop_label: str = "-",
+    ) -> tuple[Optional[list[dict]], bool, bool]:
         if not self._api_key or not self._secret_key:
-            return []
+            return [], False, False
         now = time.time()
         cached_positions: Optional[list[dict]] = None
         cached_dust_symbols: set[str] = set()
@@ -8097,9 +8479,10 @@ class TradePage(tk.Frame):
                     "Positions cache reused under healthy user stream: "
                     f"age_sec={cache_age:.2f} loop={loop_label}"
                 )
-            return self._apply_latest_ws_mark_prices_to_positions(cached_positions)
+            return self._apply_latest_ws_mark_prices_to_positions(cached_positions), False, False
 
         data = self._binance_signed_get("https://fapi.binance.com", POSITION_RISK_PATH)
+        rate_limited = self._is_rate_limit_payload(data)
         if isinstance(data, list):
             positions = []
             dust_symbols: set[str] = set()
@@ -8128,8 +8511,8 @@ class TradePage(tk.Frame):
                 self._positions_cache = self._copy_account_rows(positions)
                 self._positions_cache_at = now
                 self._positions_cache_dust_symbols = set(dust_symbols)
-            return self._apply_latest_ws_mark_prices_to_positions(positions)
-        if force_refresh and self._is_rate_limit_payload(data):
+            return self._apply_latest_ws_mark_prices_to_positions(positions), True, rate_limited
+        if force_refresh and rate_limited:
             self._note_account_rest_backoff(context=f"positions:{loop_label}")
 
         if cached_positions is not None and cache_age <= ACCOUNT_SNAPSHOT_STALE_FALLBACK_SEC:
@@ -8138,13 +8521,13 @@ class TradePage(tk.Frame):
                 "Positions snapshot fallback used: "
                 f"age_sec={cache_age:.2f} force_refresh={force_refresh} loop={loop_label}"
             )
-            return self._apply_latest_ws_mark_prices_to_positions(cached_positions)
+            return self._apply_latest_ws_mark_prices_to_positions(cached_positions), False, rate_limited
 
         _log_trade(
             "Positions snapshot unavailable: "
             f"force_refresh={force_refresh} cache_age_sec={cache_age:.2f} loop={loop_label}"
         )
-        return None
+        return None, False, rate_limited
 
     def _sync_wallet_balance_to_sheet(self, balance: float) -> None:
         if not self._api_key:
@@ -8692,7 +9075,7 @@ class TradePage(tk.Frame):
                 balance = None
                 positions = None
             else:
-                balance = self._fetch_futures_balance()
+                balance = self._fetch_futures_balance(loop_label="status-refresh-balance")
                 positions = self._fetch_open_positions()
                 if balance is not None:
                     self._sync_wallet_balance_to_sheet(balance)
