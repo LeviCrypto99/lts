@@ -1000,6 +1000,7 @@ def run_trigger_entry_cycle(
 
     raw_candidates = list(runtime.pending_trigger_candidates.values())
     candidates: list[TriggerCandidate] = []
+    trigger_tick_size_by_symbol: dict[str, float] = {}
     for candidate in raw_candidates:
         candidate_symbol = _normalize_symbol(candidate.symbol)
         filter_rules_for_candidate = filter_rules_by_symbol.get(candidate_symbol)
@@ -1063,9 +1064,11 @@ def run_trigger_entry_cycle(
                 target_price=float(normalized_target_price),
             )
         )
+        trigger_tick_size_by_symbol[candidate_symbol] = float(filter_rules_for_candidate.tick_size)
     trigger_loop = evaluate_trigger_loop_with_logging(
         candidates,
         mark_prices,
+        trigger_tick_size_by_symbol=trigger_tick_size_by_symbol,
         loop_label=loop_label,
     )
     if trigger_loop.selected_candidate is None:

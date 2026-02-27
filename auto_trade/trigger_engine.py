@@ -27,7 +27,14 @@ def compute_trigger_threshold(
     target_price: float,
     *,
     trigger_buffer_ratio: float = TRIGGER_BUFFER_RATIO_DEFAULT,
+    trigger_tick_size: Optional[float] = None,
 ) -> float:
+    if trigger_tick_size is not None and _validate_positive_price(float(trigger_tick_size)):
+        tick = float(trigger_tick_size)
+        if trigger_kind in ("FIRST_ENTRY", "SECOND_ENTRY"):
+            return max(0.0, float(target_price) - tick)
+        if trigger_kind in ("TP", "BREAKEVEN"):
+            return float(target_price) + tick
     if trigger_kind in ("FIRST_ENTRY", "SECOND_ENTRY"):
         return target_price * (1.0 - trigger_buffer_ratio)
     if trigger_kind == "TP":
@@ -43,11 +50,13 @@ def is_trigger_satisfied(
     current_mark_price: float,
     target_price: float,
     trigger_buffer_ratio: float = TRIGGER_BUFFER_RATIO_DEFAULT,
+    trigger_tick_size: Optional[float] = None,
 ) -> bool:
     threshold = compute_trigger_threshold(
         trigger_kind,
         target_price,
         trigger_buffer_ratio=trigger_buffer_ratio,
+        trigger_tick_size=trigger_tick_size,
     )
     if trigger_kind in ("FIRST_ENTRY", "SECOND_ENTRY"):
         return current_mark_price >= threshold
@@ -63,12 +72,14 @@ def evaluate_symbol_trigger(
     *,
     current_mark_price: Optional[float],
     trigger_buffer_ratio: float = TRIGGER_BUFFER_RATIO_DEFAULT,
+    trigger_tick_size: Optional[float] = None,
 ) -> SymbolTriggerEvaluation:
     symbol = _normalize_symbol(candidate.symbol)
     threshold = compute_trigger_threshold(
         candidate.trigger_kind,
         candidate.target_price,
         trigger_buffer_ratio=trigger_buffer_ratio,
+        trigger_tick_size=trigger_tick_size,
     )
 
     if not _validate_positive_price(candidate.target_price):
@@ -107,6 +118,7 @@ def evaluate_symbol_trigger(
         current_mark_price=current_mark_price,
         target_price=candidate.target_price,
         trigger_buffer_ratio=trigger_buffer_ratio,
+        trigger_tick_size=trigger_tick_size,
     )
     return SymbolTriggerEvaluation(
         symbol=symbol,
@@ -149,6 +161,7 @@ def evaluate_trigger_loop(
     mark_prices: Mapping[str, float],
     *,
     trigger_buffer_ratio: float = TRIGGER_BUFFER_RATIO_DEFAULT,
+    trigger_tick_size_by_symbol: Optional[Mapping[str, float]] = None,
 ) -> TriggerLoopResult:
     evaluations: dict[str, SymbolTriggerEvaluation] = {}
     satisfied_candidates: list[TriggerCandidate] = []
@@ -156,10 +169,16 @@ def evaluate_trigger_loop(
     for candidate in candidates:
         symbol = _normalize_symbol(candidate.symbol)
         current_price = mark_prices.get(symbol)
+        trigger_tick_size = None
+        if isinstance(trigger_tick_size_by_symbol, Mapping):
+            raw_tick_size = trigger_tick_size_by_symbol.get(symbol)
+            if raw_tick_size is not None and _validate_positive_price(float(raw_tick_size)):
+                trigger_tick_size = float(raw_tick_size)
         evaluation = evaluate_symbol_trigger(
             candidate,
             current_mark_price=current_price,
             trigger_buffer_ratio=trigger_buffer_ratio,
+            trigger_tick_size=trigger_tick_size,
         )
         evaluations[symbol] = evaluation
         if evaluation.satisfied:
@@ -196,12 +215,14 @@ def evaluate_trigger_loop_with_logging(
     mark_prices: Mapping[str, float],
     *,
     trigger_buffer_ratio: float = TRIGGER_BUFFER_RATIO_DEFAULT,
+    trigger_tick_size_by_symbol: Optional[Mapping[str, float]] = None,
     loop_label: str = "loop",
 ) -> TriggerLoopResult:
     result = evaluate_trigger_loop(
         candidates,
         mark_prices,
         trigger_buffer_ratio=trigger_buffer_ratio,
+        trigger_tick_size_by_symbol=trigger_tick_size_by_symbol,
     )
     selected_symbol = (
         _normalize_symbol(result.selected_candidate.symbol)
@@ -214,7 +235,8 @@ def evaluate_trigger_loop_with_logging(
             event="evaluate_trigger_loop",
             input_data=(
                 f"candidate_count={len(candidates)} mark_price_count={len(mark_prices)} "
-                f"trigger_buffer_ratio={trigger_buffer_ratio}"
+                f"trigger_buffer_ratio={trigger_buffer_ratio} "
+                f"trigger_tick_symbols={len(trigger_tick_size_by_symbol or {})}"
             ),
             decision="evaluate_candidates_and_apply_tiebreak",
             result="selected" if result.selected_candidate is not None else "no_trigger",

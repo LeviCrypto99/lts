@@ -29,6 +29,13 @@ class TriggerThresholdTests(unittest.TestCase):
     def test_threshold_breakeven(self) -> None:
         self.assertAlmostEqual(compute_trigger_threshold("BREAKEVEN", 120.0), 120.6, places=10)
 
+    def test_threshold_first_entry_with_tick_size(self) -> None:
+        self.assertAlmostEqual(
+            compute_trigger_threshold("FIRST_ENTRY", 100.0, trigger_tick_size=0.1),
+            99.9,
+            places=10,
+        )
+
     def test_is_trigger_satisfied_rules(self) -> None:
         tp_threshold = compute_trigger_threshold("TP", 95.0)
         self.assertTrue(
@@ -42,6 +49,22 @@ class TriggerThresholdTests(unittest.TestCase):
         )
         self.assertTrue(
             is_trigger_satisfied("BREAKEVEN", current_mark_price=120.6, target_price=120.0)
+        )
+        self.assertTrue(
+            is_trigger_satisfied(
+                "FIRST_ENTRY",
+                current_mark_price=99.9,
+                target_price=100.0,
+                trigger_tick_size=0.1,
+            )
+        )
+        self.assertFalse(
+            is_trigger_satisfied(
+                "FIRST_ENTRY",
+                current_mark_price=99.89,
+                target_price=100.0,
+                trigger_tick_size=0.1,
+            )
         )
 
 
@@ -119,6 +142,30 @@ class TriggerEvaluationTests(unittest.TestCase):
         self.assertEqual(result.selected_candidate.symbol, "ETHUSDT")
         self.assertEqual(result.reason_code, "MULTI_TRIGGER_TIEBREAK_MESSAGE_ID")
         self.assertEqual(result.dropped_symbols, ["BTCUSDT"])
+
+    def test_evaluate_trigger_loop_uses_symbol_tick_size_override(self) -> None:
+        candidate = TriggerCandidate(
+            symbol="BTCUSDT",
+            trigger_kind="FIRST_ENTRY",
+            target_price=100.0,
+            received_at_local=100,
+            message_id=10,
+        )
+        no_trigger = evaluate_trigger_loop(
+            [candidate],
+            {"BTCUSDT": 99.89},
+            trigger_tick_size_by_symbol={"BTCUSDT": 0.1},
+        )
+        self.assertIsNone(no_trigger.selected_candidate)
+        self.assertEqual(no_trigger.reason_code, "NO_TRIGGER_IN_LOOP")
+        yes_trigger = evaluate_trigger_loop(
+            [candidate],
+            {"BTCUSDT": 99.9},
+            trigger_tick_size_by_symbol={"BTCUSDT": 0.1},
+        )
+        self.assertIsNotNone(yes_trigger.selected_candidate)
+        assert yes_trigger.selected_candidate is not None
+        self.assertEqual(yes_trigger.selected_candidate.symbol, "BTCUSDT")
 
 
 class TriggerSimulationTests(unittest.TestCase):

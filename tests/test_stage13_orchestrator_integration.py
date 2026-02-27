@@ -382,6 +382,50 @@ class OrchestratorIntegrationTests(unittest.TestCase):
         self.assertEqual(updated.symbol_state, "ENTRY_ORDER")
         self.assertEqual(captured.get("price"), 100.0)
 
+    def test_trigger_cycle_does_not_fire_before_one_tick_lead_threshold(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="MONITORING",
+            pending_trigger_candidates={
+                "BTCUSDT": TriggerCandidate(
+                    symbol="BTCUSDT",
+                    trigger_kind="FIRST_ENTRY",
+                    target_price=100.0,
+                    received_at_local=1_001,
+                    message_id=402,
+                )
+            },
+        )
+        captured: dict[str, object] = {}
+
+        def _create_call(params: dict) -> GatewayCallResult:
+            captured.update(params)
+            return GatewayCallResult(ok=True, reason_code="OK")
+
+        updated, result = run_trigger_entry_cycle(
+            runtime,
+            mark_prices={"BTCUSDT": 99.89},
+            wallet_balance_usdt=1000.0,
+            available_usdt=500.0,
+            filter_rules_by_symbol={
+                "BTCUSDT": SymbolFilterRules(
+                    tick_size=0.1,
+                    step_size=0.001,
+                    min_qty=0.001,
+                    min_notional=5.0,
+                )
+            },
+            position_mode="ONE_WAY",
+            create_call=_create_call,
+            loop_label="stage13-trigger-one-tick-threshold-guard",
+        )
+        self.assertFalse(result.success)
+        self.assertEqual(result.reason_code, "NO_TRIGGER_IN_LOOP")
+        self.assertEqual(updated.symbol_state, "MONITORING")
+        self.assertEqual(captured, {})
+
     def test_trigger_cycle_pre_order_setup_failure_resets_state(self) -> None:
         runtime = AutoTradeRuntime(
             settings=_default_settings(),

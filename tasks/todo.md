@@ -211,3 +211,34 @@
   - updater sha256: `8cc13daf433203fec1c3f6e54f9866f876974e01f9e8403edee0763a594e7009`
   - `version.json` 동기화 확인: `min_version=2.1.2`, `app_url=LTS%20V2.1.2.exe`, `app_sha_match=True`, `updater_sha_match=True`
 - 잔여 리스크(릴리즈 2.1.2): GitHub 배포 시 `LTS V2.1.2.exe`, `LTS-Updater.exe`, `version.json`이 동일 커밋 단위로 함께 올라가지 않으면 일시적인 해시 검증 실패가 발생할 수 있다.
+
+- [x] 진입 트리거 조건(현재 0.5% 버퍼) 계산 경로를 1틱 선행 규칙으로 전환
+- [x] TP 트리거 주문(`TAKE_PROFIT`) stopPrice 계산을 1틱 선행 규칙으로 전환
+- [x] 트리거 가격 결정 규칙 변경에 대한 로그 필드/메시지 점검
+- [x] 관련 회귀 테스트(stage7/stage15/stage13) 보정 및 실행
+- [x] 작업 Review/리스크를 `tasks/todo.md`에 기록
+
+- 구현 요약(트리거 1틱 선행 통일): 진입 트리거 루프는 심볼별 `tick_size`를 전달받아 `FIRST_ENTRY/SECOND_ENTRY` 임계값을 `target_price - 1tick`으로 계산하도록 전환했고, TP 트리거 주문(`TAKE_PROFIT`)의 `stopPrice`는 방향별 1틱 선행(숏 청산 BUY는 `target+1tick`, 롱 청산 SELL은 `target-1tick`)으로 통일했다.
+- 검증 결과(트리거 1틱 선행 통일):
+  - 통과: `python3 -m py_compile auto_trade/trigger_engine.py auto_trade/orchestrator.py trade_page.py tests/test_stage7_trigger_engine.py tests/test_stage15_trade_page_regression.py`
+  - 통과: `python3 -m unittest tests.test_stage7_trigger_engine` (15 tests)
+  - 통과: `python3 -m unittest tests.test_stage15_trade_page_regression` (32 tests)
+  - 통과: `python3 -m unittest tests.test_stage13_orchestrator_integration tests.test_stage11_execution_flow tests.test_stage7_trigger_engine` (70 tests)
+- 잔여 리스크(트리거 1틱 선행 통일): 극단적 급변 구간에서는 1틱 선행도 미체결/부분체결 가능성을 완전히 제거하지 못하므로, 운영 로그에서 `TP trigger result`의 실패 사유(`EXCHANGE_REJECTED`, `MIN_NOTIONAL_NOT_MET`) 빈도를 모니터링해야 한다.
+
+- [x] 릴리즈 작업 계획 확정: `2.1.2 -> 2.1.3` 반영 범위/파일 점검
+- [x] `config.py` 버전을 `2.1.3`로 상향
+- [x] `build.py --target all`로 런처/업데이터 재빌드
+- [x] `dist` 산출물을 루트 배포 파일(`LTS V2.1.3.exe`, `LTS-Updater.exe`)로 동기화
+- [x] 새 산출물 SHA256 계산
+- [x] `version.json`의 `min_version`, `app_url`, `app_sha256`, `updater_sha256` 동기화
+- [x] SHA 재검증으로 자동업데이트 메타데이터 일치 확인
+
+- 구현 요약(릴리즈 2.1.3): `config.py`를 `2.1.3`으로 상향한 뒤 Windows PyInstaller로 런처/업데이터를 재빌드하고, `dist` 산출물을 루트 배포 파일로 동기화했다. 이후 계산된 SHA256을 `version.json`에 반영해 자동업데이트 메타데이터와 실제 배포 파일 해시를 일치시켰다.
+- 검증 결과(릴리즈 2.1.3):
+  - 빌드 통과: `cmd.exe /c ".venv\\Scripts\\python.exe build.py --target all"`
+  - app sha256: `a185b8347e2c8628ed2d9967ff070f3aa3dadbb189882da827272920028ee187`
+  - updater sha256: `41dfe895098a3c0afd8707d8cce0a41a767da1b06a2f7b1ea0788663f35f3f37`
+  - 메타 일치 확인: `app_sha_match=True`, `updater_sha_match=True`, `min_version=2.1.3`
+  - 문법 검증: `python3 -m py_compile config.py main.py updater.py trade_page.py auto_trade/trigger_engine.py auto_trade/orchestrator.py`
+- 잔여 리스크(릴리즈 2.1.3): GitHub 배포 시 `LTS V2.1.3.exe`, `LTS-Updater.exe`, `version.json`이 동일 커밋/동일 push로 함께 올라가지 않으면 짧은 시간 동안 SHA 검증 실패가 발생할 수 있다.

@@ -387,8 +387,8 @@ class TradePageRegressionTests(unittest.TestCase):
         triggers = [pair[1] for pair in submitted_pairs]
         self.assertAlmostEqual(min(targets), 98.6, places=9)
         self.assertAlmostEqual(max(targets), 99.5, places=9)
-        self.assertAlmostEqual(min(triggers), 99.1, places=9)
-        self.assertAlmostEqual(max(triggers), 100.0, places=9)
+        self.assertAlmostEqual(min(triggers), 98.7, places=9)
+        self.assertAlmostEqual(max(triggers), 99.6, places=9)
 
     def test_phase1_tp_trigger_guard_blocks_duplicate_submit_with_same_params(self) -> None:
         runtime = AutoTradeRuntime(
@@ -468,7 +468,7 @@ class TradePageRegressionTests(unittest.TestCase):
             "orderType": "TAKE_PROFIT",
             "side": "BUY",
             "price": "99.5",
-            "triggerPrice": "100.0",
+            "triggerPrice": "99.6",
             "quantity": "1.0",
             "reduceOnly": False,
             "closePosition": False,
@@ -680,8 +680,8 @@ class TradePageRegressionTests(unittest.TestCase):
         triggers = [pair[1] for pair in submitted_pairs]
         self.assertAlmostEqual(min(targets), 99.0, places=8)
         self.assertAlmostEqual(max(targets), 99.9, places=8)
-        self.assertAlmostEqual(min(triggers), 98.5, places=8)
-        self.assertAlmostEqual(max(triggers), 99.4, places=8)
+        self.assertAlmostEqual(min(triggers), 98.9, places=8)
+        self.assertAlmostEqual(max(triggers), 99.8, places=8)
 
     def test_safety_lock_drops_signal_queue_immediately(self) -> None:
         runtime = AutoTradeRuntime(

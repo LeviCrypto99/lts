@@ -620,7 +620,8 @@ class TradePage(tk.Frame):
         _log_trade(
             "Trigger price basis configured: "
             f"source=LAST_PRICE ws_stream=!ticker@arr rest_path={FUTURES_LAST_PRICE_PATH} "
-            f"trigger_buffer_pct={TRIGGER_BUFFER_RATIO_DEFAULT * 100:.1f}"
+            f"primary_mode=ONE_TICK_LEAD "
+            f"fallback_buffer_pct={TRIGGER_BUFFER_RATIO_DEFAULT * 100:.1f}"
         )
         self._start_wallet_fetch()
         self._start_status_refresh()
@@ -1368,6 +1369,26 @@ class TradePage(tk.Frame):
             unique.append(candidate)
         return unique
 
+    @staticmethod
+    def _compute_one_tick_lead_trigger_price(
+        *,
+        target_price: float,
+        is_short: bool,
+        tick_size: float,
+    ) -> Optional[float]:
+        target = float(target_price)
+        tick = float(tick_size)
+        if target <= 0.0 or tick <= 0.0:
+            return None
+        # Use one-tick lead instead of a fixed 0.5% buffer.
+        trigger_raw = target + tick if is_short else target - tick
+        if trigger_raw <= 0.0:
+            return None
+        rounded = round_price_by_tick_size(trigger_raw, tick)
+        if rounded is None or rounded <= 0.0:
+            return None
+        return float(rounded)
+
     def _build_split_tp_plan_for_symbol(
         self,
         *,
@@ -1447,8 +1468,11 @@ class TradePage(tk.Frame):
         plan: list[dict[str, float]] = []
         for idx in range(effective_count):
             target_price = float(desired_targets[idx])
-            trigger_raw = float(target_price) * (1.005 if is_short else 0.995)
-            trigger_price = round_price_by_tick_size(trigger_raw, float(tick_size))
+            trigger_price = self._compute_one_tick_lead_trigger_price(
+                target_price=float(target_price),
+                is_short=is_short,
+                tick_size=float(tick_size),
+            )
             if trigger_price is None or trigger_price <= 0.0:
                 continue
             quantity = float(quantities[idx])
@@ -1467,6 +1491,7 @@ class TradePage(tk.Frame):
             f"symbol={target} state={state} order_count={len(plan)} "
             f"target_first={plan[0]['target_price'] if plan else '-'} "
             f"target_last={plan[-1]['target_price'] if plan else '-'} "
+            f"trigger_mode=ONE_TICK_LEAD "
             f"qty_total={sum(item['quantity'] for item in plan):.12f} loop={loop_label}"
         )
         return plan
@@ -5754,6 +5779,9 @@ class TradePage(tk.Frame):
         avg_entry = self._safe_float(position.get("entryPrice")) or 0.0
         if avg_entry <= 0:
             return False
+        filter_rule = self._get_symbol_filter_rule(symbol)
+        if filter_rule is None:
+            return False
         is_short = position_amt < 0
         if target_price_override is None:
             tp_ratio = self._parse_percent_text(
@@ -5766,11 +5794,16 @@ class TradePage(tk.Frame):
         if target_price <= 0:
             return False
         if trigger_price_override is None:
-            trigger_price = target_price * (1.005 if is_short else 0.995)
+            trigger_price = self._compute_one_tick_lead_trigger_price(
+                target_price=float(target_price),
+                is_short=is_short,
+                tick_size=float(filter_rule.tick_size) if filter_rule is not None else 0.0,
+            )
         else:
             trigger_price = float(trigger_price_override)
-        if trigger_price <= 0:
+        if trigger_price is None or float(trigger_price) <= 0:
             return False
+        trigger_price = float(trigger_price)
         side = "BUY" if is_short else "SELL"
         quantity = abs(position_amt) if quantity_override is None else abs(float(quantity_override))
         if quantity <= 1e-12:
@@ -5780,9 +5813,6 @@ class TradePage(tk.Frame):
             )
             return False
 
-        filter_rule = self._get_symbol_filter_rule(symbol)
-        if filter_rule is None:
-            return False
         rounded_target_price = round_price_by_tick_size(float(target_price), float(filter_rule.tick_size))
         if rounded_target_price is None or rounded_target_price <= 0:
             return False
