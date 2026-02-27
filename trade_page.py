@@ -159,6 +159,13 @@ USER_STREAM_HEALTHY_GRACE_SEC = 12
 ACCOUNT_REST_RECONCILE_INTERVAL_SEC = 20
 ACCOUNT_REST_BACKOFF_BASE_SEC = 2
 ACCOUNT_REST_BACKOFF_MAX_SEC = 20
+QUERY_CANCEL_RETRY_MAX_ATTEMPTS = 2
+QUERY_CANCEL_RETRYABLE_REASON_CODES = (
+    "NETWORK_ERROR",
+    "TIMEOUT",
+    "SERVER_ERROR",
+    "TEMPORARY_UNAVAILABLE",
+)
 SERVER_TIME_SYNC_PATH = "/fapi/v1/time"
 SIGNED_REQUEST_TIME_SYNC_RETRY_COUNT = 1
 AUTH_ERROR_POPUP_THROTTLE_SEC = 60
@@ -547,6 +554,7 @@ class TradePage(tk.Frame):
         self._account_snapshot_rest_backoff_sec = 0.0
         self._account_snapshot_last_user_stream_force_at = 0.0
         self._account_snapshot_last_user_stream_force_cycle_id = 0
+        self._account_snapshot_invalidation_seq = 0
         self._signal_loop_snapshot_cycle_seq = 0
         self._futures_balance_cache_lock = threading.Lock()
         self._futures_balance_cache: Optional[list[dict]] = None
@@ -576,6 +584,7 @@ class TradePage(tk.Frame):
         self._phase1_tp_filled_symbols: set[str] = set()
         self._tp_trigger_submit_guard_by_symbol: dict[str, dict[str, object]] = {}
         self._last_position_qty_by_symbol: dict[str, float] = {}
+        self._last_position_entry_price_by_symbol: dict[str, float] = {}
         self._position_zero_confirm_streak_by_symbol: dict[str, int] = {}
         self._last_safety_action_code = ""
         self._last_safety_action_at = 0
@@ -2986,17 +2995,22 @@ class TradePage(tk.Frame):
             loop_label="signal-loop-pre-sync-snapshot",
             snapshot_cycle_id=snapshot_cycle_id,
         )
+        pre_sync_invalidation_seq = self._get_account_snapshot_invalidation_seq()
         self._run_fill_sync_pass(
             open_orders=open_orders,
             positions=positions,
             risk_market_exit_in_same_loop=False,
             loop_label="signal-loop-pre-sync",
         )
-
-        open_orders, positions = self._fetch_loop_account_snapshot(
-            loop_label="signal-loop-price-guard-snapshot",
-            snapshot_cycle_id=snapshot_cycle_id,
-        )
+        if self._get_account_snapshot_invalidation_seq() != pre_sync_invalidation_seq:
+            open_orders, positions = self._fetch_loop_account_snapshot(
+                loop_label="signal-loop-price-guard-snapshot",
+                snapshot_cycle_id=snapshot_cycle_id,
+            )
+            _log_trade(
+                "Signal loop price guard snapshot refreshed: "
+                f"reason=pre_sync_cache_invalidated cycle_id={snapshot_cycle_id}"
+            )
         guard_result = self._apply_price_guard_for_loop(
             open_orders=open_orders,
             positions=positions,
@@ -3060,10 +3074,16 @@ class TradePage(tk.Frame):
         with self._account_snapshot_cache_lock:
             self._open_orders_cache_at = stale_at
             self._positions_cache_at = stale_at
+            self._account_snapshot_invalidation_seq += 1
+            invalidation_seq = int(self._account_snapshot_invalidation_seq)
         _log_trade(
             "Account snapshot cache invalidated: "
-            f"reason={reason} loop={loop_label}"
+            f"reason={reason} loop={loop_label} invalidation_seq={invalidation_seq}"
         )
+
+    def _get_account_snapshot_invalidation_seq(self) -> int:
+        with self._account_snapshot_cache_lock:
+            return int(self._account_snapshot_invalidation_seq)
 
     def _has_account_snapshot_within(self, *, max_age_sec: float) -> bool:
         threshold = max(0.0, float(max_age_sec))
@@ -4197,15 +4217,28 @@ class TradePage(tk.Frame):
 
         position = self._get_symbol_position(positions, target)
         current_qty = abs(self._safe_float(position.get("positionAmt")) or 0.0) if position is not None else 0.0
+        current_entry = self._safe_float(position.get("entryPrice")) if position is not None else None
+        current_entry_price: Optional[float] = (
+            float(current_entry) if current_entry is not None and float(current_entry) > 0.0 else None
+        )
         previous_qty = self._last_position_qty_by_symbol.get(target)
-        if previous_qty is None:
+        previous_entry_price = self._last_position_entry_price_by_symbol.get(target)
+
+        def _sync_position_baseline() -> None:
             self._last_position_qty_by_symbol[target] = current_qty
+            if current_entry_price is not None:
+                self._last_position_entry_price_by_symbol[target] = float(current_entry_price)
+            else:
+                self._last_position_entry_price_by_symbol.pop(target, None)
+
+        if previous_qty is None:
+            _sync_position_baseline()
             if current_qty > 1e-12:
                 self._position_zero_confirm_streak_by_symbol.pop(target, None)
             return runtime, open_orders, positions
 
         if abs(float(current_qty) - float(previous_qty)) <= 1e-12:
-            self._last_position_qty_by_symbol[target] = current_qty
+            _sync_position_baseline()
             if current_qty > 1e-12:
                 self._position_zero_confirm_streak_by_symbol.pop(target, None)
             return runtime, open_orders, positions
@@ -4220,7 +4253,7 @@ class TradePage(tk.Frame):
             if runtime.symbol_state == "ENTRY_ORDER":
                 entry_orders, _ = self._classify_orders_for_symbol(target, open_orders)
                 if entry_orders:
-                    self._last_position_qty_by_symbol[target] = current_qty
+                    _sync_position_baseline()
                     self._position_zero_confirm_streak_by_symbol.pop(target, None)
                     _log_trade(
                         "Position quantity zero transition ignored during entry wait: "
@@ -4261,6 +4294,7 @@ class TradePage(tk.Frame):
             self._oco_last_filled_exit_order_by_symbol.pop(target, None)
             self._pending_oco_retry_symbols.discard(target)
             self._last_position_qty_by_symbol.pop(target, None)
+            self._last_position_entry_price_by_symbol.pop(target, None)
             self._tp_trigger_submit_guard_by_symbol.pop(target, None)
             _log_trade(
                 "Exit partial tracker cleared on position-zero reset: "
@@ -4295,7 +4329,7 @@ class TradePage(tk.Frame):
             )
 
         if runtime.symbol_state not in ("PHASE1", "PHASE2"):
-            self._last_position_qty_by_symbol[target] = current_qty
+            _sync_position_baseline()
             self._phase1_tp_filled_symbols.discard(target)
             self._tp_trigger_submit_guard_by_symbol.pop(target, None)
             _log_trade(
@@ -4310,11 +4344,35 @@ class TradePage(tk.Frame):
             open_orders=open_orders,
             loop_label=loop_label,
         ):
-            self._last_position_qty_by_symbol[target] = current_qty
+            _sync_position_baseline()
             self._tp_trigger_submit_guard_by_symbol.pop(target, None)
             _log_trade(
                 "Position quantity change baseline updated: "
                 f"symbol={target} current_qty={current_qty} reason=exit_partial_waiting loop={loop_label}"
+            )
+            return runtime, open_orders, positions
+
+        # Quantity-only reduction from TP fill should not tear down remaining exits.
+        entry_change_tolerance = 1e-12
+        filter_rule = self._get_symbol_filter_rule(target)
+        if filter_rule is not None:
+            entry_change_tolerance = max(float(filter_rule.tick_size) * 0.55, 1e-12)
+        elif current_entry_price is not None:
+            entry_change_tolerance = max(abs(float(current_entry_price)) * 1e-6, 1e-12)
+        elif previous_entry_price is not None:
+            entry_change_tolerance = max(abs(float(previous_entry_price)) * 1e-6, 1e-12)
+        entry_price_changed = True
+        if current_entry_price is not None and previous_entry_price is not None:
+            entry_price_changed = (
+                abs(float(current_entry_price) - float(previous_entry_price)) > float(entry_change_tolerance)
+            )
+        if not entry_price_changed:
+            _sync_position_baseline()
+            _log_trade(
+                "Position quantity change noted without exit rebuild: "
+                f"symbol={target} previous_qty={previous_qty} current_qty={current_qty} "
+                f"previous_entry={previous_entry_price} current_entry={current_entry_price} "
+                f"reason=avg_entry_unchanged loop={loop_label}"
             )
             return runtime, open_orders, positions
 
@@ -4353,7 +4411,7 @@ class TradePage(tk.Frame):
                 f"symbol={target} reason=position_not_found_after_refresh loop={loop_label}"
             )
 
-        self._last_position_qty_by_symbol[target] = current_qty
+        _sync_position_baseline()
         account_transition = update_account_activity_with_logging(
             runtime.global_state,
             has_any_position=bool(refreshed_positions),
@@ -4965,6 +5023,21 @@ class TradePage(tk.Frame):
             if not split_plan:
                 return runtime
 
+            tp_open_order_count = len(tp_trigger_rows) + len(tp_limit_rows)
+            if (
+                missing_split_plan
+                and target in self._phase1_tp_filled_symbols
+                and tp_open_order_count > 0
+                and not stale_tp_order_ids
+            ):
+                self._tp_trigger_submit_guard_by_symbol.pop(target, None)
+                _log_trade(
+                    "Phase1 split TP replenish skipped after TP fill: "
+                    f"symbol={target} mark_price={mark_price} desired={len(split_plan)} "
+                    f"existing_tp={tp_open_order_count} missing={len(missing_split_plan)} loop={loop_label}"
+                )
+                return runtime
+
             if missing_split_plan:
                 plan_signature = self._build_split_tp_plan_signature(phase=state, plan=split_plan)
                 guard = self._tp_trigger_submit_guard_by_symbol.get(target)
@@ -5196,7 +5269,7 @@ class TradePage(tk.Frame):
                             filled_order_id=int(filled_order_id),
                             open_exit_order_ids=sorted(current_exit_ids),
                             cancel_call=self._gateway_cancel_order_call,
-                            retry_policy=self._default_retry_policy(),
+                            retry_policy=self._query_cancel_retry_policy(),
                             loop_label=f"{loop_label}-oco-cancel",
                         )
                         self._oco_last_filled_exit_order_by_symbol[target] = int(filled_order_id)
@@ -6017,7 +6090,7 @@ class TradePage(tk.Frame):
         retry = cancel_order_with_retry_with_logging(
             OrderCancelRequest(symbol=symbol, order_id=int(order_id)),
             call=self._gateway_cancel_order_call,
-            retry_policy=self._default_retry_policy(),
+            retry_policy=self._query_cancel_retry_policy(),
             loop_label=loop_label,
         )
         _log_trade(
@@ -6037,10 +6110,16 @@ class TradePage(tk.Frame):
         retry = query_order_with_retry_with_logging(
             OrderQueryRequest(symbol=symbol, order_id=int(order_id)),
             call=self._gateway_query_order_call,
-            retry_policy=self._default_retry_policy(),
+            retry_policy=self._query_cancel_retry_policy(),
             loop_label=loop_label,
         )
         if not retry.success:
+            _log_trade(
+                "Query order result: "
+                f"symbol={symbol} order_id={order_id} success={retry.success} "
+                f"reason={retry.reason_code} attempts={retry.attempts} "
+                "policy=query_cancel_reduced"
+            )
             return None
         payload = retry.last_result.payload
         if not isinstance(payload, dict):
@@ -6085,12 +6164,20 @@ class TradePage(tk.Frame):
         self._oco_last_filled_exit_order_by_symbol.clear()
         self._pending_oco_retry_symbols.clear()
         self._last_position_qty_by_symbol.clear()
+        self._last_position_entry_price_by_symbol.clear()
         self._position_zero_confirm_streak_by_symbol.clear()
         _log_trade(f"Runtime reset after external clear: reason={reason_code}")
 
     @staticmethod
     def _default_retry_policy() -> RetryPolicy:
         return RetryPolicy(max_attempts=3)
+
+    @staticmethod
+    def _query_cancel_retry_policy() -> RetryPolicy:
+        return RetryPolicy(
+            max_attempts=QUERY_CANCEL_RETRY_MAX_ATTEMPTS,
+            retryable_reason_codes=QUERY_CANCEL_RETRYABLE_REASON_CODES,
+        )
 
     def _current_position_mode(self) -> str:
         with self._auto_trade_runtime_lock:
@@ -6207,7 +6294,11 @@ class TradePage(tk.Frame):
         now = time.time()
         if self._exchange_info_cache is not None and now - self._exchange_info_cache_at < EXCHANGE_INFO_CACHE_TTL_SEC:
             return self._exchange_info_cache
-        payload = self._binance_public_get("https://fapi.binance.com", "/fapi/v1/exchangeInfo")
+        payload = self._binance_public_get(
+            "https://fapi.binance.com",
+            "/fapi/v1/exchangeInfo",
+            caller="fetch_exchange_info_snapshot",
+        )
         if isinstance(payload, dict):
             self._exchange_info_cache = payload
             self._exchange_info_cache_at = now
@@ -6218,12 +6309,19 @@ class TradePage(tk.Frame):
         normalized = (symbol or "").strip().upper()
         if not normalized:
             return []
+        requested_limit = max(2, int(limit))
         payload = self._binance_public_get(
             "https://fapi.binance.com",
             "/fapi/v1/klines",
-            {"symbol": normalized, "interval": "3m", "limit": max(2, int(limit))},
+            {"symbol": normalized, "interval": "3m", "limit": requested_limit},
+            caller="fetch_recent_3m_candles",
         )
         if not isinstance(payload, list):
+            payload_type = type(payload).__name__ if payload is not None else "NoneType"
+            _log_trade(
+                "Kline fetch returned non-list payload: "
+                f"symbol={normalized} payload_type={payload_type} limit={requested_limit}"
+            )
             return []
         candles: list[dict] = []
         for row in payload:
@@ -6242,6 +6340,11 @@ class TradePage(tk.Frame):
                     "low": float(low),
                     "close": float(close),
                 }
+            )
+        if len(candles) < 2:
+            _log_trade(
+                "Kline fetch insufficient candles: "
+                f"symbol={normalized} usable={len(candles)} raw_rows={len(payload)} limit={requested_limit}"
             )
         return candles
 
@@ -8884,8 +8987,14 @@ class TradePage(tk.Frame):
                 )
             return None
 
-    @staticmethod
-    def _binance_public_get(base_url: str, path: str, params: Optional[dict] = None) -> Optional[object]:
+    def _binance_public_get(
+        self,
+        base_url: str,
+        path: str,
+        params: Optional[dict] = None,
+        *,
+        caller: str = "-",
+    ) -> Optional[object]:
         params = dict(params or {})
         query = urllib.parse.urlencode(params, doseq=True)
         url = f"{base_url}{path}"
@@ -8893,9 +9002,40 @@ class TradePage(tk.Frame):
             url = f"{url}?{query}"
         try:
             response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException:
+            try:
+                data = response.json()
+            except ValueError:
+                data = None
+            if not response.ok:
+                detail = data if isinstance(data, (dict, list)) else _trim_text(response.text)
+                _log_trade(
+                    f"GET {path} public failed status={response.status_code} "
+                    f"params={params} caller={caller} detail={detail!r}"
+                )
+                return None
+            if data is None:
+                _log_trade(
+                    f"GET {path} public returned non-JSON response status={response.status_code} "
+                    f"params={params} caller={caller} body={_trim_text(response.text)!r}"
+                )
+                return None
+            return data
+        except requests.RequestException as exc:
+            response = getattr(exc, "response", None)
+            if response is not None:
+                try:
+                    data = response.json()
+                except ValueError:
+                    data = None
+                detail = data if isinstance(data, (dict, list)) else _trim_text(response.text)
+                _log_trade(
+                    f"GET {path} public request error status={response.status_code} "
+                    f"params={params} caller={caller} detail={detail!r}"
+                )
+            else:
+                _log_trade(
+                    f"GET {path} public request error params={params} caller={caller} error={exc!r}"
+                )
             return None
 
     @staticmethod

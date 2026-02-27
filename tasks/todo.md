@@ -242,3 +242,74 @@
   - 메타 일치 확인: `app_sha_match=True`, `updater_sha_match=True`, `min_version=2.1.3`
   - 문법 검증: `python3 -m py_compile config.py main.py updater.py trade_page.py auto_trade/trigger_engine.py auto_trade/orchestrator.py`
 - 잔여 리스크(릴리즈 2.1.3): GitHub 배포 시 `LTS V2.1.3.exe`, `LTS-Updater.exe`, `version.json`이 동일 커밋/동일 push로 함께 올라가지 않으면 짧은 시간 동안 SHA 검증 실패가 발생할 수 있다.
+
+- [x] 수량 변화 재빌드 트리거를 "평단 변화" 기준으로 제한(평단 불변 시 exit 재빌드 스킵)
+- [x] PHASE1 TP 1건 체결 이후 누락 분할 TP 자동 보충을 차단(남은 TP 유지)
+- [x] 상태 추적 필드 추가: 심볼별 직전 평단 캐시(`_last_position_entry_price_by_symbol`)
+- [x] 회귀 테스트 추가: 평단 불변 수량변화 스킵 / PHASE1 보충 차단
+- [x] py_compile + stage15/stage11/stage13/stage7 테스트 재검증
+
+- 구현 요약(TP 체결 후 전량취소/재등록 방지):
+  - `trade_page.py`의 포지션 수량 동기화 루틴에서 단순 수량 변화만으로 exit 전량 취소/재등록을 수행하던 경로를 수정해, 직전 평단과 현재 평단이 동일(틱 허용오차 내)하면 재빌드를 건너뛰도록 변경했다.
+  - PHASE1에서 TP 1건 체결이 감지된 이후(`_phase1_tp_filled_symbols`)에는 누락 분할 TP를 다시 채우지 않도록 정책을 추가해 "1건 체결 후 나머지 유지"가 깨지지 않게 했다.
+  - 런타임 리셋/제로 포지션 정리 시 새 평단 캐시도 함께 정리하도록 동기화했다.
+- 검증 결과(TP 체결 후 전량취소/재등록 방지):
+  - 통과: `python3 -m py_compile trade_page.py tests/test_stage15_trade_page_regression.py`
+  - 통과: `python3 -m unittest tests.test_stage15_trade_page_regression` (34 tests)
+  - 통과: `python3 -m unittest tests.test_stage13_orchestrator_integration tests.test_stage11_execution_flow tests.test_stage7_trigger_engine` (67 tests)
+  - 통과: `python3 -m unittest tests.test_stage15_trade_page_regression tests.test_stage7_trigger_engine tests.test_stage11_execution_flow` (72 tests)
+- 잔여 리스크(TP 체결 후 전량취소/재등록 방지):
+  - PHASE1에서 TP 체결 후 남은 분할 주문이 거래소 측 사유로 다수 취소되는 극단 상황에서는 자동 보충을 의도적으로 막았기 때문에, 보호 주문 수가 줄어든 상태가 유지될 수 있다(운영 로그 모니터링 필요).
+
+- [x] public API 실패 로그 강화 작업 계획 수립(`/fapi/v1/klines` 포함)
+- [x] `_binance_public_get` 실패/비정상 응답 로그 추가(상태코드, 경로, 파라미터, 상세 사유)
+- [x] `_fetch_recent_3m_candles` 빈 캔들/비정상 payload 로그 추가
+- [x] 문법 검증(`py_compile`) 실행
+- [x] 작업 Review/잔여 리스크 기록
+
+- 구현 요약(public API 실패 원인 로그 가시화):
+  - `trade_page.py`의 `_binance_public_get`을 실패 원인 로깅형으로 보강했다.
+  - HTTP 비정상 상태/요청 예외/비JSON 응답에서 `path`, `status`, `params`, `caller`, `detail`을 모두 기록하도록 변경했다.
+  - `_fetch_recent_3m_candles`에서 비정상 payload(`list` 아님) 및 유효 캔들 2개 미만 상황을 별도 로그로 남기도록 추가했다.
+  - `_fetch_exchange_info_snapshot`/`_fetch_recent_3m_candles` 호출부에 `caller`를 전달해 원인 추적이 가능하도록 했다.
+- 검증 결과(public API 실패 원인 로그 가시화):
+  - 통과: `python3 -m py_compile trade_page.py`
+- 잔여 리스크(public API 실패 원인 로그 가시화):
+  - 네트워크/거래소 장애가 장시간 지속될 경우 public GET 실패 로그량이 증가할 수 있다(장애 구간 분석에는 유리).
+
+- [x] 지연 없는 과호출 축소안 계획 확정(루프 1초 유지, 주문 직후 강제 갱신 유지)
+- [x] signal-loop 한 틱 내 계정 스냅샷 재사용으로 중복 호출 축소
+- [x] RATE_LIMIT 발생 시 QUERY/CANCEL 재시도 축소로 호출 증폭 차단
+- [x] 신규 분기 로깅 추가(스냅샷 재사용/재시도 축소)
+- [x] 검증 실행: 대상 unittest + `python3 -m py_compile trade_page.py`
+- [x] Review 섹션 업데이트(구현/검증/잔여 리스크)
+
+- 구현 요약(지연 없는 과호출 축소안):
+  - `trade_page.py`의 `signal-loop`에서 pre-sync 이후 account snapshot 캐시 무효화가 실제 발생한 경우에만 price-guard용 스냅샷을 재조회하도록 변경했다. 무효화가 없으면 pre-sync 스냅샷을 그대로 재사용해 같은 틱 내 중복 REST 호출을 줄였다.
+  - account snapshot 캐시 무효화 시퀀스(`_account_snapshot_invalidation_seq`)를 도입해 mutation 기반 재조회 판단을 명시적으로 수행하고, 무효화 로그에 `invalidation_seq`를 남기도록 보강했다.
+  - 주문 조회/취소 재시도 정책을 기본 정책에서 분리해 `QUERY/CANCEL` 경로는 `RATE_LIMIT`을 재시도 대상에서 제외하고(네트워크성 오류만 제한 재시도), 관련 요약 로그(`policy=query_cancel_reduced`)를 추가했다.
+  - 회귀 테스트 스텁(`tests/test_stage15_trade_page_regression.py`)에 신규 필드(`_account_snapshot_cache_lock`, `_account_snapshot_invalidation_seq`)를 반영해 테스트 환경 정합성을 맞췄다.
+- 검증 결과(지연 없는 과호출 축소안):
+  - 통과: `python3 -m py_compile trade_page.py tests/test_stage15_trade_page_regression.py`
+  - 통과: `python3 -m unittest tests.test_stage15_trade_page_regression` (34 tests)
+  - 통과: `python3 -m unittest tests.test_stage13_orchestrator_integration tests.test_stage11_execution_flow tests.test_stage7_trigger_engine` (67 tests)
+- 잔여 리스크(지연 없는 과호출 축소안):
+  - pre-sync 직후 mutation이 있었지만 스냅샷 재조회가 필요 없는 경로(가격가드에 영향이 없는 mutation)에서는 의도대로 재사용되며, mutation이 연쇄적으로 많은 구간에서는 기존처럼 재조회가 발생할 수 있다.
+  - QUERY/CANCEL의 재시도 축소로 네트워크 일시 장애 구간에서 단일 주문 조회/취소 성공률이 소폭 낮아질 수 있으므로 운영 로그(`Query order result`, `Cancel order result`)의 실패 빈도 모니터링이 필요하다.
+
+- [x] 릴리즈 작업 계획 확정: `2.1.3 -> 2.1.4` 반영 범위/파일 점검
+- [x] `config.py` 버전을 `2.1.4`로 상향
+- [x] `build.py --target all`로 런처/업데이터 재빌드
+- [x] `dist` 산출물을 루트 배포 파일(`LTS V2.1.4.exe`, `LTS-Updater.exe`)로 동기화
+- [x] 새 산출물 SHA256 계산
+- [x] `version.json`의 `min_version`, `app_url`, `app_sha256`, `updater_sha256` 동기화
+- [x] SHA 재검증으로 자동업데이트 메타데이터 일치 확인
+
+- 구현 요약(릴리즈 2.1.4): `config.py`를 `2.1.4`로 상향하고 Windows `.venv/Scripts/python.exe build.py --target all`로 런처/업데이터를 재빌드했다. 이후 `dist` 산출물을 루트 배포 파일(`LTS V2.1.4.exe`, `LTS-Updater.exe`)로 동기화하고, 계산된 SHA256을 `version.json`에 반영해 자동업데이트 메타데이터를 일치시켰다.
+- 검증 결과(릴리즈 2.1.4):
+  - 빌드 통과: `./.venv/Scripts/python.exe build.py --target all`
+  - app sha256: `7732f83c919d84205f919707b62b93dc2b2b5e13b0c3d8eb73a8495cfe801eb0`
+  - updater sha256: `57420f2e0fb6d5f0f71c5796fb07c55ffa520ec88b9633610a80a12bd4bb9d61`
+  - `version.json` 검증: `min_version=2.1.4`, `app_url=LTS%20V2.1.4.exe`, `app_sha_match=True`, `updater_sha_match=True`
+  - 문법 검증: `python3 -m py_compile config.py`
+- 잔여 리스크(릴리즈 2.1.4): GitHub 배포 시 `LTS V2.1.4.exe`, `LTS-Updater.exe`, `version.json`이 동일 커밋/동일 push 단위로 함께 올라가지 않으면 일시적인 SHA 검증 실패가 발생할 수 있다.

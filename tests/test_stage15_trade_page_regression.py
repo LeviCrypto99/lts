@@ -112,8 +112,12 @@ def _make_trade_page_stub(runtime: AutoTradeRuntime | None = None) -> TradePage:
     page._last_open_exit_order_ids_by_symbol = {}
     page._oco_last_filled_exit_order_by_symbol = {}
     page._pending_oco_retry_symbols = set()
+    page._account_snapshot_cache_lock = threading.Lock()
+    page._account_snapshot_invalidation_seq = 0
     page._position_zero_confirm_streak_by_symbol = {}
     page._tp_trigger_submit_guard_by_symbol = {}
+    page._last_position_qty_by_symbol = {}
+    page._last_position_entry_price_by_symbol = {}
     page._signal_loop_snapshot_cycle_seq = 0
     page._saved_filter_settings = {"mdd": "15%", "tp_ratio": "5%"}
     page._default_filter_settings = lambda: {"mdd": "15%", "tp_ratio": "5%"}
@@ -1082,6 +1086,111 @@ class TradePageRegressionTests(unittest.TestCase):
         self.assertEqual(updated_positions, positions)
         self.assertAlmostEqual(page._last_position_qty_by_symbol["BTCUSDT"], 0.6, places=8)
         self.assertNotIn("BTCUSDT", page._tp_trigger_submit_guard_by_symbol)
+
+    def test_position_quantity_change_skips_exit_rebuild_when_avg_entry_unchanged(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE1",
+            active_symbol="BTCUSDT",
+            global_state=GlobalState(has_any_position=True),
+        )
+        page = _make_trade_page_stub(runtime)
+        page._last_position_qty_by_symbol = {"BTCUSDT": 1.0}
+        page._last_position_entry_price_by_symbol = {"BTCUSDT": 100.0}
+        page._tp_trigger_submit_guard_by_symbol = {"BTCUSDT": {"submitted_at": 10.0}}
+        page._get_symbol_filter_rule = lambda _symbol: SymbolFilterRules(
+            tick_size=0.1,
+            step_size=0.001,
+            min_qty=0.001,
+            min_notional=5.0,
+        )
+        page._collect_active_exit_rebuild_templates = (
+            lambda **_kwargs: self.fail("exit rebuild should be skipped when avg entry is unchanged")
+        )
+        page._cancel_exit_orders_for_symbol = (
+            lambda **_kwargs: self.fail("exit orders should not be canceled when avg entry is unchanged")
+        )
+        page._fetch_open_orders = lambda: []
+        page._fetch_open_positions = lambda: []
+
+        positions = [{"symbol": "BTCUSDT", "positionAmt": "0.9", "entryPrice": "100", "markPrice": "101"}]
+        updated, updated_open_orders, updated_positions = page._handle_position_quantity_reconciliation(
+            runtime,
+            symbol="BTCUSDT",
+            open_orders=[],
+            positions=positions,
+            loop_label="stage15-qty-change-skip-rebuild-avg-unchanged",
+        )
+
+        self.assertIs(updated, runtime)
+        self.assertEqual(updated_open_orders, [])
+        self.assertEqual(updated_positions, positions)
+        self.assertAlmostEqual(page._last_position_qty_by_symbol["BTCUSDT"], 0.9, places=8)
+        self.assertAlmostEqual(page._last_position_entry_price_by_symbol["BTCUSDT"], 100.0, places=8)
+        self.assertIn("BTCUSDT", page._tp_trigger_submit_guard_by_symbol)
+
+    def test_phase1_split_tp_does_not_replenish_missing_after_tp_fill(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE1",
+            active_symbol="BTCUSDT",
+            global_state=GlobalState(has_any_position=True),
+        )
+        page = _make_trade_page_stub(runtime)
+        page._phase1_tp_filled_symbols = {"BTCUSDT"}
+        page._last_position_qty_by_symbol = {"BTCUSDT": 1.0}
+        page._get_symbol_filter_rule = lambda _symbol: SymbolFilterRules(
+            tick_size=0.1,
+            step_size=0.001,
+            min_qty=0.001,
+            min_notional=5.0,
+        )
+        page._cancel_orders_by_ids = lambda **_kwargs: self.fail("stale tp cancel should not run")
+        page._submit_split_tp_triggers = (
+            lambda **_kwargs: self.fail("missing split TP should not be replenished after TP fill")
+        )
+        page._submit_breakeven_stop_market = lambda **_kwargs: True
+
+        positions = [{"symbol": "BTCUSDT", "positionAmt": "-0.9", "entryPrice": "100", "markPrice": "94.5"}]
+        split_plan = page._build_split_tp_plan_for_symbol(
+            symbol="BTCUSDT",
+            position_amt=-0.9,
+            avg_entry=100.0,
+            tick_size=0.1,
+            step_size=0.001,
+            min_qty=0.001,
+            phase="PHASE1",
+            tp_ratio=0.05,
+            loop_label="stage15-phase1-skip-replenish-plan",
+        )
+        self.assertEqual(len(split_plan), 10)
+        open_orders = [
+            {
+                "symbol": "BTCUSDT",
+                "orderId": 1000 + idx,
+                "type": "TAKE_PROFIT",
+                "side": "BUY",
+                "price": str(order["target_price"]),
+                "stopPrice": str(order["trigger_price"]),
+                "reduceOnly": "true",
+                "status": "NEW",
+            }
+            for idx, order in enumerate(split_plan[1:], start=1)
+        ]
+
+        updated = page._enforce_phase_exit_policy(
+            runtime,
+            symbol="BTCUSDT",
+            open_orders=open_orders,
+            positions=positions,
+            loop_label="stage15-phase1-skip-replenish",
+        )
+
+        self.assertIs(updated, runtime)
 
     def test_run_exit_supervision_clears_stale_exit_partial_tracker_before_five_second_rule(self) -> None:
         runtime = AutoTradeRuntime(
