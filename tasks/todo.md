@@ -1,5 +1,16 @@
 # todo
 
+- [x] [RELEASE-2.1.8] `config.py`/`version.json` 버전 문자열 2.1.8 반영
+- [x] [RELEASE-2.1.8] launcher/updater 재빌드(`python build.py --target all`)
+- [x] [RELEASE-2.1.8] 산출물 SHA256 계산 및 `version.json`의 `app_sha256`/`updater_sha256` 갱신
+- [x] [RELEASE-2.1.8] 자동업데이트 메타 최종 점검(파일명, URL, 버전, SHA 일치) + Review 기록
+
+- [x] [HOTFIX-RISK-MBOX-ENTRY-CANCEL-20260302] 플랜 고정: MBOX 리스크 시그널에서 `has_open_entry_order=True`인데 IDLE 분기로 취소 누락되는 경로 최소 수정
+- [x] [HOTFIX-RISK-MBOX-ENTRY-CANCEL-20260302] 수정 1: `IDLE + no_position + has_open_entry_order`를 `CANCEL_ENTRY_AND_RESET`으로 승격
+- [x] [HOTFIX-RISK-MBOX-ENTRY-CANCEL-20260302] 수정 2: 실행흐름 테스트(stage11/stage13)에 재현 케이스 추가 및 reason/action 검증
+- [x] [HOTFIX-RISK-MBOX-ENTRY-CANCEL-20260302] 검증: 관련 테스트 실행 + 로그 타임라인 대조
+- [x] [HOTFIX-RISK-MBOX-ENTRY-CANCEL-20260302] Review: 원인/수정/검증/잔여 리스크 기록
+
 - [x] [HOTFIX-TRADE-3HIGHRISK-20260301] 플랜 고정: 활성심볼 stale/trigger deferred starvation/loser entry 취소실패 잔류주문 3건만 최소 수정
 - [x] [HOTFIX-TRADE-3HIGHRISK-20260301] 수정 1: active_symbol stale 반환 차단(포지션/오더 미일치 시 스냅샷 심볼 재선정)
 - [x] [HOTFIX-TRADE-3HIGHRISK-20260301] 수정 2: deferred 심볼이 같은 사이클의 다른 pending 후보 처리를 막지 않도록 skip 가드
@@ -131,6 +142,28 @@
 - [x] [HOTFIX-SECOND-ENTRY-RETRY] 검증 실행(`py_compile` + orchestrator 관련 테스트) 및 Review 기록
 
 ## Review
+- RELEASE-2.1.8 수정 파일: `config.py`, `version.json`, `tasks/todo.md`
+- 빌드: `.venv/Scripts/python.exe build.py --target all` 실행 완료(`dist/LTS V2.1.8.exe`, `dist/LTS-Updater.exe`)
+- 배포 파일 반영: `dist` 산출물을 루트 `LTS V2.1.8.exe`, `LTS-Updater.exe`로 복사
+- SHA256:
+- `LTS V2.1.8.exe` = `0e2846ad76fd300607f7bd52b290d4b9da808a3a63cfaf36fcce35c84dfced31`
+- `LTS-Updater.exe` = `f6f2c4ed8c7566810f3c307efb2b1d48ca14b0917da9aa27fd66758070d72d93`
+- version.json 반영:
+- `min_version` = `2.1.8`
+- `app_url` = `https://raw.githubusercontent.com/LeviCrypto99/lts/main/LTS%20V2.1.8.exe`
+- `app_sha256` = `0e2846ad76fd300607f7bd52b290d4b9da808a3a63cfaf36fcce35c84dfced31`
+- `updater_url` = `https://raw.githubusercontent.com/LeviCrypto99/lts/main/LTS-Updater.exe`
+- `updater_sha256` = `f6f2c4ed8c7566810f3c307efb2b1d48ca14b0917da9aa27fd66758070d72d93`
+- 최종 점검: 로컬 산출물 SHA256와 `version.json` SHA256 일치 확인 완료
+- HOTFIX-RISK-MBOX-ENTRY-CANCEL-20260302 수정 파일: `auto_trade/execution_flow.py`, `tests/test_stage11_execution_flow.py`, `tests/test_stage13_orchestrator_integration.py`, `tasks/todo.md`
+- 원인 고정(로그): `2026-03-02 06:18:01` MBOX 리스크 시그널 처리 시 `state=IDLE has_open_entry_order=True`인데 `IGNORE_NO_POSITION`으로 분기되어 entry 취소 액션이 실행되지 않음
+- 핵심 수정: `plan_risk_management_action()`에 `no_position + has_open_entry_order` 보강 분기 추가, 상태가 `ENTRY_ORDER`가 아니어도 `CANCEL_ENTRY_AND_RESET` 수행(`reason_code=RISK_ENTRY_ORDER_NO_POSITION_STALE_STATE`)
+- 테스트 추가:
+- `test_idle_without_position_but_open_entry_order_cancels_and_resets` (stage11)
+- `test_risk_signal_idle_with_open_entry_order_cancels_and_resets` (stage13)
+- 검증: `python3 -m unittest tests/test_stage11_execution_flow.py tests/test_stage13_orchestrator_integration.py` 통과(54 tests)
+- 검증: `python3 -m py_compile auto_trade/execution_flow.py tests/test_stage11_execution_flow.py tests/test_stage13_orchestrator_integration.py` 통과
+- 잔여 리스크: `MONITORING` 상태 분기는 기존 정책(`RESET_MONITORING`)을 유지하므로, 동일 유형이 `MONITORING`에서 재현되면 별도 보강이 필요할 수 있음
 - HOTFIX-TRADE-3HIGHRISK-20260301 수정 파일: `trade_page.py`, `tests/test_stage15_trade_page_regression.py`, `tasks/todo.md`
 - 수정 1(active symbol stale): 포지션 없음 + active_symbol 미일치 + open_orders 존재 시 stale active를 그대로 반환하지 않고 open-order 심볼을 우선 반환하도록 보정(`trade_page.py`)
 - 수정 2(deferred starvation): trigger cycle 내에서 deferred 심볼은 임시 제외하고 다른 pending 후보를 계속 처리한 뒤, deferred 후보를 병합 복원하도록 보강(`trade_page.py`)

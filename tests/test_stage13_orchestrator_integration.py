@@ -758,6 +758,37 @@ class OrchestratorIntegrationTests(unittest.TestCase):
         self.assertTrue(result.submit_market_exit)
         self.assertEqual(updated.symbol_state, "PHASE2")
 
+    def test_risk_signal_idle_with_open_entry_order_cancels_and_resets(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="IDLE",
+            active_symbol="BTCUSDT",
+        )
+        updated, result = handle_risk_management_signal(
+            runtime,
+            channel_id=runtime.settings.risk_signal_channel_id,
+            message_id=303,
+            message_text="리스크 알림\nBinance: BTCUSDT.P",
+            avg_entry_price=0.0,
+            mark_price=100.0,
+            has_position=False,
+            has_open_entry_order=True,
+            has_tp_order=False,
+            second_entry_fully_filled=False,
+            exchange_info=_exchange_info(),
+            loop_label="stage13-risk-idle-open-entry-cancel",
+        )
+        self.assertTrue(result.accepted)
+        self.assertTrue(result.actionable)
+        self.assertEqual(result.action_code, "CANCEL_ENTRY_AND_RESET")
+        self.assertEqual(result.reason_code, "RISK_ENTRY_ORDER_NO_POSITION_STALE_STATE")
+        self.assertTrue(result.cancel_entry_orders)
+        self.assertTrue(result.reset_state)
+        self.assertEqual(updated.symbol_state, "IDLE")
+        self.assertIsNone(updated.active_symbol)
+
     def test_risk_signal_symbol_validation_failure_is_ignored(self) -> None:
         runtime = AutoTradeRuntime(
             settings=_default_settings(),

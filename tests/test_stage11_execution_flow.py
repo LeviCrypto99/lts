@@ -142,6 +142,22 @@ class RiskManagementPlanTests(unittest.TestCase):
         self.assertTrue(result.cancel_entry_orders)
         self.assertTrue(result.reset_state)
 
+    def test_idle_without_position_but_open_entry_order_cancels_and_resets(self) -> None:
+        result = plan_risk_management_action(
+            current_state="IDLE",
+            symbol_matches_active=True,
+            has_position=False,
+            has_open_entry_order=True,
+            pnl_branch="PNL_UNAVAILABLE",
+            has_tp_order=False,
+            second_entry_fully_filled=False,
+        )
+        self.assertTrue(result.actionable)
+        self.assertEqual(result.action_code, "CANCEL_ENTRY_AND_RESET")
+        self.assertEqual(result.reason_code, "RISK_ENTRY_ORDER_NO_POSITION_STALE_STATE")
+        self.assertTrue(result.cancel_entry_orders)
+        self.assertTrue(result.reset_state)
+
     def test_partial_fill_with_negative_pnl_prioritizes_market_exit(self) -> None:
         result = plan_risk_management_action(
             current_state="ENTRY_ORDER",

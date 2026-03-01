@@ -297,6 +297,23 @@ def plan_risk_management_action(
             reset_state=True,
         )
 
+    # Account snapshot can temporarily report IDLE while an entry order is still open.
+    # In that case, prioritize entry-cancel and state reset instead of ignoring risk.
+    if not has_position and has_open_entry_order:
+        return RiskManagementPlanResult(
+            actionable=True,
+            action_code="CANCEL_ENTRY_AND_RESET",
+            reason_code="RISK_ENTRY_ORDER_NO_POSITION_STALE_STATE",
+            cancel_entry_orders=True,
+            submit_market_exit=False,
+            submit_breakeven_stop_market=False,
+            keep_tp_order=False,
+            create_tp_limit_once=False,
+            keep_phase2_breakeven_limit=False,
+            keep_existing_mdd_stop=False,
+            reset_state=True,
+        )
+
     if not has_position:
         return RiskManagementPlanResult(
             actionable=False,
