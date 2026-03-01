@@ -18,6 +18,8 @@ from .order_gateway_models import (
     SymbolFilterRules,
 )
 
+STOP_FAMILY_WORKING_TYPE = "CONTRACT_PRICE"
+
 
 def _normalize(value: Any) -> str:
     text = " ".join(str(value).split())
@@ -270,7 +272,7 @@ def prepare_create_order(
                 notional=None,
             )
         params["stopPrice"] = adjusted_stop_price
-        params["workingType"] = "MARK_PRICE"
+        params["workingType"] = STOP_FAMILY_WORKING_TYPE
 
     quantity_required = not bool(request.close_position)
     if request.purpose == "EXIT" and request.order_type in ("STOP_MARKET", "TAKE_PROFIT_MARKET"):

@@ -87,7 +87,7 @@ class OrderPreparationTests(unittest.TestCase):
         )
         self.assertTrue(result.ok)
         self.assertEqual(result.prepared_params["stopPrice"], 120.1)
-        self.assertEqual(result.prepared_params["workingType"], "MARK_PRICE")
+        self.assertEqual(result.prepared_params["workingType"], "CONTRACT_PRICE")
         self.assertEqual(result.prepared_params["closePosition"], True)
         self.assertNotIn("quantity", result.prepared_params)
         self.assertNotIn("reduceOnly", result.prepared_params)
@@ -111,7 +111,7 @@ class OrderPreparationTests(unittest.TestCase):
         self.assertEqual(result.prepared_params["price"], 119.9)
         self.assertEqual(result.prepared_params["stopPrice"], 120.1)
         self.assertEqual(result.prepared_params["quantity"], 2.5)
-        self.assertEqual(result.prepared_params["workingType"], "MARK_PRICE")
+        self.assertEqual(result.prepared_params["workingType"], "CONTRACT_PRICE")
         self.assertEqual(result.prepared_params["reduceOnly"], True)
         self.assertNotIn("closePosition", result.prepared_params)
 
@@ -167,7 +167,7 @@ class OrderPreparationTests(unittest.TestCase):
         )
         self.assertTrue(result.ok)
         self.assertEqual(result.prepared_params["positionSide"], "SHORT")
-        self.assertEqual(result.prepared_params["workingType"], "MARK_PRICE")
+        self.assertEqual(result.prepared_params["workingType"], "CONTRACT_PRICE")
         self.assertEqual(result.prepared_params["closePosition"], True)
         self.assertNotIn("quantity", result.prepared_params)
 

@@ -123,6 +123,12 @@ TP_SPLIT_ORDER_COUNT = 10
 TP_SPLIT_STEP_RATIO = 0.001
 PHASE2_TP_START_RATIO = -0.01
 PHASE2_TP_STEP_RATIO = 0.001
+ENTRY_CLIENT_ID_PREFIXES = ("LTS-E1-", "LTS-E2-")
+FIRST_ENTRY_CLIENT_ID_PREFIX = "LTS-E1-"
+SECOND_ENTRY_CLIENT_ID_PREFIX = "LTS-E2-"
+STOP_FAMILY_EXPECTED_WORKING_TYPE = "CONTRACT_PRICE"
+WORKING_TYPE_MONITOR_LOG_THROTTLE_SEC = 30.0
+WORKING_TYPE_MONITOR_SUMMARY_INTERVAL_SEC = 60.0
 ENTRY_CANCEL_SYNC_GUARD_SEC = 3.0
 EXCHANGE_INFO_CACHE_TTL_SEC = 60
 ACCOUNT_SNAPSHOT_CACHE_TTL_SEC = 0.9
@@ -565,6 +571,12 @@ class TradePage(tk.Frame):
         self._ws_loop_thread: Optional[threading.Thread] = None
         self._ws_loop_stop = threading.Event()
         self._user_stream_lock = threading.Lock()
+        self._working_type_monitor_lock = threading.Lock()
+        self._working_type_missing_stop_family_count = 0
+        self._working_type_non_contract_stop_family_count = 0
+        self._working_type_last_detail_log_at = 0.0
+        self._working_type_last_summary_log_at = 0.0
+        self._working_type_recent_samples: list[str] = []
         self._user_stream_thread: Optional[threading.Thread] = None
         self._user_stream_stop = threading.Event()
         self._user_stream_connected = False
@@ -629,6 +641,7 @@ class TradePage(tk.Frame):
         _log_trade(
             "Trigger price basis configured: "
             f"source=LAST_PRICE ws_stream=!ticker@arr rest_path={FUTURES_LAST_PRICE_PATH} "
+            "trigger_working_type=CONTRACT_PRICE "
             f"primary_mode=ONE_TICK_LEAD "
             f"fallback_buffer_pct={TRIGGER_BUFFER_RATIO_DEFAULT * 100:.1f}"
         )
@@ -1570,11 +1583,37 @@ class TradePage(tk.Frame):
         else:
             tolerance = max(abs(float(entry_price)) * 1e-6, 1e-12)
         _, exit_orders = self._classify_orders_for_symbol(target, open_orders)
+        skipped_non_contract_stop_orders: list[str] = []
         for row in exit_orders:
             side = str(row.get("side") or "").strip().upper()
             if side and side != close_side:
                 continue
             order_type = str(row.get("type") or "").strip().upper()
+            working_type = self._extract_order_working_type(row)
+            if self._is_stop_family_order_type(order_type) and not working_type:
+                self._record_working_type_monitor_event(
+                    symbol=target,
+                    order_id=self._safe_int(row.get("orderId")),
+                    order_type=order_type,
+                    working_type=working_type,
+                    source="EXIT_TEMPLATE_SCAN",
+                    loop_label=loop_label,
+                )
+            if self._is_non_contract_price_stop_family_order(row):
+                order_id = self._safe_int(row.get("orderId"))
+                self._record_working_type_monitor_event(
+                    symbol=target,
+                    order_id=order_id,
+                    order_type=order_type,
+                    working_type=working_type,
+                    source="EXIT_TEMPLATE_SCAN",
+                    loop_label=loop_label,
+                )
+                working_type = working_type or "-"
+                skipped_non_contract_stop_orders.append(
+                    f"{order_id}:{order_type}:{working_type}"
+                )
+                continue
             if order_type == "TAKE_PROFIT":
                 price = self._safe_float(row.get("price"))
                 if price is not None and float(price) > 0.0 and abs(float(price) - float(entry_price)) <= tolerance * 2:
@@ -1610,6 +1649,12 @@ class TradePage(tk.Frame):
                 templates["breakeven_stop"] = True
             else:
                 templates["mdd_stop"] = True
+        if skipped_non_contract_stop_orders:
+            _log_trade(
+                "Exit rebuild template scan skipped non-contract stop-family orders: "
+                f"symbol={target} count={len(skipped_non_contract_stop_orders)} "
+                f"orders={','.join(skipped_non_contract_stop_orders)} loop={loop_label}"
+            )
 
         _log_trade(
             "Exit rebuild templates collected: "
@@ -2742,6 +2787,11 @@ class TradePage(tk.Frame):
                     self._user_stream_open_orders_by_symbol.pop(symbol, None)
             else:
                 order_type = str(order_data.get("o") or "").strip().upper()
+                client_order_id = str(
+                    order_data.get("c")
+                    or order_data.get("C")
+                    or ""
+                ).strip()
                 row = {
                     "symbol": symbol,
                     "orderId": int(order_id),
@@ -2766,8 +2816,21 @@ class TradePage(tk.Frame):
                     "reduceOnly": bool(order_data.get("R")),
                     "closePosition": bool(order_data.get("cp")),
                     "positionSide": str(order_data.get("ps") or "BOTH").strip().upper() or "BOTH",
+                    "workingType": str(order_data.get("wt") or order_data.get("workingType") or "").strip().upper(),
                     "updateTime": int(self._safe_int(order_data.get("T")) or self._safe_int(payload.get("E"))),
+                    "clientOrderId": client_order_id,
+                    "origClientOrderId": client_order_id,
+                    "clientAlgoId": client_order_id,
                 }
+                if self._is_stop_family_order_type(order_type):
+                    self._record_working_type_monitor_event(
+                        symbol=symbol,
+                        order_id=int(order_id),
+                        order_type=order_type,
+                        working_type=str(row.get("workingType") or ""),
+                        source="USER_STREAM",
+                        loop_label="user-stream-order-update",
+                    )
                 if order_type in ALGO_ORDER_TYPES:
                     stop_price, stop_source = self._select_effective_stop_price(row)
                     if stop_price is not None:
@@ -2984,6 +3047,7 @@ class TradePage(tk.Frame):
             except Exception as exc:
                 _log_trade(f"Signal loop tick error: {exc!r}")
             time.sleep(SIGNAL_LOOP_INTERVAL_SEC)
+        self._flush_working_type_monitor_summary_if_due(loop_label="signal-loop-worker-exit", force=True)
         _log_trade("Signal loop worker exited.")
 
     def _signal_loop_tick(self) -> None:
@@ -3029,6 +3093,7 @@ class TradePage(tk.Frame):
         if runtime.global_state.safety_locked:
             self._drop_queued_signal_events_for_safety_lock(loop_label="signal-loop-safety-lock")
             self._refresh_filter_controls_lock_from_runtime(runtime)
+            self._flush_working_type_monitor_summary_if_due(loop_label="signal-loop-safety-locked")
             return
 
         events = self._drain_signal_events()
@@ -3054,6 +3119,7 @@ class TradePage(tk.Frame):
         with self._auto_trade_runtime_lock:
             runtime = self._orchestrator_runtime
         self._refresh_filter_controls_lock_from_runtime(runtime)
+        self._flush_working_type_monitor_summary_if_due(loop_label="signal-loop-tick-end")
 
     @staticmethod
     def _copy_account_rows(rows: list[dict]) -> list[dict]:
@@ -3730,13 +3796,28 @@ class TradePage(tk.Frame):
             runtime_with_price = replace(runtime_with_price, price_state=read.state)
             if read.mark_price is not None and read.mark_price > 0:
                 mark_prices[symbol] = float(read.mark_price)
-        if len(mark_prices) != len(symbols):
-            missing = sorted(set(symbols) - set(mark_prices))
-            _log_trade(f"Trigger cycle skipped: missing_mark_prices={','.join(missing)}")
-            with self._auto_trade_runtime_lock:
-                self._orchestrator_runtime = runtime_with_price
-                self._sync_recovery_state_from_orchestrator_locked()
-            return
+        missing_prices = sorted(set(symbols) - set(mark_prices))
+        if missing_prices:
+            rest_fallback_prices = self._fetch_mark_prices(missing_prices)
+            if rest_fallback_prices:
+                mark_prices.update(
+                    {
+                        str(symbol).strip().upper(): float(price)
+                        for symbol, price in rest_fallback_prices.items()
+                        if float(price) > 0.0
+                    }
+                )
+                missing_prices = sorted(set(symbols) - set(mark_prices))
+                _log_trade(
+                    "Trigger cycle mark-price rest fallback applied: "
+                    f"fallback_symbols={','.join(sorted(rest_fallback_prices.keys()))} "
+                    f"remaining_missing={','.join(missing_prices) or '-'}"
+                )
+        if missing_prices:
+            _log_trade(
+                "Trigger cycle mark-price partial: "
+                f"missing_mark_prices={','.join(missing_prices)} mode=immediate_trigger_submit"
+            )
 
         wallet_balance = self._wallet_balance
         if wallet_balance is None:
@@ -3750,77 +3831,95 @@ class TradePage(tk.Frame):
         position_mode = runtime.position_mode
         if position_mode not in ("ONE_WAY", "HEDGE"):
             position_mode = self._fetch_position_mode()
+
+        current_runtime = runtime_with_price
+        processed = 0
+        success_count = 0
+        failed_count = 0
+        last_result = None
+        max_iterations = max(1, len(symbols) + 2)
+
+        def _run_single_cycle(inner_runtime, *, mode_unknown: bool):
+            return run_trigger_entry_cycle(
+                inner_runtime,
+                mark_prices=mark_prices,
+                wallet_balance_usdt=float(wallet_balance),
+                available_usdt=float(available_balance),
+                filter_rules_by_symbol=filter_rules,
+                position_mode="ONE_WAY" if mode_unknown else position_mode,  # type: ignore[arg-type]
+                create_call=self._gateway_create_order_call,
+                has_open_entry_order_for_symbol=self._has_open_entry_order_for_symbol,
+                pre_order_setup=(
+                    self._reject_pre_order_when_position_mode_unknown
+                    if mode_unknown
+                    else self._run_pre_order_setup_hook
+                ),
+                loop_label="signal-loop-trigger-mode-unknown" if mode_unknown else "signal-loop-trigger",
+            )
+
         if position_mode not in ("ONE_WAY", "HEDGE"):
             _log_trade(
                 "Trigger cycle blocked: unresolved position mode, "
                 "candidate-level rejection will be applied."
             )
-            updated, result = run_trigger_entry_cycle(
-                runtime_with_price,
-                mark_prices=mark_prices,
-                wallet_balance_usdt=float(wallet_balance),
-                available_usdt=float(available_balance),
-                filter_rules_by_symbol=filter_rules,
-                # Position mode is unresolved; pre-order hook will reject before pipeline execution.
-                position_mode="ONE_WAY",
-                create_call=self._gateway_create_order_call,
-                has_open_entry_order_for_symbol=self._has_open_entry_order_for_symbol,
-                pre_order_setup=self._reject_pre_order_when_position_mode_unknown,
-                loop_label="signal-loop-trigger-mode-unknown",
-            )
-            with self._auto_trade_runtime_lock:
-                self._orchestrator_runtime = updated
-                self._sync_recovery_state_from_orchestrator_locked()
-            self._persist_auto_trade_runtime()
+            mode_unknown = True
+        else:
+            mode_unknown = False
+
+        for _ in range(max_iterations):
+            if not current_runtime.pending_trigger_candidates:
+                break
+            updated, result = _run_single_cycle(current_runtime, mode_unknown=mode_unknown)
+            current_runtime = updated
+            last_result = result
+            if not result.attempted:
+                break
+            processed += 1
+            if result.success:
+                success_count += 1
+            else:
+                failed_count += 1
+            if (
+                result.success
+                and result.selected_symbol
+                and result.selected_trigger_kind in ("FIRST_ENTRY", "SECOND_ENTRY")
+            ):
+                self._arm_entry_cancel_sync_guard(
+                    symbol=str(result.selected_symbol),
+                    trigger_kind=str(result.selected_trigger_kind),
+                    loop_label="signal-loop-trigger",
+                )
+            if result.selected_trigger_kind == "SECOND_ENTRY" and result.selected_symbol:
+                symbol = str(result.selected_symbol).strip().upper()
+                if result.success:
+                    self._second_entry_skip_latch.discard(symbol)
+                else:
+                    self._second_entry_skip_latch.add(symbol)
+                    _log_trade(
+                        "Second-entry trigger skipped and latched: "
+                        f"symbol={symbol} pipeline_reason={result.pipeline_reason_code}"
+                    )
+
+        with self._auto_trade_runtime_lock:
+            self._orchestrator_runtime = current_runtime
+            self._sync_recovery_state_from_orchestrator_locked()
+        self._persist_auto_trade_runtime()
+        if last_result is None:
+            _log_trade("Trigger cycle processed: reason=no_cycle_attempt")
+            return
+        if mode_unknown:
             _log_trade(
                 "Trigger cycle processed under unresolved position mode: "
-                f"attempted={result.attempted} success={result.success} reason={result.reason_code} "
-                f"pipeline={result.pipeline_reason_code} symbol={result.selected_symbol} "
-                f"trigger={result.selected_trigger_kind}"
+                f"processed={processed} success_count={success_count} failed_count={failed_count} "
+                f"last_reason={last_result.reason_code} last_pipeline={last_result.pipeline_reason_code} "
+                f"last_symbol={last_result.selected_symbol} last_trigger={last_result.selected_trigger_kind}"
             )
             return
-
-        updated, result = run_trigger_entry_cycle(
-            runtime_with_price,
-            mark_prices=mark_prices,
-            wallet_balance_usdt=float(wallet_balance),
-            available_usdt=float(available_balance),
-            filter_rules_by_symbol=filter_rules,
-            position_mode=position_mode,
-            create_call=self._gateway_create_order_call,
-            has_open_entry_order_for_symbol=self._has_open_entry_order_for_symbol,
-            pre_order_setup=self._run_pre_order_setup_hook,
-            loop_label="signal-loop-trigger",
-        )
-        if (
-            result.success
-            and result.selected_symbol
-            and result.selected_trigger_kind in ("FIRST_ENTRY", "SECOND_ENTRY")
-        ):
-            self._arm_entry_cancel_sync_guard(
-                symbol=str(result.selected_symbol),
-                trigger_kind=str(result.selected_trigger_kind),
-                loop_label="signal-loop-trigger",
-            )
-        with self._auto_trade_runtime_lock:
-            self._orchestrator_runtime = updated
-            self._sync_recovery_state_from_orchestrator_locked()
-        if result.selected_trigger_kind == "SECOND_ENTRY" and result.selected_symbol:
-            symbol = str(result.selected_symbol).strip().upper()
-            if result.success:
-                self._second_entry_skip_latch.discard(symbol)
-            else:
-                self._second_entry_skip_latch.add(symbol)
-                _log_trade(
-                    "Second-entry trigger skipped and latched: "
-                    f"symbol={symbol} pipeline_reason={result.pipeline_reason_code}"
-                )
-        self._persist_auto_trade_runtime()
         _log_trade(
             "Trigger cycle processed: "
-            f"attempted={result.attempted} success={result.success} "
-            f"reason={result.reason_code} pipeline={result.pipeline_reason_code} "
-            f"symbol={result.selected_symbol} trigger={result.selected_trigger_kind}"
+            f"processed={processed} success_count={success_count} failed_count={failed_count} "
+            f"last_reason={last_result.reason_code} last_pipeline={last_result.pipeline_reason_code} "
+            f"last_symbol={last_result.selected_symbol} last_trigger={last_result.selected_trigger_kind}"
         )
 
     def _arm_entry_cancel_sync_guard(
@@ -4070,6 +4169,18 @@ class TradePage(tk.Frame):
                 "Dust cleanup applied: "
                 f"symbols={','.join(sorted(self._last_dust_symbols))}"
             )
+        current, open_orders, positions = self._enforce_first_fill_winner_policy(
+            current,
+            open_orders=open_orders,
+            positions=positions,
+            loop_label=f"{loop_label}-winner-policy",
+        )
+        account_transition = update_account_activity_with_logging(
+            current.global_state,
+            has_any_position=bool(positions),
+            has_any_open_order=bool(open_orders),
+        )
+        current = replace(current, global_state=account_transition.current)
         active_symbol = self._resolve_active_symbol_snapshot(current, open_orders=open_orders, positions=positions)
         if active_symbol and active_symbol != (current.active_symbol or ""):
             current = replace(current, active_symbol=active_symbol)
@@ -4469,17 +4580,139 @@ class TradePage(tk.Frame):
         open_orders: list[dict],
         positions: list[dict],
     ) -> str:
-        if runtime.active_symbol:
-            return str(runtime.active_symbol).strip().upper()
+        active_symbol = str(runtime.active_symbol or "").strip().upper()
+        position_rows: list[dict] = []
         for row in positions:
             symbol = str(row.get("symbol") or "").strip().upper()
-            if symbol:
-                return symbol
+            position_amt = self._safe_float(row.get("positionAmt")) or 0.0
+            if symbol and abs(position_amt) > 1e-12:
+                position_rows.append(row)
+        if position_rows:
+            if active_symbol:
+                for row in position_rows:
+                    if str(row.get("symbol") or "").strip().upper() == active_symbol:
+                        return active_symbol
+            prioritized = sorted(
+                position_rows,
+                key=lambda row: (
+                    self._safe_int(row.get("updateTime")) if self._safe_int(row.get("updateTime")) > 0 else 9_999_999_999_999,
+                    str(row.get("symbol") or "").strip().upper(),
+                ),
+            )
+            return str(prioritized[0].get("symbol") or "").strip().upper()
+        if active_symbol:
+            for row in open_orders:
+                if str(row.get("symbol") or "").strip().upper() == active_symbol:
+                    return active_symbol
+            return active_symbol
         for row in open_orders:
             symbol = str(row.get("symbol") or "").strip().upper()
             if symbol:
                 return symbol
         return ""
+
+    def _enforce_first_fill_winner_policy(
+        self,
+        runtime: AutoTradeRuntime,
+        *,
+        open_orders: list[dict],
+        positions: list[dict],
+        loop_label: str,
+    ) -> tuple[AutoTradeRuntime, list[dict], list[dict]]:
+        position_symbols = [
+            str(row.get("symbol") or "").strip().upper()
+            for row in positions
+            if str(row.get("symbol") or "").strip().upper()
+            and abs(self._safe_float(row.get("positionAmt")) or 0.0) > 1e-12
+        ]
+        unique_position_symbols = sorted(set(position_symbols))
+        if not unique_position_symbols:
+            return runtime, open_orders, positions
+
+        winner_symbol = self._resolve_active_symbol_snapshot(
+            runtime,
+            open_orders=open_orders,
+            positions=positions,
+        )
+        if winner_symbol not in unique_position_symbols:
+            winner_symbol = unique_position_symbols[0]
+        loser_position_symbols = [
+            symbol for symbol in unique_position_symbols
+            if symbol != winner_symbol
+        ]
+
+        monitored_symbols: set[str] = set(unique_position_symbols)
+        monitored_symbols.update(
+            str(row.get("symbol") or "").strip().upper()
+            for row in open_orders
+            if str(row.get("symbol") or "").strip().upper()
+        )
+        monitored_symbols.update(
+            str(key).strip().upper()
+            for key in runtime.pending_trigger_candidates.keys()
+            if str(key).strip()
+        )
+
+        canceled_symbols: list[str] = []
+        attempted_cancel_count = 0
+        for symbol in sorted(monitored_symbols):
+            if symbol == winner_symbol:
+                continue
+            cancel_result = self._cancel_entry_orders_for_symbol(
+                symbol=symbol,
+                open_orders=open_orders,
+                loop_label=f"{loop_label}-winner-lock-cancel-{symbol}",
+            )
+            if int(cancel_result.get("attempted_count") or 0) > 0:
+                canceled_symbols.append(symbol)
+                attempted_cancel_count += int(cancel_result.get("attempted_count") or 0)
+            self._entry_order_ref_by_symbol.pop(symbol, None)
+            self._clear_entry_cancel_sync_guard(symbol)
+            self._second_entry_skip_latch.discard(symbol)
+            self._second_entry_fully_filled_symbols.discard(symbol)
+            self._phase1_tp_filled_symbols.discard(symbol)
+
+        forced_market_exit_symbols: list[str] = []
+        for symbol in loser_position_symbols:
+            success = self._submit_market_exit_for_symbol(
+                symbol=symbol,
+                positions=positions,
+                loop_label=f"{loop_label}-winner-lock-loser-market-exit-{symbol}",
+            )
+            forced_market_exit_symbols.append(f"{symbol}:{'OK' if success else 'FAIL'}")
+
+        pending = {
+            key: value
+            for key, value in runtime.pending_trigger_candidates.items()
+            if str(key).strip().upper() == winner_symbol
+        }
+        next_symbol_state = runtime.symbol_state
+        if next_symbol_state in ("IDLE", "MONITORING"):
+            next_symbol_state = "ENTRY_ORDER"
+        current = replace(
+            runtime,
+            symbol_state=next_symbol_state,
+            active_symbol=winner_symbol,
+            pending_trigger_candidates=pending,
+        )
+
+        snapshot_changed = bool(canceled_symbols or loser_position_symbols)
+        if snapshot_changed:
+            open_orders, positions = self._fetch_loop_account_snapshot(
+                force_refresh=True,
+                loop_label=f"{loop_label}-winner-lock-post-refresh",
+            )
+
+        _log_trade(
+            "Winner policy applied: "
+            f"winner={winner_symbol} loser_positions={','.join(loser_position_symbols) or '-'} "
+            f"entry_cancel_symbols={','.join(canceled_symbols) or '-'} "
+            f"entry_cancel_attempts={attempted_cancel_count} "
+            f"loser_market_exit={','.join(forced_market_exit_symbols) or '-'} "
+            f"pending_kept={','.join(sorted(str(key).strip().upper() for key in pending.keys())) or '-'} "
+            f"loop={loop_label}"
+        )
+        return current, open_orders, positions
 
     def _sync_entry_fill_by_symbol(
         self,
@@ -4580,12 +4813,17 @@ class TradePage(tk.Frame):
             reduce_only = self._to_bool(row.get("reduceOnly"))
             close_position = self._to_bool(row.get("closePosition"))
             order_type = str(row.get("type") or "").strip().upper()
+            client_order_id = self._extract_order_client_id(row)
+            is_entry_by_prefix = self._is_entry_client_order_id(client_order_id)
             is_stop_family = order_type in ("STOP_MARKET", "TAKE_PROFIT_MARKET", "STOP", "TAKE_PROFIT")
             is_exit = bool(
-                side == "BUY"
-                or reduce_only
-                or close_position
-                or is_stop_family
+                not is_entry_by_prefix
+                and (
+                    side == "BUY"
+                    or reduce_only
+                    or close_position
+                    or is_stop_family
+                )
             )
             if is_exit:
                 exit_orders.append(row)
@@ -4602,10 +4840,16 @@ class TradePage(tk.Frame):
         loop_label: str,
     ) -> str:
         target = str(symbol or "").strip().upper()
-        if entry_orders:
+        scoped_entry_orders = [
+            row for row in entry_orders
+            if self._is_first_entry_client_order_id(self._extract_order_client_id(row))
+        ]
+        if not scoped_entry_orders:
+            scoped_entry_orders = list(entry_orders)
+        if scoped_entry_orders:
             self._clear_entry_cancel_sync_guard(target)
             latest = max(
-                entry_orders,
+                scoped_entry_orders,
                 key=lambda row: (
                     self._safe_int(row.get("updateTime")),
                     self._safe_int(row.get("orderId")),
@@ -4616,7 +4860,7 @@ class TradePage(tk.Frame):
                 self._entry_order_ref_by_symbol[target] = order_id
             statuses = {
                 str(row.get("status") or "").strip().upper()
-                for row in entry_orders
+                for row in scoped_entry_orders
             }
             if "PARTIALLY_FILLED" in statuses:
                 return "PARTIALLY_FILLED"
@@ -4665,13 +4909,19 @@ class TradePage(tk.Frame):
         loop_label: str,
     ) -> Optional[str]:
         target = str(symbol or "").strip().upper()
-        if entry_orders:
+        scoped_entry_orders = [
+            row for row in entry_orders
+            if self._is_second_entry_client_order_id(self._extract_order_client_id(row))
+        ]
+        if not scoped_entry_orders:
+            scoped_entry_orders = list(entry_orders)
+        if scoped_entry_orders:
             statuses = {
                 str(row.get("status") or "").strip().upper()
-                for row in entry_orders
+                for row in scoped_entry_orders
             }
             latest = max(
-                entry_orders,
+                scoped_entry_orders,
                 key=lambda row: (
                     self._safe_int(row.get("updateTime")),
                     self._safe_int(row.get("orderId")),
@@ -4871,6 +5121,8 @@ class TradePage(tk.Frame):
         breakeven_stop_order_ids: list[int] = []
         mdd_stop_order_ids: list[int] = []
         mdd_stop_prices: list[float] = []
+        non_contract_stop_family_order_ids: list[int] = []
+        non_contract_stop_family_tokens: list[str] = []
 
         for row in exit_orders:
             order_id = self._safe_int(row.get("orderId"))
@@ -4879,6 +5131,31 @@ class TradePage(tk.Frame):
             order_type = str(row.get("type") or "").strip().upper()
             side = str(row.get("side") or "").strip().upper()
             if side != close_side:
+                continue
+            working_type = self._extract_order_working_type(row)
+            if self._is_stop_family_order_type(order_type) and not working_type:
+                self._record_working_type_monitor_event(
+                    symbol=target,
+                    order_id=order_id,
+                    order_type=order_type,
+                    working_type=working_type,
+                    source="PHASE_POLICY_SCAN",
+                    loop_label=loop_label,
+                )
+            if self._is_non_contract_price_stop_family_order(row):
+                self._record_working_type_monitor_event(
+                    symbol=target,
+                    order_id=order_id,
+                    order_type=order_type,
+                    working_type=working_type,
+                    source="PHASE_POLICY_SCAN",
+                    loop_label=loop_label,
+                )
+                working_type = working_type or "-"
+                non_contract_stop_family_order_ids.append(order_id)
+                non_contract_stop_family_tokens.append(
+                    f"{order_id}:{order_type}:{working_type}"
+                )
                 continue
             if order_type == "TAKE_PROFIT":
                 trigger_price, stop_source = self._select_effective_stop_price(row)
@@ -4931,6 +5208,26 @@ class TradePage(tk.Frame):
             else:
                 mdd_stop_order_ids.append(order_id)
                 mdd_stop_prices.append(float(stop_price))
+        non_contract_stop_family_order_ids = sorted(
+            {
+                int(order_id)
+                for order_id in non_contract_stop_family_order_ids
+                if int(order_id) > 0
+            }
+        )
+        if non_contract_stop_family_order_ids:
+            self._cancel_orders_by_ids(
+                symbol=target,
+                order_ids=non_contract_stop_family_order_ids,
+                loop_label=loop_label,
+                reason=f"{state.lower()}_replace_non_contract_price_stop_family",
+            )
+            self._tp_trigger_submit_guard_by_symbol.pop(target, None)
+            _log_trade(
+                "Phase policy replaced non-contract stop-family orders: "
+                f"symbol={target} count={len(non_contract_stop_family_order_ids)} "
+                f"orders={','.join(non_contract_stop_family_tokens)} loop={loop_label}"
+            )
 
         split_plan = self._build_split_tp_plan_for_symbol(
             symbol=target,
@@ -7035,6 +7332,159 @@ class TradePage(tk.Frame):
         return str(value or "").strip().upper()
 
     @staticmethod
+    def _extract_order_working_type(row: Mapping[str, Any]) -> str:
+        if not isinstance(row, Mapping):
+            return ""
+        return str(row.get("workingType") or row.get("wt") or "").strip().upper()
+
+    @staticmethod
+    def _is_stop_family_order_type(order_type: object) -> bool:
+        normalized = str(order_type or "").strip().upper()
+        return normalized in ("STOP_MARKET", "TAKE_PROFIT_MARKET", "STOP", "TAKE_PROFIT")
+
+    @classmethod
+    def _is_non_contract_price_stop_family_order(cls, row: Mapping[str, Any]) -> bool:
+        if not isinstance(row, Mapping):
+            return False
+        order_type = cls._normalize_order_type_token(row.get("type"))
+        if not cls._is_stop_family_order_type(order_type):
+            return False
+        working_type = cls._extract_order_working_type(row)
+        if not working_type:
+            return False
+        return working_type != STOP_FAMILY_EXPECTED_WORKING_TYPE
+
+    def _ensure_working_type_monitor_state(self) -> None:
+        if getattr(self, "_working_type_monitor_lock", None) is None:
+            self._working_type_monitor_lock = threading.Lock()
+        if not isinstance(getattr(self, "_working_type_missing_stop_family_count", None), int):
+            self._working_type_missing_stop_family_count = 0
+        if not isinstance(getattr(self, "_working_type_non_contract_stop_family_count", None), int):
+            self._working_type_non_contract_stop_family_count = 0
+        if not isinstance(getattr(self, "_working_type_last_detail_log_at", None), (int, float)):
+            self._working_type_last_detail_log_at = 0.0
+        if not isinstance(getattr(self, "_working_type_last_summary_log_at", None), (int, float)):
+            self._working_type_last_summary_log_at = 0.0
+        recent_samples = getattr(self, "_working_type_recent_samples", None)
+        if not isinstance(recent_samples, list):
+            self._working_type_recent_samples = []
+
+    def _record_working_type_monitor_event(
+        self,
+        *,
+        symbol: str,
+        order_id: int,
+        order_type: str,
+        working_type: str,
+        source: str,
+        loop_label: str,
+    ) -> None:
+        normalized_order_type = self._normalize_order_type_token(order_type)
+        if not self._is_stop_family_order_type(normalized_order_type):
+            return
+        normalized_working_type = str(working_type or "").strip().upper()
+        issue_kind = ""
+        if not normalized_working_type:
+            issue_kind = "MISSING"
+        elif normalized_working_type != STOP_FAMILY_EXPECTED_WORKING_TYPE:
+            issue_kind = "NON_CONTRACT"
+        else:
+            return
+        target = str(symbol or "").strip().upper() or "-"
+        now = time.time()
+        sample = (
+            f"{source}:{target}:{max(0, int(order_id))}:"
+            f"{normalized_order_type or '-'}:{normalized_working_type or '-'}"
+        )
+        should_log_detail = False
+        missing_count = 0
+        non_contract_count = 0
+        self._ensure_working_type_monitor_state()
+        with self._working_type_monitor_lock:
+            if issue_kind == "MISSING":
+                self._working_type_missing_stop_family_count += 1
+            else:
+                self._working_type_non_contract_stop_family_count += 1
+            if sample not in self._working_type_recent_samples:
+                self._working_type_recent_samples.append(sample)
+                if len(self._working_type_recent_samples) > 20:
+                    self._working_type_recent_samples = self._working_type_recent_samples[-20:]
+            if now - float(self._working_type_last_detail_log_at) >= float(WORKING_TYPE_MONITOR_LOG_THROTTLE_SEC):
+                self._working_type_last_detail_log_at = now
+                should_log_detail = True
+            missing_count = int(self._working_type_missing_stop_family_count)
+            non_contract_count = int(self._working_type_non_contract_stop_family_count)
+        if should_log_detail:
+            _log_trade(
+                "WorkingType monitor event: "
+                f"issue={issue_kind} source={source} symbol={target} "
+                f"order_id={max(0, int(order_id))} order_type={normalized_order_type or '-'} "
+                f"working_type={normalized_working_type or '-'} "
+                f"missing_count={missing_count} non_contract_count={non_contract_count} "
+                f"loop={loop_label}"
+            )
+
+    def _flush_working_type_monitor_summary_if_due(
+        self,
+        *,
+        loop_label: str,
+        force: bool = False,
+    ) -> None:
+        now = time.time()
+        self._ensure_working_type_monitor_state()
+        with self._working_type_monitor_lock:
+            due = bool(force) or (
+                now - float(self._working_type_last_summary_log_at)
+                >= float(WORKING_TYPE_MONITOR_SUMMARY_INTERVAL_SEC)
+            )
+            if not due:
+                return
+            missing_count = int(self._working_type_missing_stop_family_count)
+            non_contract_count = int(self._working_type_non_contract_stop_family_count)
+            samples = list(self._working_type_recent_samples[-5:])
+            self._working_type_last_summary_log_at = now
+            self._working_type_missing_stop_family_count = 0
+            self._working_type_non_contract_stop_family_count = 0
+            self._working_type_recent_samples.clear()
+        if missing_count <= 0 and non_contract_count <= 0:
+            return
+        _log_trade(
+            "WorkingType monitor summary: "
+            f"missing_stop_family={missing_count} "
+            f"non_contract_stop_family={non_contract_count} "
+            f"samples={';'.join(samples) if samples else '-'} loop={loop_label}"
+        )
+
+    @staticmethod
+    def _extract_order_client_id(row: Mapping[str, Any]) -> str:
+        if not isinstance(row, Mapping):
+            return ""
+        return str(
+            row.get("clientOrderId")
+            or row.get("origClientOrderId")
+            or row.get("newClientOrderId")
+            or row.get("clientAlgoId")
+            or ""
+        ).strip().upper()
+
+    @staticmethod
+    def _is_entry_client_order_id(client_order_id: object) -> bool:
+        token = str(client_order_id or "").strip().upper()
+        if not token:
+            return False
+        return any(token.startswith(prefix) for prefix in ENTRY_CLIENT_ID_PREFIXES)
+
+    @staticmethod
+    def _is_first_entry_client_order_id(client_order_id: object) -> bool:
+        token = str(client_order_id or "").strip().upper()
+        return bool(token and token.startswith(FIRST_ENTRY_CLIENT_ID_PREFIX))
+
+    @staticmethod
+    def _is_second_entry_client_order_id(client_order_id: object) -> bool:
+        token = str(client_order_id or "").strip().upper()
+        return bool(token and token.startswith(SECOND_ENTRY_CLIENT_ID_PREFIX))
+
+    @staticmethod
     def _is_algo_order_type(value: object) -> bool:
         return TradePage._normalize_order_type_token(value) in ALGO_ORDER_TYPES
 
@@ -7166,6 +7616,22 @@ class TradePage(tk.Frame):
             ).strip().upper()
             if fallback_side:
                 normalized["side"] = fallback_side
+        client_order_id = str(
+            normalized.get("clientOrderId")
+            or normalized.get("origClientOrderId")
+            or normalized.get("newClientOrderId")
+            or normalized.get("clientAlgoId")
+            or ""
+        ).strip()
+        if client_order_id:
+            normalized["clientOrderId"] = client_order_id
+        working_type = str(
+            normalized.get("workingType")
+            or normalized.get("wt")
+            or ""
+        ).strip().upper()
+        if working_type:
+            normalized["workingType"] = working_type
 
         orig_qty = TradePage._safe_float(normalized.get("origQty"))
         if (orig_qty is None or orig_qty <= 0.0) and is_algo_order:
@@ -7233,9 +7699,20 @@ class TradePage(tk.Frame):
                     normalized.get("clientOrderId")
                     or normalized.get("origClientOrderId")
                     or normalized.get("newClientOrderId")
+                    or normalized.get("clientAlgoId")
                     or ""
                 ).strip()
                 order_type = str(normalized.get("type") or "").strip().upper()
+                working_type = self._extract_order_working_type(normalized)
+                if self._is_stop_family_order_type(order_type):
+                    self._record_working_type_monitor_event(
+                        symbol=symbol,
+                        order_id=order_id,
+                        order_type=order_type,
+                        working_type=working_type,
+                        source="OPEN_ORDER_MERGE",
+                        loop_label=loop_label,
+                    )
                 side = str(normalized.get("side") or "").strip().upper()
                 key = (symbol, int(order_id), client_order_id, order_type, side)
                 if key in seen:

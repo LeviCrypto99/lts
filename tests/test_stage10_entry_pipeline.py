@@ -37,6 +37,16 @@ class EntryBudgetTests(unittest.TestCase):
         self.assertEqual(result.budget_usdt, 198.0)
         self.assertEqual(result.reason_code, "SECOND_ENTRY_BUDGET_READY")
 
+    def test_second_entry_budget_aggressive_mode_applies_double_multiplier(self) -> None:
+        result = compute_second_entry_budget(
+            200.0,
+            margin_buffer_pct=0.01,
+            entry_mode="AGGRESSIVE",
+        )
+        self.assertTrue(result.ok)
+        self.assertEqual(result.budget_usdt, 396.0)
+        self.assertEqual(result.reason_code, "SECOND_ENTRY_BUDGET_READY")
+
 
 class FirstEntryPipelineTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -70,7 +80,9 @@ class FirstEntryPipelineTests(unittest.TestCase):
         self.assertEqual(result.current_state, "ENTRY_ORDER")
         self.assertEqual(captured.get("newClientOrderId"), "first-1")
         self.assertEqual(captured.get("quantity"), 0.5)
+        self.assertEqual(captured.get("type"), "TAKE_PROFIT")
         self.assertEqual(captured.get("price"), 100.0)
+        self.assertEqual(captured.get("stopPrice"), 99.9)
 
     def test_first_entry_aggressive_mode_doubles_order_quantity(self) -> None:
         captured = {}
@@ -151,6 +163,37 @@ class SecondEntryPipelineTests(unittest.TestCase):
         self.assertEqual(result.current_state, "PHASE1")
         self.assertEqual(result.state_transition_reason, "NO_STATE_CHANGE")
         self.assertEqual(captured.get("newClientOrderId"), "second-1")
+        self.assertEqual(captured.get("type"), "TAKE_PROFIT")
+        self.assertEqual(captured.get("price"), 110.0)
+        self.assertEqual(captured.get("stopPrice"), 109.9)
+
+    def test_second_entry_aggressive_mode_doubles_order_quantity(self) -> None:
+        captured = {}
+
+        def fake_create(params: dict) -> GatewayCallResult:
+            captured.update(params)
+            return GatewayCallResult(ok=True, reason_code="OK", payload={"orderId": 12})
+
+        result = run_second_entry_pipeline(
+            current_state="PHASE1",
+            symbol="BTCUSDT",
+            second_target_price=110.0,
+            available_usdt=200.0,
+            margin_buffer_pct=0.01,
+            entry_mode="AGGRESSIVE",
+            filter_rules=self.filters,
+            position_mode="ONE_WAY",
+            create_call=fake_create,
+            retry_policy=RetryPolicy(max_attempts=1, retryable_reason_codes=()),
+            new_client_order_id="second-agg-1",
+        )
+        self.assertTrue(result.success)
+        self.assertEqual(result.action, "ENTRY_SUBMITTED")
+        self.assertEqual(result.current_state, "PHASE1")
+        self.assertEqual(result.budget_usdt, 396.0)
+        self.assertEqual(captured.get("newClientOrderId"), "second-agg-1")
+        self.assertEqual(captured.get("quantity"), 3.6)
+        self.assertEqual(captured.get("price"), 110.0)
 
     def test_second_entry_non_margin_failure_skips_and_keeps_state(self) -> None:
         def fake_create(_params: dict) -> GatewayCallResult:
@@ -236,6 +279,8 @@ class Stage10LoggingTests(unittest.TestCase):
             self.assertIn("result=", line)
             self.assertIn("state_transition=", line)
             self.assertIn("failure_reason=", line)
+            self.assertIn("entry_mode=", line)
+            self.assertIn("mode_multiplier=", line)
 
     def test_pipeline_logging_fields_exist(self) -> None:
         with patch("auto_trade.event_logging.write_auto_trade_log_line") as mocked:
@@ -279,6 +324,8 @@ class Stage10LoggingTests(unittest.TestCase):
             self.assertIn("result=", line)
             self.assertIn("state_transition=", line)
             self.assertIn("failure_reason=", line)
+            self.assertIn("entry_mode=", line)
+            self.assertIn("mode_multiplier=", line)
 
 
 if __name__ == "__main__":

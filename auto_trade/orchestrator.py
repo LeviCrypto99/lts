@@ -62,7 +62,6 @@ from .symbol_mapping import (
     map_ticker_to_candidate_symbol_with_logging,
     validate_candidate_symbol_usdt_m_with_logging,
 )
-from .trigger_engine import evaluate_trigger_loop_with_logging
 from .trigger_models import TriggerCandidate
 
 _LEADING_FIELD_PARSE_FAILURE_CODES = frozenset(
@@ -171,10 +170,34 @@ def _build_entry_client_order_id(
     message_id: int,
 ) -> str:
     normalized_symbol = _normalize_symbol(symbol)
-    trigger_code = "F1" if str(trigger_kind or "").strip().upper() == "FIRST_ENTRY" else "S2"
+    trigger_code = "E1" if str(trigger_kind or "").strip().upper() == "FIRST_ENTRY" else "E2"
     symbol_hash = format(zlib.crc32(normalized_symbol.encode("utf-8")) & 0xFFFFFFFF, "08x")
     client_order_id = f"LTS-{trigger_code}-{max(0, int(message_id))}-{symbol_hash}"
     return client_order_id[:36]
+
+
+def _has_pending_first_entry_candidates(runtime: AutoTradeRuntime) -> bool:
+    if not runtime.pending_trigger_candidates:
+        return False
+    for candidate in runtime.pending_trigger_candidates.values():
+        if str(candidate.trigger_kind or "").strip().upper() == "FIRST_ENTRY":
+            return True
+    return False
+
+
+def _is_entry_lock_effective_for_new_leading_signal(runtime: AutoTradeRuntime) -> bool:
+    if runtime.global_state.safety_locked:
+        return True
+    if runtime.new_orders_locked or runtime.rate_limit_locked or runtime.auth_error_locked:
+        return True
+    # Pre-winner stage: allow additional first-entry candidate registration while only open orders exist.
+    if (
+        runtime.global_state.has_any_open_order
+        and not runtime.global_state.has_any_position
+        and runtime.symbol_state in ("MONITORING", "ENTRY_ORDER")
+    ):
+        return False
+    return runtime.global_state.entry_locked
 
 
 def _can_allow_second_entry_while_entry_locked(
@@ -457,12 +480,7 @@ def handle_leading_market_signal(
                         channel_id=channel_id,
                         message_id=message_id,
                     )
-                    blocked_by_entry_lock = (
-                        current.global_state.entry_locked
-                        or current.new_orders_locked
-                        or current.rate_limit_locked
-                        or current.auth_error_locked
-                    )
+                    blocked_by_entry_lock = _is_entry_lock_effective_for_new_leading_signal(current)
                     blocked_by_safety_lock = current.global_state.safety_locked
                     current, _ = _record_candidate_cooldown_with_logging(
                         current,
@@ -532,12 +550,7 @@ def handle_leading_market_signal(
     )
     if not validated.ok:
         symbol = _normalize_symbol(validated.symbol or mapped.candidate_symbol)
-        blocked_by_entry_lock = (
-            current.global_state.entry_locked
-            or current.new_orders_locked
-            or current.rate_limit_locked
-            or current.auth_error_locked
-        )
+        blocked_by_entry_lock = _is_entry_lock_effective_for_new_leading_signal(current)
         blocked_by_safety_lock = current.global_state.safety_locked
         current, cooldown_status = _record_candidate_cooldown_with_logging(
             current,
@@ -596,7 +609,7 @@ def handle_leading_market_signal(
 
     symbol = validated.symbol
     if (
-        current.symbol_state == "MONITORING"
+        current.symbol_state in ("MONITORING", "ENTRY_ORDER")
         and (
             _normalize_symbol(current.active_symbol or "") == symbol
             or symbol in current.pending_trigger_candidates
@@ -623,12 +636,7 @@ def handle_leading_market_signal(
         )
         return current, result
 
-    blocked_by_entry_lock = (
-        current.global_state.entry_locked
-        or current.new_orders_locked
-        or current.rate_limit_locked
-        or current.auth_error_locked
-    )
+    blocked_by_entry_lock = _is_entry_lock_effective_for_new_leading_signal(current)
     blocked_by_safety_lock = current.global_state.safety_locked
     cooldown_record_decision = decide_cooldown_recording_with_logging(
         blocked_by_entry_lock=blocked_by_entry_lock,
@@ -773,7 +781,7 @@ def handle_leading_market_signal(
             )
             return current, result
         symbol_state_after = transition.current_state
-    elif current.symbol_state not in ("MONITORING",):
+    elif current.symbol_state not in ("MONITORING", "ENTRY_ORDER"):
         result = LeadingSignalProcessResult(
             accepted=False,
             reason_code=f"SYMBOL_STATE_BLOCKED_{current.symbol_state}",
@@ -890,8 +898,9 @@ def run_trigger_entry_cycle(
         return runtime, result
 
     allow_second_entry_under_entry_lock = False
+    allow_first_entry_under_entry_lock = False
     has_open_entry_order_active_symbol: Optional[bool] = None
-    if runtime.global_state.global_blocked:
+    if runtime.global_state.entry_locked:
         active_symbol = _normalize_symbol(str(runtime.active_symbol or ""))
         if has_open_entry_order_for_symbol is not None and active_symbol:
             try:
@@ -916,6 +925,11 @@ def run_trigger_entry_cycle(
             runtime,
             has_open_entry_order_active_symbol=has_open_entry_order_active_symbol,
         )
+        allow_first_entry_under_entry_lock = (
+            not runtime.global_state.has_any_position
+            and runtime.symbol_state in ("MONITORING", "ENTRY_ORDER")
+            and _has_pending_first_entry_candidates(runtime)
+        )
         if allow_second_entry_under_entry_lock:
             _log_orchestrator_event(
                 event="run_trigger_entry_cycle",
@@ -939,9 +953,31 @@ def run_trigger_entry_cycle(
                     else "-"
                 ),
             )
+        if allow_first_entry_under_entry_lock:
+            _log_orchestrator_event(
+                event="run_trigger_entry_cycle",
+                input_data=(
+                    f"pending_candidates={len(runtime.pending_trigger_candidates)} "
+                    f"active_symbol={_normalize(runtime.active_symbol)}"
+                ),
+                decision="allow_pre_winner_first_entry_under_entry_lock",
+                result="allowed",
+                state_before=_state_label(runtime),
+                state_after=_state_label(runtime),
+                failure_reason="-",
+                loop_label=loop_label,
+                entry_locked=runtime.global_state.entry_locked,
+                has_any_position=runtime.global_state.has_any_position,
+                has_any_open_order=runtime.global_state.has_any_open_order,
+            )
 
     if (
-        (runtime.global_state.global_blocked and not allow_second_entry_under_entry_lock)
+        runtime.global_state.safety_locked
+        or (
+            runtime.global_state.entry_locked
+            and not allow_second_entry_under_entry_lock
+            and not allow_first_entry_under_entry_lock
+        )
         or runtime.new_orders_locked
         or runtime.rate_limit_locked
         or runtime.auth_error_locked
@@ -1000,63 +1036,20 @@ def run_trigger_entry_cycle(
 
     raw_candidates = list(runtime.pending_trigger_candidates.values())
     candidates: list[TriggerCandidate] = []
-    trigger_tick_size_by_symbol: dict[str, float] = {}
+    skipped_symbols: list[str] = []
     for candidate in raw_candidates:
         candidate_symbol = _normalize_symbol(candidate.symbol)
         filter_rules_for_candidate = filter_rules_by_symbol.get(candidate_symbol)
         if filter_rules_for_candidate is None:
-            result = TriggerCycleProcessResult(
-                attempted=True,
-                success=False,
-                reason_code="MISSING_SYMBOL_FILTER_RULES",
-                failure_reason=f"symbol={candidate_symbol}",
-                selected_symbol=candidate_symbol,
-                selected_trigger_kind=candidate.trigger_kind,
-                pipeline_reason_code="NO_PIPELINE_CALL",
-                symbol_state_before=before_state,
-                symbol_state_after=before_state,
-            )
-            _log_orchestrator_event(
-                event="run_trigger_entry_cycle",
-                input_data=f"selected_symbol={candidate_symbol}",
-                decision="resolve_symbol_filter_rules_for_trigger_candidates",
-                result="failed",
-                state_before=_state_label(runtime),
-                state_after=_state_label(runtime),
-                failure_reason=result.reason_code,
-                loop_label=loop_label,
-            )
-            return runtime, result
+            skipped_symbols.append(candidate_symbol)
+            continue
         normalized_target_price = round_price_by_tick_size(
             float(candidate.target_price),
             float(filter_rules_for_candidate.tick_size),
         )
         if normalized_target_price is None or normalized_target_price <= 0:
-            result = TriggerCycleProcessResult(
-                attempted=True,
-                success=False,
-                reason_code="INVALID_NORMALIZED_TARGET_PRICE",
-                failure_reason=f"symbol={candidate_symbol} raw_target={candidate.target_price}",
-                selected_symbol=candidate_symbol,
-                selected_trigger_kind=candidate.trigger_kind,
-                pipeline_reason_code="NO_PIPELINE_CALL",
-                symbol_state_before=before_state,
-                symbol_state_after=before_state,
-            )
-            _log_orchestrator_event(
-                event="run_trigger_entry_cycle",
-                input_data=(
-                    f"selected_symbol={candidate_symbol} raw_target={candidate.target_price} "
-                    f"tick_size={filter_rules_for_candidate.tick_size}"
-                ),
-                decision="normalize_trigger_target_price_by_tick_size",
-                result="failed",
-                state_before=_state_label(runtime),
-                state_after=_state_label(runtime),
-                failure_reason=result.reason_code,
-                loop_label=loop_label,
-            )
-            return runtime, result
+            skipped_symbols.append(candidate_symbol)
+            continue
         candidates.append(
             replace(
                 candidate,
@@ -1064,19 +1057,37 @@ def run_trigger_entry_cycle(
                 target_price=float(normalized_target_price),
             )
         )
-        trigger_tick_size_by_symbol[candidate_symbol] = float(filter_rules_for_candidate.tick_size)
-    trigger_loop = evaluate_trigger_loop_with_logging(
-        candidates,
-        mark_prices,
-        trigger_tick_size_by_symbol=trigger_tick_size_by_symbol,
-        loop_label=loop_label,
-    )
-    if trigger_loop.selected_candidate is None:
+    if skipped_symbols:
+        _log_orchestrator_event(
+            event="run_trigger_entry_cycle",
+            input_data=f"candidate_count={len(raw_candidates)}",
+            decision="sanitize_trigger_candidates",
+            result="skipped_invalid_candidates",
+            state_before=_state_label(runtime),
+            state_after=_state_label(runtime),
+            failure_reason="-",
+            loop_label=loop_label,
+            skipped_symbols=",".join(sorted(set(skipped_symbols))),
+        )
+    if runtime.global_state.entry_locked:
+        if allow_first_entry_under_entry_lock and not allow_second_entry_under_entry_lock:
+            candidates = [
+                candidate
+                for candidate in candidates
+                if str(candidate.trigger_kind or "").strip().upper() == "FIRST_ENTRY"
+            ]
+        elif allow_second_entry_under_entry_lock and not allow_first_entry_under_entry_lock:
+            candidates = [
+                candidate
+                for candidate in candidates
+                if str(candidate.trigger_kind or "").strip().upper() == "SECOND_ENTRY"
+            ]
+    if not candidates:
         result = TriggerCycleProcessResult(
             attempted=True,
             success=False,
-            reason_code=trigger_loop.reason_code,
-            failure_reason=trigger_loop.reason_code,
+            reason_code="NO_VALID_TRIGGER_CANDIDATES",
+            failure_reason="all pending candidates invalid",
             selected_symbol=None,
             selected_trigger_kind=None,
             pipeline_reason_code="NO_PIPELINE_CALL",
@@ -1086,7 +1097,7 @@ def run_trigger_entry_cycle(
         _log_orchestrator_event(
             event="run_trigger_entry_cycle",
             input_data=f"candidate_count={len(candidates)} mark_price_count={len(mark_prices)}",
-            decision="evaluate_trigger_loop",
+            decision="select_pending_candidate_for_immediate_trigger_submit",
             result="no_trigger",
             state_before=_state_label(runtime),
             state_after=_state_label(runtime),
@@ -1095,7 +1106,14 @@ def run_trigger_entry_cycle(
         )
         return runtime, result
 
-    selected = trigger_loop.selected_candidate
+    selected = max(
+        candidates,
+        key=lambda item: (
+            int(item.received_at_local),
+            int(item.message_id),
+            _normalize_symbol(item.symbol),
+        ),
+    )
     selected_symbol = _normalize_symbol(selected.symbol)
     filter_rules = filter_rules_by_symbol.get(selected_symbol)
     if filter_rules is None:
@@ -1203,6 +1221,7 @@ def run_trigger_entry_cycle(
         trigger_kind=str(selected.trigger_kind),
         message_id=int(selected.message_id),
     )
+    selected_mark_price = mark_prices.get(selected_symbol)
     selected_entry_mode = _normalize_entry_mode(selected.entry_mode)
     if selected.trigger_kind == "FIRST_ENTRY":
         pipeline = run_first_entry_pipeline_with_logging(
@@ -1216,6 +1235,7 @@ def run_trigger_entry_cycle(
             create_call=create_call,
             retry_policy=retry_policy,
             new_client_order_id=entry_client_order_id,
+            reference_mark_price=selected_mark_price,
             loop_label=loop_label,
         )
     elif selected.trigger_kind == "SECOND_ENTRY":
@@ -1225,12 +1245,14 @@ def run_trigger_entry_cycle(
             second_target_price=selected.target_price,
             available_usdt=available_usdt,
             margin_buffer_pct=runtime.settings.margin_buffer_pct,
+            entry_mode=selected_entry_mode,
             filter_rules=filter_rules,
             position_mode=position_mode,
             create_call=create_call,
             refresh_available_usdt=refresh_available_usdt,
             retry_policy=retry_policy,
             new_client_order_id=entry_client_order_id,
+            reference_mark_price=selected_mark_price,
             loop_label=loop_label,
         )
     else:
@@ -1257,11 +1279,16 @@ def run_trigger_entry_cycle(
         )
         return runtime, result
 
+    pending_after_selected = {
+        key: value
+        for key, value in runtime.pending_trigger_candidates.items()
+        if _normalize_symbol(str(key)) != selected_symbol
+    }
     current = replace(
         runtime,
         symbol_state=pipeline.current_state,
         active_symbol=selected_symbol if pipeline.success else runtime.active_symbol,
-        pending_trigger_candidates={},
+        pending_trigger_candidates=pending_after_selected,
         position_mode=position_mode,
         second_entry_order_pending=(
             True
@@ -1297,7 +1324,7 @@ def run_trigger_entry_cycle(
         input_data=(
             f"selected_symbol={selected_symbol} trigger_kind={selected.trigger_kind} "
             f"entry_mode={selected_entry_mode} wallet_balance_usdt={wallet_balance_usdt} "
-            f"available_usdt={available_usdt}"
+            f"available_usdt={available_usdt} selected_mark_price={selected_mark_price}"
         ),
         decision="run_entry_pipeline_for_selected_trigger",
         result="success" if result.success else "failed",
@@ -1319,6 +1346,7 @@ def sync_entry_fill_flow(
     has_any_open_order: Optional[bool] = None,
     loop_label: str = "loop",
 ) -> tuple[AutoTradeRuntime, FillSyncProcessResult]:
+    second_entry_pending_before = runtime.second_entry_order_pending
     sync_result = sync_entry_fill_state_with_logging(
         runtime.symbol_state,
         phase=phase,  # type: ignore[arg-type]
@@ -1328,8 +1356,12 @@ def sync_entry_fill_flow(
     )
     second_entry_order_pending = runtime.second_entry_order_pending
     if phase == "SECOND_ENTRY":
-        if order_status in ("FILLED", "PARTIALLY_FILLED", "CANCELED", "REJECTED", "EXPIRED"):
+        if order_status in ("FILLED", "CANCELED", "REJECTED", "EXPIRED"):
             second_entry_order_pending = False
+        elif order_status == "PARTIALLY_FILLED":
+            # Keep tracking second-entry completion after partial fills so a later
+            # FILLED sync can trigger phase2 MDD stop submission reliably.
+            second_entry_order_pending = True
     if sync_result.current_state == "IDLE":
         second_entry_order_pending = False
 
@@ -1362,7 +1394,11 @@ def sync_entry_fill_flow(
     )
     _log_orchestrator_event(
         event="sync_entry_fill_flow",
-        input_data=f"phase={phase} order_status={order_status} has_position={has_position}",
+        input_data=(
+            f"phase={phase} order_status={order_status} has_position={has_position} "
+            f"second_entry_pending_before={second_entry_pending_before} "
+            f"second_entry_pending_after={second_entry_order_pending}"
+        ),
         decision="apply_fill_sync_and_update_runtime_state",
         result=sync_result.reason_code,
         state_before=_state_label(runtime),

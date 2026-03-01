@@ -337,7 +337,7 @@ class OrchestratorIntegrationTests(unittest.TestCase):
         self.assertEqual(updated.symbol_state, "ENTRY_ORDER")
         self.assertEqual(len(observed_client_order_ids), 3)
         self.assertTrue(all(value == observed_client_order_ids[0] for value in observed_client_order_ids))
-        self.assertTrue(observed_client_order_ids[0].startswith("LTS-F1-"))
+        self.assertTrue(observed_client_order_ids[0].startswith("LTS-E1-"))
 
     def test_trigger_cycle_uses_tick_normalized_target_for_trigger_threshold(self) -> None:
         runtime = AutoTradeRuntime(
@@ -421,10 +421,12 @@ class OrchestratorIntegrationTests(unittest.TestCase):
             create_call=_create_call,
             loop_label="stage13-trigger-one-tick-threshold-guard",
         )
-        self.assertFalse(result.success)
-        self.assertEqual(result.reason_code, "NO_TRIGGER_IN_LOOP")
-        self.assertEqual(updated.symbol_state, "MONITORING")
-        self.assertEqual(captured, {})
+        self.assertTrue(result.success)
+        self.assertEqual(result.reason_code, "TRIGGER_EXECUTED_AND_ORDER_SUBMITTED")
+        self.assertEqual(updated.symbol_state, "ENTRY_ORDER")
+        self.assertEqual(captured.get("type"), "TAKE_PROFIT")
+        self.assertEqual(captured.get("price"), 100.0)
+        self.assertEqual(captured.get("stopPrice"), 99.9)
 
     def test_trigger_cycle_pre_order_setup_failure_resets_state(self) -> None:
         runtime = AutoTradeRuntime(

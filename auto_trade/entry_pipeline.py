@@ -10,7 +10,7 @@ from .entry_pipeline_models import (
     EntryQuantityResult,
 )
 from .event_logging import StructuredLogEvent, log_structured_event
-from .order_gateway import create_order_with_retry
+from .order_gateway import create_order_with_retry, round_price_by_tick_size
 from .order_gateway_models import (
     GatewayCallResult,
     OrderCreateRequest,
@@ -39,6 +39,50 @@ ENTRY_MODE_TO_FIRST_ENTRY_BUDGET_MULTIPLIER: dict[str, float] = {
 DEFAULT_ENTRY_MODE = "CONSERVATIVE"
 
 
+def _resolve_entry_trigger_order_type(
+    *,
+    side: str,
+    target_price: float,
+    reference_mark_price: Optional[float],
+) -> str:
+    normalized_side = str(side or "").strip().upper()
+    current_mark = float(reference_mark_price) if _is_positive_finite(float(reference_mark_price or 0.0)) else None
+    if normalized_side == "SELL":
+        if current_mark is None:
+            return "TAKE_PROFIT"
+        return "TAKE_PROFIT" if float(target_price) >= current_mark else "STOP"
+    if current_mark is None:
+        return "STOP"
+    return "STOP" if float(target_price) >= current_mark else "TAKE_PROFIT"
+
+
+def _resolve_entry_trigger_price(
+    *,
+    side: str,
+    order_type: str,
+    target_price: float,
+    tick_size: float,
+) -> float:
+    target = float(target_price)
+    tick = float(tick_size)
+    if not _is_positive_finite(target) or not _is_positive_finite(tick):
+        return target
+    normalized_side = str(side or "").strip().upper()
+    normalized_order_type = str(order_type or "").strip().upper()
+    trigger_raw = target
+    # One-tick lead rule:
+    # - TAKE_PROFIT SELL / STOP BUY  : trigger when >= stopPrice -> use target - 1tick
+    # - STOP SELL / TAKE_PROFIT BUY  : trigger when <= stopPrice -> use target + 1tick
+    if normalized_order_type == "TAKE_PROFIT":
+        trigger_raw = target - tick if normalized_side == "SELL" else target + tick
+    elif normalized_order_type == "STOP":
+        trigger_raw = target + tick if normalized_side == "SELL" else target - tick
+    rounded = round_price_by_tick_size(trigger_raw, tick)
+    if rounded is None or float(rounded) <= 0.0:
+        return target
+    return float(rounded)
+
+
 def _normalize_entry_mode_token(entry_mode: Any) -> str:
     normalized = str(entry_mode or "").strip().upper()
     if normalized in ENTRY_MODE_TO_FIRST_ENTRY_BUDGET_MULTIPLIER:
@@ -49,6 +93,10 @@ def _normalize_entry_mode_token(entry_mode: Any) -> str:
 def _resolve_first_entry_budget_multiplier(entry_mode: str) -> float:
     normalized = _normalize_entry_mode_token(entry_mode)
     return float(ENTRY_MODE_TO_FIRST_ENTRY_BUDGET_MULTIPLIER.get(normalized, 1.0))
+
+
+def _resolve_second_entry_budget_multiplier(entry_mode: str) -> float:
+    return _resolve_first_entry_budget_multiplier(entry_mode)
 
 
 def compute_first_entry_budget(
@@ -83,6 +131,7 @@ def compute_second_entry_budget(
     available_usdt: float,
     *,
     margin_buffer_pct: float,
+    entry_mode: str = DEFAULT_ENTRY_MODE,
 ) -> EntryBudgetResult:
     if not _is_positive_finite(available_usdt):
         return EntryBudgetResult(
@@ -105,7 +154,8 @@ def compute_second_entry_budget(
             reason_code="MARGIN_BUFFER_OUT_OF_RANGE",
             failure_reason="margin_buffer_pct must be >= 0 and < 1",
         )
-    budget = float(available_usdt) * (1.0 - float(margin_buffer_pct))
+    mode_multiplier = _resolve_second_entry_budget_multiplier(entry_mode)
+    budget = float(available_usdt) * (1.0 - float(margin_buffer_pct)) * float(mode_multiplier)
     if budget <= 0:
         return EntryBudgetResult(
             ok=False,
@@ -225,13 +275,14 @@ def run_first_entry_pipeline(
     create_call: Callable[[Mapping[str, Any]], GatewayCallResult],
     retry_policy: Optional[RetryPolicy] = None,
     new_client_order_id: Optional[str] = None,
+    reference_mark_price: Optional[float] = None,
 ) -> EntryPipelineResult:
-    if current_state != "MONITORING":
+    if current_state not in ("MONITORING", "ENTRY_ORDER"):
         return _reset_result(
             phase="FIRST_ENTRY",
             current_state=current_state,
             reason_code="FIRST_ENTRY_INVALID_STATE",
-            failure_reason=f"expected MONITORING, got {current_state}",
+            failure_reason=f"expected MONITORING/ENTRY_ORDER, got {current_state}",
             gateway_attempts=0,
             gateway_reason_code="NO_GATEWAY_CALL",
             budget_usdt=None,
@@ -269,13 +320,24 @@ def run_first_entry_pipeline(
             raw_quantity=None,
         )
 
+    order_type = _resolve_entry_trigger_order_type(
+        side="SELL",
+        target_price=float(target_price),
+        reference_mark_price=reference_mark_price,
+    )
     request = OrderCreateRequest(
         symbol=symbol,
         side="SELL",
-        order_type="LIMIT",
+        order_type=order_type,  # type: ignore[arg-type]
         purpose="ENTRY",
         quantity=quantity_result.quantity,
         price=target_price,
+        stop_price=_resolve_entry_trigger_price(
+            side="SELL",
+            order_type=order_type,
+            target_price=float(target_price),
+            tick_size=float(filter_rules.tick_size),
+        ),
         reference_price=target_price,
         new_client_order_id=new_client_order_id,
     )
@@ -287,18 +349,24 @@ def run_first_entry_pipeline(
         retry_policy=retry_policy,
     )
     if gateway_result.success:
-        transition = apply_symbol_event(current_state, "SUBMIT_ENTRY_ORDER")
-        if not transition.accepted:
-            return _reset_result(
-                phase="FIRST_ENTRY",
-                current_state=current_state,
-                reason_code="FIRST_ENTRY_STATE_TRANSITION_REJECTED",
-                failure_reason=transition.reason_code,
-                gateway_attempts=gateway_result.attempts,
-                gateway_reason_code=gateway_result.reason_code,
-                budget_usdt=budget_result.budget_usdt,
-                raw_quantity=quantity_result.quantity,
-            )
+        if current_state == "MONITORING":
+            transition = apply_symbol_event(current_state, "SUBMIT_ENTRY_ORDER")
+            if not transition.accepted:
+                return _reset_result(
+                    phase="FIRST_ENTRY",
+                    current_state=current_state,
+                    reason_code="FIRST_ENTRY_STATE_TRANSITION_REJECTED",
+                    failure_reason=transition.reason_code,
+                    gateway_attempts=gateway_result.attempts,
+                    gateway_reason_code=gateway_result.reason_code,
+                    budget_usdt=budget_result.budget_usdt,
+                    raw_quantity=quantity_result.quantity,
+                )
+            next_state = transition.current_state
+            transition_reason = transition.reason_code
+        else:
+            next_state = current_state
+            transition_reason = "FIRST_ENTRY_KEEP_STATE"
         return EntryPipelineResult(
             phase="FIRST_ENTRY",
             success=True,
@@ -306,8 +374,25 @@ def run_first_entry_pipeline(
             reason_code="FIRST_ENTRY_SUBMITTED",
             failure_reason="-",
             previous_state=current_state,
-            current_state=transition.current_state,
-            state_transition_reason=transition.reason_code,
+            current_state=next_state,
+            state_transition_reason=transition_reason,
+            gateway_attempts=gateway_result.attempts,
+            gateway_reason_code=gateway_result.reason_code,
+            budget_usdt=budget_result.budget_usdt,
+            raw_quantity=quantity_result.quantity,
+            refreshed_available_usdt=None,
+        )
+
+    if current_state == "ENTRY_ORDER":
+        return EntryPipelineResult(
+            phase="FIRST_ENTRY",
+            success=False,
+            action="FIRST_ENTRY_SKIPPED_KEEP_STATE",
+            reason_code="FIRST_ENTRY_CREATE_FAILED_KEEP_STATE",
+            failure_reason=gateway_result.reason_code,
+            previous_state=current_state,
+            current_state=current_state,
+            state_transition_reason="FIRST_ENTRY_KEEP_STATE",
             gateway_attempts=gateway_result.attempts,
             gateway_reason_code=gateway_result.reason_code,
             budget_usdt=budget_result.budget_usdt,
@@ -346,12 +431,14 @@ def run_second_entry_pipeline(
     second_target_price: float,
     available_usdt: float,
     margin_buffer_pct: float,
+    entry_mode: str = DEFAULT_ENTRY_MODE,
     filter_rules: SymbolFilterRules,
     position_mode: PositionMode,
     create_call: Callable[[Mapping[str, Any]], GatewayCallResult],
     refresh_available_usdt: Optional[Callable[[], float]] = None,
     retry_policy: Optional[RetryPolicy] = None,
     new_client_order_id: Optional[str] = None,
+    reference_mark_price: Optional[float] = None,
 ) -> EntryPipelineResult:
     if current_state != "PHASE1":
         return _skip_second_entry_result(
@@ -365,9 +452,11 @@ def run_second_entry_pipeline(
             refreshed_available_usdt=None,
         )
 
+    normalized_mode = _normalize_entry_mode_token(entry_mode)
     budget_result = compute_second_entry_budget(
         available_usdt,
         margin_buffer_pct=margin_buffer_pct,
+        entry_mode=normalized_mode,
     )
     if not budget_result.ok:
         return _skip_second_entry_result(
@@ -396,13 +485,24 @@ def run_second_entry_pipeline(
             refreshed_available_usdt=None,
         )
 
+    order_type = _resolve_entry_trigger_order_type(
+        side="SELL",
+        target_price=float(second_target_price),
+        reference_mark_price=reference_mark_price,
+    )
     request = OrderCreateRequest(
         symbol=symbol,
         side="SELL",
-        order_type="LIMIT",
+        order_type=order_type,  # type: ignore[arg-type]
         purpose="ENTRY",
         quantity=quantity_result.quantity,
         price=second_target_price,
+        stop_price=_resolve_entry_trigger_price(
+            side="SELL",
+            order_type=order_type,
+            target_price=float(second_target_price),
+            tick_size=float(filter_rules.tick_size),
+        ),
         reference_price=second_target_price,
         new_client_order_id=new_client_order_id,
     )
@@ -482,6 +582,7 @@ def run_second_entry_pipeline(
     refreshed_budget = compute_second_entry_budget(
         refreshed_available,
         margin_buffer_pct=margin_buffer_pct,
+        entry_mode=normalized_mode,
     )
     if not refreshed_budget.ok:
         return _skip_second_entry_result(
@@ -514,10 +615,16 @@ def run_second_entry_pipeline(
     refreshed_request = OrderCreateRequest(
         symbol=symbol,
         side="SELL",
-        order_type="LIMIT",
+        order_type=order_type,  # type: ignore[arg-type]
         purpose="ENTRY",
         quantity=refreshed_quantity.quantity,
         price=second_target_price,
+        stop_price=_resolve_entry_trigger_price(
+            side="SELL",
+            order_type=order_type,
+            target_price=float(second_target_price),
+            tick_size=float(filter_rules.tick_size),
+        ),
         reference_price=second_target_price,
         new_client_order_id=new_client_order_id,
     )
@@ -605,17 +712,24 @@ def compute_second_entry_budget_with_logging(
     available_usdt: float,
     *,
     margin_buffer_pct: float,
+    entry_mode: str = DEFAULT_ENTRY_MODE,
 ) -> EntryBudgetResult:
+    normalized_mode = _normalize_entry_mode_token(entry_mode)
+    mode_multiplier = _resolve_second_entry_budget_multiplier(normalized_mode)
     result = compute_second_entry_budget(
         available_usdt,
         margin_buffer_pct=margin_buffer_pct,
+        entry_mode=normalized_mode,
     )
     log_structured_event(
         StructuredLogEvent(
             component="entry_pipeline",
             event="compute_second_entry_budget",
-            input_data=f"available_usdt={available_usdt} margin_buffer_pct={margin_buffer_pct}",
-            decision="available_balance_apply_margin_buffer",
+            input_data=(
+                f"available_usdt={available_usdt} margin_buffer_pct={margin_buffer_pct} "
+                f"entry_mode={normalized_mode}"
+            ),
+            decision="available_balance_apply_margin_buffer_then_apply_entry_mode_multiplier",
             result="ready" if result.ok else "rejected",
             state_before="budget_pending",
             state_after="budget_ready" if result.ok else "budget_rejected",
@@ -623,6 +737,8 @@ def compute_second_entry_budget_with_logging(
         ),
         reason_code=result.reason_code,
         budget_usdt=result.budget_usdt if result.budget_usdt is not None else "-",
+        entry_mode=normalized_mode,
+        mode_multiplier=mode_multiplier,
     )
     return result
 
@@ -639,6 +755,7 @@ def run_first_entry_pipeline_with_logging(
     create_call: Callable[[Mapping[str, Any]], GatewayCallResult],
     retry_policy: Optional[RetryPolicy] = None,
     new_client_order_id: Optional[str] = None,
+    reference_mark_price: Optional[float] = None,
     loop_label: str = "loop",
 ) -> EntryPipelineResult:
     normalized_mode = _normalize_entry_mode_token(entry_mode)
@@ -654,6 +771,7 @@ def run_first_entry_pipeline_with_logging(
         create_call=create_call,
         retry_policy=retry_policy,
         new_client_order_id=new_client_order_id,
+        reference_mark_price=reference_mark_price,
     )
     log_structured_event(
         StructuredLogEvent(
@@ -679,6 +797,7 @@ def run_first_entry_pipeline_with_logging(
         raw_quantity=result.raw_quantity if result.raw_quantity is not None else "-",
         entry_mode=normalized_mode,
         mode_multiplier=mode_multiplier,
+        reference_mark_price=reference_mark_price if reference_mark_price is not None else "-",
     )
     return result
 
@@ -690,26 +809,32 @@ def run_second_entry_pipeline_with_logging(
     second_target_price: float,
     available_usdt: float,
     margin_buffer_pct: float,
+    entry_mode: str = DEFAULT_ENTRY_MODE,
     filter_rules: SymbolFilterRules,
     position_mode: PositionMode,
     create_call: Callable[[Mapping[str, Any]], GatewayCallResult],
     refresh_available_usdt: Optional[Callable[[], float]] = None,
     retry_policy: Optional[RetryPolicy] = None,
     new_client_order_id: Optional[str] = None,
+    reference_mark_price: Optional[float] = None,
     loop_label: str = "loop",
 ) -> EntryPipelineResult:
+    normalized_mode = _normalize_entry_mode_token(entry_mode)
+    mode_multiplier = _resolve_second_entry_budget_multiplier(normalized_mode)
     result = run_second_entry_pipeline(
         current_state=current_state,
         symbol=symbol,
         second_target_price=second_target_price,
         available_usdt=available_usdt,
         margin_buffer_pct=margin_buffer_pct,
+        entry_mode=normalized_mode,
         filter_rules=filter_rules,
         position_mode=position_mode,
         create_call=create_call,
         refresh_available_usdt=refresh_available_usdt,
         retry_policy=retry_policy,
         new_client_order_id=new_client_order_id,
+        reference_mark_price=reference_mark_price,
     )
     log_structured_event(
         StructuredLogEvent(
@@ -717,7 +842,8 @@ def run_second_entry_pipeline_with_logging(
             event="run_second_entry_pipeline",
             input_data=(
                 f"symbol={_normalize(symbol)} second_target_price={second_target_price} "
-                f"available_usdt={available_usdt} margin_buffer_pct={margin_buffer_pct} state={current_state}"
+                f"available_usdt={available_usdt} margin_buffer_pct={margin_buffer_pct} "
+                f"entry_mode={normalized_mode} state={current_state}"
             ),
             decision="build_second_entry_order_and_apply_skip_policy",
             result="submitted" if result.success else "failed",
@@ -732,10 +858,13 @@ def run_second_entry_pipeline_with_logging(
         gateway_attempts=result.gateway_attempts,
         budget_usdt=result.budget_usdt if result.budget_usdt is not None else "-",
         raw_quantity=result.raw_quantity if result.raw_quantity is not None else "-",
+        entry_mode=normalized_mode,
+        mode_multiplier=mode_multiplier,
         refreshed_available_usdt=(
             result.refreshed_available_usdt
             if result.refreshed_available_usdt is not None
             else "-"
         ),
+        reference_mark_price=reference_mark_price if reference_mark_price is not None else "-",
     )
     return result
