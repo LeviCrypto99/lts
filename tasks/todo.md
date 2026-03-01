@@ -1,5 +1,65 @@
 # todo
 
+- [x] [HOTFIX-TRADE-3HIGHRISK-20260301] 플랜 고정: 활성심볼 stale/trigger deferred starvation/loser entry 취소실패 잔류주문 3건만 최소 수정
+- [x] [HOTFIX-TRADE-3HIGHRISK-20260301] 수정 1: active_symbol stale 반환 차단(포지션/오더 미일치 시 스냅샷 심볼 재선정)
+- [x] [HOTFIX-TRADE-3HIGHRISK-20260301] 수정 2: deferred 심볼이 같은 사이클의 다른 pending 후보 처리를 막지 않도록 skip 가드
+- [x] [HOTFIX-TRADE-3HIGHRISK-20260301] 수정 3: winner 정책 loser entry 취소 실패 심볼 재시도 큐 도입(잔류 주문 자동 정리)
+- [x] [HOTFIX-TRADE-3HIGHRISK-20260301] 검증: stage10/stage11/stage13/stage15 + py_compile
+- [x] [HOTFIX-TRADE-3HIGHRISK-20260301] Review: 변경 파일/근거/검증/잔여 리스크 기록
+
+- [x] [AUDIT-TRADE-DEFECT-SWEEP-20260301-2] 플랜 고정: 거래 영역 코드 결함 전수 스캔(과수정 금지, 고위험만 식별)
+- [x] [AUDIT-TRADE-DEFECT-SWEEP-20260301-2] 점검 1: 주문 제출/취소 idempotency 및 누락 가능 분기 확인
+- [x] [AUDIT-TRADE-DEFECT-SWEEP-20260301-2] 점검 2: 상태 전이(ENTRY/PHASE/IDLE)에서 조기리셋/오판 경로 확인
+- [x] [AUDIT-TRADE-DEFECT-SWEEP-20260301-2] 점검 3: 보호주문(MDD/BE/TP) 공백 또는 중복 제출 가능 분기 확인
+- [x] [AUDIT-TRADE-DEFECT-SWEEP-20260301-2] Review: 심각 이슈만 근거 라인으로 정리(필요시 최소 수정안 제시)
+
+- [x] [HARDEN-NONCONSUME-RETRY-20260301] 플랜 고정: 주문기회 유실(후보 소거) 리스크만 최소 수정하고 상태머신/전략 의도 유지
+- [x] [HARDEN-NONCONSUME-RETRY-20260301] 수정 1: pre-order setup 실패 중 재시도 가능 사유는 후보를 소거하지 않고 deferred 처리
+- [x] [HARDEN-NONCONSUME-RETRY-20260301] 수정 2: pipeline 실패 중 `_KEEP_STATE` 사유는 후보를 보존하고 deferred reason으로 표기
+- [x] [HARDEN-NONCONSUME-RETRY-20260301] 수정 3: deferred 후보는 같은 trigger loop에서 반복 소모되지 않도록 loop break 가드 추가
+- [x] [HARDEN-NONCONSUME-RETRY-20260301] 수정 4: 1차 상태추론 fallback에 snapshot 건강성 체크 추가(조기 CANCELED 억제)
+- [x] [HARDEN-NONCONSUME-RETRY-20260301] 검증: py_compile + stage10/stage11/stage13/stage15
+- [x] [HARDEN-NONCONSUME-RETRY-20260301] Review: 변경 파일/근거/검증/잔여 리스크 기록
+
+- [x] [AUDIT-MINIMAL-HIGHRISK-20260301] 플랜 고정: trade/orchestrator/entry/exit 경로 전수 스캔 후 고위험만 최소 수정(리팩터링 금지)
+- [x] [AUDIT-MINIMAL-HIGHRISK-20260301] 점검 1: 단일 실패가 전체 상태/후보를 초기화하는 분기 전수 확인
+- [x] [AUDIT-MINIMAL-HIGHRISK-20260301] 점검 2: 취소 범위가 과도해 보호주문까지 제거되는 경로 전수 확인
+- [x] [AUDIT-MINIMAL-HIGHRISK-20260301] 점검 3: 상태추론 fallback 오판 가능성과 복구 약한 분기 전수 확인
+- [x] [AUDIT-MINIMAL-HIGHRISK-20260301] 수정: 증거 기반 고위험 항목만 최소 분기 패치 + 로깅 보강
+- [x] [AUDIT-MINIMAL-HIGHRISK-20260301] 검증: py_compile + stage10/stage11/stage13/stage15
+- [x] [AUDIT-MINIMAL-HIGHRISK-20260301] Review: 변경 파일/근거/검증/잔여 리스크 기록
+
+- [x] [HARDEN-MINIMAL-5RISK-20260301] 플랜 고정: 지적된 1~5번 이슈만 수정하고 상태머신/전략 의도는 유지(리팩터링 금지)
+- [x] [HARDEN-MINIMAL-5RISK-20260301] 수정 1: pre-order setup 실패가 전체 pending 초기화로 확산되지 않도록 실패 심볼 범위로 제한
+- [x] [HARDEN-MINIMAL-5RISK-20260301] 수정 2: setup 재시도 open-order 정리 시 보호주문 취소 금지(entry 주문만 취소)
+- [x] [HARDEN-MINIMAL-5RISK-20260301] 수정 3: 필터룰 누락 심볼이 있어도 유효 심볼 트리거 사이클은 계속 진행
+- [x] [HARDEN-MINIMAL-5RISK-20260301] 수정 4: 2차 상태 추론 cached order ref는 2차 clientOrderId 검증 후만 사용
+- [x] [HARDEN-MINIMAL-5RISK-20260301] 수정 5: 외부 리셋 시 split TP submit guard 초기화
+- [x] [HARDEN-MINIMAL-5RISK-20260301] 검증: py_compile + stage10/stage11/stage13/stage15 회귀
+- [x] [HARDEN-MINIMAL-5RISK-20260301] Review: 변경 파일/검증 결과/잔여 리스크 기록
+
+- [x] [HARDEN-PHASE-GUARD-20260301] 플랜 확정: ENTRY_ORDER->IDLE 조기리셋/PHASE2 보호주문 공백/2차 상태추론 오판의 안전 전이 규칙 정의
+- [x] [HARDEN-PHASE-GUARD-20260301] 코드 수정 1: no_position_no_orders 리셋을 연속확인+시간확인+스냅샷건강성 기준으로 지연 확정
+- [x] [HARDEN-PHASE-GUARD-20260301] 코드 수정 2: PHASE2에서 보호주문 공백 금지(2차 미완체결 구간 본절 STOP 유지, 완체결 MDD 전환 시 안전 폴백)
+- [x] [HARDEN-PHASE-GUARD-20260301] 코드 수정 3: 2차 상태 fallback을 즉시 CANCELED 확정하지 않고 연속확인 후 확정
+- [x] [HARDEN-PHASE-GUARD-20260301] 검증: stage11/stage13/stage15 회귀 + py_compile
+- [x] [HARDEN-PHASE-GUARD-20260301] Review: 변경 파일/검증결과/잔여리스크 기록
+
+- [x] [HOTFIX-MDD-EFFECTIVE-20] 요구사항 확정: UI 표시 MDD(15%) 유지 + 실제 MDD 스탑 계산 비율 20% 적용 범위 식별
+- [x] [HOTFIX-MDD-EFFECTIVE-20] 코드 수정: MDD 스탑 타겟 계산/제출 경로에 유효 비율(20%) 공통 적용 + 로깅 추가
+- [x] [HOTFIX-MDD-EFFECTIVE-20] 검증: 관련 회귀 테스트(mdd stop 경로) 및 py_compile 실행
+- [x] [HOTFIX-MDD-EFFECTIVE-20] Review: 변경 파일/검증 결과/잔여 리스크 기록
+
+- [x] [RELEASE-2.1.6] `config.py`/`version.json` 버전 문자열 2.1.6 반영
+- [x] [RELEASE-2.1.6] launcher/updater 재빌드(`python build.py --target all`)
+- [x] [RELEASE-2.1.6] 산출물 SHA256 계산 및 `version.json`의 `app_sha256`/`updater_sha256` 갱신
+- [x] [RELEASE-2.1.6] 자동업데이트 메타 최종 점검(파일명, URL, 버전, SHA 일치) + Review 기록
+
+- [x] [RELEASE-2.1.7] `config.py`/`version.json` 버전 문자열 2.1.7 반영
+- [x] [RELEASE-2.1.7] launcher/updater 재빌드(`python build.py --target all`)
+- [x] [RELEASE-2.1.7] 산출물 SHA256 계산 및 `version.json`의 `app_sha256`/`updater_sha256` 갱신
+- [x] [RELEASE-2.1.7] 자동업데이트 메타 최종 점검(파일명, URL, 버전, SHA 일치) + Review 기록
+
 - [x] [RELEASE-2.1.5] `config.py`/`version.json` 버전 문자열 2.1.5 반영
 - [x] [RELEASE-2.1.5] launcher/updater 재빌드(`python build.py --target all`)
 - [x] [RELEASE-2.1.5] 산출물 SHA256 계산 및 `version.json`의 `app_sha256`/`updater_sha256` 갱신
@@ -61,7 +121,73 @@
 - [x] [HOTFIX-LAST-PRICE-ENFORCE] 검증 실행(unittest + py_compile) 및 요청사항 1/2/3 점검 결과 Review 기록
 - [x] [HOTFIX-LAST-PRICE-ENFORCE] 운영 모니터링 보강: workingType 이상 이벤트 상세/주기 요약 로그 추가
 
+- [x] [HOTFIX-ENTRY-2021-LIMIT-FALLBACK] `-2021` 발생 경로 확정 및 ENTRY 파이프라인 폴백 설계 반영(기존 stop-family 유지, 실패 시 limit 재주문)
+- [x] [HOTFIX-ENTRY-2021-LIMIT-FALLBACK] 1차/2차 ENTRY 공통 `-2021` 감지 시 `LIMIT SELL @ 진입예정가` 1회 폴백 구현 + 로깅 추가
+- [x] [HOTFIX-ENTRY-2021-LIMIT-FALLBACK] 회귀 테스트 추가(`-2021` 후 limit 재주문 성공/실패) 및 검증 실행
+- [x] [HOTFIX-ENTRY-2021-LIMIT-FALLBACK] Review 기록(수정 파일/검증 결과/잔여 리스크)
+
+- [x] [HOTFIX-SECOND-ENTRY-RETRY] 1차 FILLED 이후 2차 진입 미제출 코드 경로 점검(`skip_latch`/후보 제거/게이트 분기)
+- [x] [HOTFIX-SECOND-ENTRY-RETRY] 2차 진입 실패 후 재등록 차단 제거(`skip_latch` 비차단화) + 재시도 로깅 추가
+- [x] [HOTFIX-SECOND-ENTRY-RETRY] 검증 실행(`py_compile` + orchestrator 관련 테스트) 및 Review 기록
+
 ## Review
+- HOTFIX-TRADE-3HIGHRISK-20260301 수정 파일: `trade_page.py`, `tests/test_stage15_trade_page_regression.py`, `tasks/todo.md`
+- 수정 1(active symbol stale): 포지션 없음 + active_symbol 미일치 + open_orders 존재 시 stale active를 그대로 반환하지 않고 open-order 심볼을 우선 반환하도록 보정(`trade_page.py`)
+- 수정 2(deferred starvation): trigger cycle 내에서 deferred 심볼은 임시 제외하고 다른 pending 후보를 계속 처리한 뒤, deferred 후보를 병합 복원하도록 보강(`trade_page.py`)
+- 수정 3(loser 취소 실패 잔류): winner 정책에서 loser entry 취소 실패 심볼을 retry set에 적재하고, fill-sync pass마다 entry 취소 재시도 루프를 수행해 잔류 주문 자동 정리(`trade_page.py`)
+- 상태정리 보강: leading/reset/position-zero/risk-reset/external-clear 경로에 retry set 정리 추가
+- 테스트 추가:
+- `test_resolve_active_symbol_snapshot_ignores_stale_active_when_open_orders_exist`
+- `test_trigger_cycle_deferred_symbol_allows_other_candidate_in_same_cycle`
+- `test_winner_policy_failed_loser_entry_cancel_registers_retry_symbol`
+- 검증: `python3 -m py_compile trade_page.py tests/test_stage15_trade_page_regression.py auto_trade/orchestrator.py auto_trade/execution_flow.py auto_trade/entry_pipeline.py` 통과
+- 회귀 테스트: `python3 -m unittest tests/test_stage10_entry_pipeline.py tests/test_stage11_execution_flow.py tests/test_stage13_orchestrator_integration.py tests/test_stage15_trade_page_regression.py` 통과(108 tests)
+- 잔여 리스크: loser entry 취소가 장시간 실패(지속 네트워크/권한 오류)하면 retry 로그가 증가할 수 있으나, 기존처럼 침묵 잔류되는 대신 명시 재시도로 전환됨
+- AUDIT-TRADE-DEFECT-SWEEP-20260301-2 점검 범위: `trade_page.py`, `auto_trade/orchestrator.py`, `auto_trade/execution_flow.py` (거래 경로 결함만 재감사)
+- High(해결됨: HOTFIX-TRADE-3HIGHRISK-20260301): active symbol stale 반환 보정 완료.
+- High(해결됨: HOTFIX-TRADE-3HIGHRISK-20260301): deferred 후보 starvation 완화(같은 사이클 타 후보 처리) 완료.
+- High(해결됨: HOTFIX-TRADE-3HIGHRISK-20260301): winner 정책 loser entry 취소 실패 재시도 큐 추가 완료.
+- 잔여 리스크 판단: 위 3건은 모두 "의도와 다른 주문 생존/처리 지연"으로 실거래 영향도가 높아 최소 범위 보강 패치 우선순위가 높음.
+- HARDEN-NONCONSUME-RETRY-20260301 수정 파일: `auto_trade/orchestrator.py`, `trade_page.py`, `tests/test_stage13_orchestrator_integration.py`, `tasks/todo.md`
+- 수정 1: pre-order setup 실패 중 `POSITION_MODE_UNKNOWN/SYMBOL_SETUP_*/LEVERAGE_SET_FAILED_*/MARGIN_TYPE_SET_FAILED_*` 사유는 후보를 소거하지 않고 `PRE_ORDER_SETUP_DEFERRED_*`로 보류
+- 수정 2: entry pipeline 실패 중 reason이 `_KEEP_STATE`이면 후보를 소거하지 않고 `TRIGGER_PIPELINE_DEFERRED_*`로 보류
+- 수정 3: deferred 결과는 같은 signal loop에서 반복 소모되지 않게 `trade_page` trigger loop에 즉시 break 가드 추가
+- 수정 4: 1차 fill sync fallback(`ENTRY_ORDER`)의 terminal `CANCELED` 확정 전에 account snapshot 건강성 체크를 추가해 조기 취소 인식 억제
+- 테스트 갱신: stage13 pre-order non-reset 실패 케이스를 `후보 보존 + deferred reason` 기대값으로 변경
+- 검증: `python3 -m py_compile auto_trade/orchestrator.py trade_page.py tests/test_stage13_orchestrator_integration.py tests/test_stage15_trade_page_regression.py` 통과
+- 회귀 테스트: `python3 -m unittest tests/test_stage10_entry_pipeline.py`(17), `tests/test_stage11_execution_flow.py`(23), `tests/test_stage13_orchestrator_integration.py`(29), `tests/test_stage15_trade_page_regression.py`(36) 모두 통과
+- 잔여 리스크: deferred 사유가 장시간 지속되면 동일 후보가 다음 루프마다 재시도되므로 로그 빈도는 증가할 수 있음(주문기회 유실 방지 우선의 의도된 트레이드오프)
+- AUDIT-MINIMAL-HIGHRISK-20260301 수정 파일: `trade_page.py`, `tasks/todo.md`
+- 수정 A: trigger cycle에서 `missing_filter_rules` 발생 시 pending 후보를 삭제하지 않고 유효 심볼만 계속 처리하도록 변경(일시적 exchange-info 누락으로 후보 유실 방지)
+- 수정 B: IDLE 리셋/winner 정리/risk reset 경로에서 `_tp_trigger_submit_guard_by_symbol`를 심볼 단위로 정리하도록 보강(다음 진입 TP 제출 guard 오차단 방지)
+- 수정 C: exit removed-order 조회가 일시 실패해 `FILLED` 확인이 불확실할 때, 이전 exit snapshot을 1회 이상 유지해 다음 루프에서 OCO fill 판별을 재시도하도록 보강
+- 로그 보강: `Trigger cycle continues with valid filter symbols only`, `OCO fill detection deferred for retry` 등 복구 경로 로그 추가
+- 검증: `python3 -m py_compile trade_page.py auto_trade/orchestrator.py auto_trade/execution_flow.py auto_trade/entry_pipeline.py tests/test_stage10_entry_pipeline.py tests/test_stage11_execution_flow.py tests/test_stage13_orchestrator_integration.py tests/test_stage15_trade_page_regression.py` 통과
+- 테스트: `python3 -m unittest tests/test_stage10_entry_pipeline.py`(17), `tests/test_stage11_execution_flow.py`(23), `tests/test_stage13_orchestrator_integration.py`(29), `tests/test_stage15_trade_page_regression.py`(36) 모두 통과
+- 잔여 리스크: 거래소 query 응답이 장시간 비정상인 경우 OCO fill 판별 재시도가 지속되어 로그가 증가할 수 있음(무방비보다 재시도 우선으로 의도된 트레이드오프)
+- HARDEN-MINIMAL-5RISK-20260301 수정 파일: `trade_page.py`, `tasks/todo.md`
+- 수정 1: pre-order setup 실패 시 `setup_reset=True`로 전체 pending 초기화하던 경로를 `False`로 변경해 실패 심볼 범위 처리로 제한
+- 수정 2: pre-order setup 재시도의 open-order 정리를 `cancel_all`이 아닌 `entry 주문 취소`로 제한해 TP/본절/MDD 보호주문 취소를 방지
+- 수정 3: 트리거 사이클에서 filter rule 누락 심볼만 pending에서 제거하고, 유효 심볼은 같은 사이클에서 계속 처리
+- 수정 4: 2차 상태 추론의 cached order ref 사용 시 `clientOrderId` 2차 prefix 검증을 추가해 1차 주문 참조 오판 차단
+- 수정 5: 외부 리셋 시 `_tp_trigger_submit_guard_by_symbol` 초기화 추가
+- 검증: `python3 -m py_compile trade_page.py auto_trade/orchestrator.py auto_trade/entry_pipeline.py tests/test_stage10_entry_pipeline.py tests/test_stage11_execution_flow.py tests/test_stage13_orchestrator_integration.py tests/test_stage15_trade_page_regression.py` 통과
+- 테스트: `python3 -m unittest tests/test_stage10_entry_pipeline.py`(17), `tests/test_stage11_execution_flow.py`(23), `tests/test_stage13_orchestrator_integration.py`(29), `tests/test_stage15_trade_page_regression.py`(36) 모두 통과
+- 잔여 리스크: filter rule 누락 심볼은 pending에서 제거되므로, 거래소 메타 지연/오타 심볼 신호는 자동 재시도 대신 신규 신호 재유입이 필요함
+- HARDEN-PHASE-GUARD-20260301 수정 파일: `trade_page.py`, `tasks/todo.md`
+- 핵심 변경 1: `ENTRY_ORDER/PHASE* -> IDLE` fallback reset을 `연속 3회 + 8초` 확인 충족 시점에만 확정하고, 가드/스냅샷 미충족 시 확인 카운터를 즉시 초기화
+- 핵심 변경 2: PHASE2에서 `split TP guard`로 split 제출을 스킵해도 보호주문 정책은 계속 진행되도록 변경, `2차 미완체결 구간`은 본절 STOP 유지/보강, `2차 완체결 구간`은 MDD 실패 시 본절 STOP 폴백으로 무방비 구간 차단
+- 핵심 변경 3: 2차 상태 fallback을 즉시 `CANCELED` 확정하지 않고 `연속 3회 + 8초` 확인 후 확정하도록 보수화(조회 성공/실체결 증거 시 확인 카운터 즉시 해제)
+- 안정성 보강: 외부 리셋/포지션제로 리셋/승자정책 정리 경로에 confirmation tracker 클리어 추가, 자격증명 미초기화 환경에서 `_fetch_position_mode`/`_fetch_multi_assets_margin_mode`가 `AttributeError` 없이 안전하게 `UNKNOWN`/`api_credentials_missing` 반환
+- 검증: `python3 -m py_compile trade_page.py tests/test_stage15_trade_page_regression.py` 통과
+- 테스트: `python3 -m unittest tests/test_stage11_execution_flow.py` 통과(23 tests), `python3 -m unittest tests/test_stage13_orchestrator_integration.py` 통과(29 tests), `python3 -m unittest tests/test_stage15_trade_page_regression.py` 통과(36 tests)
+- 잔여 리스크: 보수적 확정 정책으로 인해 실제 주문/포지션이 사라진 뒤 IDLE 복귀와 2차 CANCELED 확정이 최대 약 8초 지연될 수 있음(의도된 안전지연)
+- HOTFIX-MDD-EFFECTIVE-20 수정 파일: `trade_page.py`, `tests/test_stage15_trade_page_regression.py`, `tasks/todo.md`
+- 핵심 변경: 화면/저장 MDD 값(`15%`)은 그대로 두고, 실제 MDD 스탑 계산/정렬 기준은 `20%` 고정(`MDD_STOP_EFFECTIVE_RATIO`)으로 통일
+- 로깅 변경: `MDD stop ratio override active`, `MDD stop price prepared`, `Phase2 MDD stop evaluated` 로그에 유효 비율을 명시
+- 검증: `python3 -m py_compile trade_page.py tests/test_stage15_trade_page_regression.py` 통과
+- 테스트: `python3 -m unittest tests/test_stage15_trade_page_regression.py` 통과(36 tests)
+- 잔여 리스크: 기존 15% 기준으로 고정해 둔 외부/수동 점검 시나리오가 있으면 기대 스탑값이 달라질 수 있어, 운영 체크리스트 기준값을 20%로 갱신해야 함
 - HOTFIX-MDD-SECOND 수정 파일: `auto_trade/orchestrator.py`
 - 핵심 변경: `sync_entry_fill_flow()`에서 `SECOND_ENTRY/PARTIALLY_FILLED`를 terminal로 보지 않고 `second_entry_order_pending=True` 유지
 - 기대 효과: PARTIAL 이후 다음 루프에서 FILLED 재동기화가 수행되어 `SECOND_ENTRY_FILLED_PHASE2_CONFIRM` 경로 및 MDD 제출 트리거가 복구됨
@@ -94,3 +220,31 @@
 - `LTS V2.1.5.exe` = `d5533cecdb85394f23a2fe8e46a3377ea0086d75d5132238f84d78dc2f7f360c`
 - `LTS-Updater.exe` = `32cae164cd0a223340b173bc171e1a7d05c58b87b94e43e4e4faa3b6a305399f`
 - 자동업데이트 메타 점검: `min_version=2.1.5`, `app_url=LTS%20V2.1.5.exe`, `app_sha256/updater_sha256` 모두 신규 산출물과 일치
+- HOTFIX-ENTRY-2021-LIMIT-FALLBACK 수정 파일: `auto_trade/entry_pipeline.py`, `tests/test_stage10_entry_pipeline.py`, `tasks/todo.md`
+- 핵심 변경: ENTRY stop-family 주문이 `-2021 (immediate trigger)`로 거절되면 동일 진입예정가 기준 `LIMIT SELL`을 즉시 1회 폴백 제출(1차/2차 공통)
+- 로깅 변경: `entry_pipeline`에 `fallback_entry_limit_on_immediate_trigger_reject` 이벤트 추가(감지/폴백결과 분리)
+- 검증: `python3 -m py_compile auto_trade/entry_pipeline.py tests/test_stage10_entry_pipeline.py` 통과
+- 테스트: `python3 -m unittest tests/test_stage10_entry_pipeline.py` 통과(17 tests)
+- 추가 테스트: `python3 -m unittest tests/test_stage13_orchestrator_integration.py` 통과(29 tests)
+- 잔여 리스크: LIMIT 폴백은 미끄러짐을 줄이는 대신 급반전 구간에서 미체결 확률이 증가할 수 있음(의도된 정책 트레이드오프)
+- HOTFIX-SECOND-ENTRY-RETRY 수정 파일: `trade_page.py`, `tests/test_stage15_trade_page_regression.py`, `tasks/todo.md`
+- 핵심 변경: 2차 진입 실패/취소 상태에서 `skip_latch`를 add하지 않도록 변경해 PHASE1 루프에서 2차 트리거 재등록이 계속 가능하도록 조정
+- 로깅 변경: 2차 제출 실패/동기화 취소 상태에서 `retry remains enabled` 성격의 명시 로그 추가
+- 검증: `python3 -m py_compile trade_page.py tests/test_stage15_trade_page_regression.py` 통과
+- 테스트: `python3 -m unittest tests/test_stage15_trade_page_regression.py` 통과(36 tests)
+- 추가 테스트: `python3 -m unittest tests/test_stage10_entry_pipeline.py` 통과(17 tests), `python3 -m unittest tests/test_stage13_orchestrator_integration.py` 통과(29 tests)
+- 잔여 리스크: 증거금 부족/필터 불충족 같은 비일시적 실패에서도 재시도는 계속되므로, 동일 실패가 지속될 때 로그 빈도와 API 호출량 모니터링이 필요함
+- RELEASE-2.1.6 수정 파일: `config.py`, `version.json`, `tasks/todo.md`
+- 빌드: `.venv/Scripts/python.exe build.py --target all` 실행 완료(`dist/LTS V2.1.6.exe`, `dist/LTS-Updater.exe`)
+- 배포 파일 반영: `dist` 산출물을 루트 `LTS V2.1.6.exe`, `LTS-Updater.exe`로 복사
+- SHA256:
+- `LTS V2.1.6.exe` = `d776ea6dd444907bb95b10c00035cb86234991fb2a607857e9bd1614477988bd`
+- `LTS-Updater.exe` = `33a95c0856f0c49964ccf663ee0a15b4862ef69a5b3a5d66e149a6b3a32aca4e`
+- 자동업데이트 메타 점검: `min_version=2.1.6`, `app_url=LTS%20V2.1.6.exe`, `app_sha256/updater_sha256` 모두 신규 산출물과 일치
+- RELEASE-2.1.7 수정 파일: `config.py`, `version.json`, `tasks/todo.md`
+- 빌드: `.venv/Scripts/python.exe build.py --target all` 실행 완료(`dist/LTS V2.1.7.exe`, `dist/LTS-Updater.exe`)
+- 배포 파일 반영: `dist` 산출물을 루트 `LTS V2.1.7.exe`, `LTS-Updater.exe`로 복사
+- SHA256:
+- `LTS V2.1.7.exe` = `4ca655fd842fc1c1cd76aba208fe417ccdf763459f06e615fc7e47de0cf7eeb2`
+- `LTS-Updater.exe` = `8f4a74c49b448c46adb689bc06d393d8c5cda4a10ae752b89d4f7c6f638521e3`
+- 자동업데이트 메타 점검: `min_version=2.1.7`, `app_url=LTS%20V2.1.7.exe`, `app_sha256/updater_sha256` 모두 신규 산출물과 일치

@@ -475,7 +475,7 @@ class OrchestratorIntegrationTests(unittest.TestCase):
         self.assertIsNone(updated.active_symbol)
         self.assertEqual(updated.pending_trigger_candidates, {})
 
-    def test_trigger_cycle_pre_order_setup_failure_non_reset_reassigns_active_symbol(self) -> None:
+    def test_trigger_cycle_pre_order_setup_failure_non_reset_defers_and_preserves_candidates(self) -> None:
         runtime = AutoTradeRuntime(
             settings=_default_settings(),
             signal_loop_paused=False,
@@ -535,13 +535,14 @@ class OrchestratorIntegrationTests(unittest.TestCase):
         )
         self.assertTrue(result.attempted)
         self.assertFalse(result.success)
+        self.assertTrue(result.reason_code.startswith("PRE_ORDER_SETUP_DEFERRED_"))
         self.assertEqual(result.selected_symbol, "ETHUSDT")
         self.assertEqual(updated.symbol_state, "MONITORING")
-        self.assertEqual(updated.active_symbol, "BTCUSDT")
-        self.assertEqual(set(updated.pending_trigger_candidates.keys()), {"BTCUSDT"})
+        self.assertEqual(updated.active_symbol, "ETHUSDT")
+        self.assertEqual(set(updated.pending_trigger_candidates.keys()), {"BTCUSDT", "ETHUSDT"})
         self.assertTrue(updated.second_entry_order_pending)
 
-    def test_trigger_cycle_pre_order_setup_failure_non_reset_sets_idle_when_pending_empty(self) -> None:
+    def test_trigger_cycle_pre_order_setup_failure_non_reset_preserves_single_candidate(self) -> None:
         runtime = AutoTradeRuntime(
             settings=_default_settings(),
             signal_loop_paused=False,
@@ -588,10 +589,11 @@ class OrchestratorIntegrationTests(unittest.TestCase):
         )
         self.assertTrue(result.attempted)
         self.assertFalse(result.success)
-        self.assertEqual(updated.symbol_state, "IDLE")
-        self.assertIsNone(updated.active_symbol)
-        self.assertEqual(updated.pending_trigger_candidates, {})
-        self.assertFalse(updated.second_entry_order_pending)
+        self.assertTrue(result.reason_code.startswith("PRE_ORDER_SETUP_DEFERRED_"))
+        self.assertEqual(updated.symbol_state, "MONITORING")
+        self.assertEqual(updated.active_symbol, "BTCUSDT")
+        self.assertEqual(set(updated.pending_trigger_candidates.keys()), {"BTCUSDT"})
+        self.assertTrue(updated.second_entry_order_pending)
 
     def test_recovery_lock_blocks_leading_signal_handling(self) -> None:
         runtime = AutoTradeRuntime(

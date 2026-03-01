@@ -129,6 +129,72 @@ class FirstEntryPipelineTests(unittest.TestCase):
         self.assertEqual(result.current_state, "IDLE")
         self.assertEqual(result.reason_code, "FIRST_ENTRY_INSUFFICIENT_MARGIN_RESET")
 
+    def test_first_entry_immediate_trigger_reject_falls_back_to_limit(self) -> None:
+        calls: list[dict] = []
+
+        def fake_create(params: dict) -> GatewayCallResult:
+            calls.append(dict(params))
+            if len(calls) == 1:
+                return GatewayCallResult(
+                    ok=False,
+                    reason_code="EXCHANGE_REJECTED",
+                    error_code=-2021,
+                    error_message="Order would immediately trigger.",
+                )
+            return GatewayCallResult(ok=True, reason_code="OK", payload={"orderId": 13})
+
+        result = run_first_entry_pipeline(
+            current_state="MONITORING",
+            symbol="BTCUSDT",
+            target_price=100.0,
+            wallet_balance_usdt=100.0,
+            filter_rules=self.filters,
+            position_mode="ONE_WAY",
+            create_call=fake_create,
+            retry_policy=RetryPolicy(max_attempts=1, retryable_reason_codes=()),
+            new_client_order_id="first-fallback-1",
+        )
+        self.assertTrue(result.success)
+        self.assertEqual(result.reason_code, "FIRST_ENTRY_SUBMITTED_AFTER_IMMEDIATE_TRIGGER_LIMIT_FALLBACK")
+        self.assertEqual(result.gateway_attempts, 2)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0].get("type"), "TAKE_PROFIT")
+        self.assertEqual(calls[1].get("type"), "LIMIT")
+        self.assertEqual(calls[1].get("price"), 100.0)
+        self.assertNotIn("stopPrice", calls[1])
+
+    def test_first_entry_limit_fallback_failure_resets(self) -> None:
+        calls: list[dict] = []
+
+        def fake_create(params: dict) -> GatewayCallResult:
+            calls.append(dict(params))
+            if len(calls) == 1:
+                return GatewayCallResult(
+                    ok=False,
+                    reason_code="EXCHANGE_REJECTED",
+                    error_code=-2021,
+                    error_message="Order would immediately trigger.",
+                )
+            return GatewayCallResult(ok=False, reason_code="INVALID_SIGNATURE")
+
+        result = run_first_entry_pipeline(
+            current_state="MONITORING",
+            symbol="BTCUSDT",
+            target_price=100.0,
+            wallet_balance_usdt=100.0,
+            filter_rules=self.filters,
+            position_mode="ONE_WAY",
+            create_call=fake_create,
+            retry_policy=RetryPolicy(max_attempts=1, retryable_reason_codes=()),
+            new_client_order_id="first-fallback-fail-1",
+        )
+        self.assertFalse(result.success)
+        self.assertEqual(result.reason_code, "FIRST_ENTRY_CREATE_FAILED_RESET")
+        self.assertEqual(result.failure_reason, "INVALID_SIGNATURE")
+        self.assertEqual(result.gateway_attempts, 2)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[1].get("type"), "LIMIT")
+
 
 class SecondEntryPipelineTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -265,6 +331,42 @@ class SecondEntryPipelineTests(unittest.TestCase):
         self.assertEqual(result.action, "SECOND_ENTRY_SKIPPED_KEEP_STATE")
         self.assertEqual(result.current_state, "PHASE1")
         self.assertEqual(result.reason_code, "SECOND_ENTRY_MARGIN_REFRESH_RETRY_FAILED_KEEP_STATE")
+
+    def test_second_entry_immediate_trigger_reject_falls_back_to_limit(self) -> None:
+        calls: list[dict] = []
+
+        def fake_create(params: dict) -> GatewayCallResult:
+            calls.append(dict(params))
+            if len(calls) == 1:
+                return GatewayCallResult(
+                    ok=False,
+                    reason_code="EXCHANGE_REJECTED",
+                    error_code=-2021,
+                    error_message="Order would immediately trigger.",
+                )
+            return GatewayCallResult(ok=True, reason_code="OK", payload={"orderId": 14})
+
+        result = run_second_entry_pipeline(
+            current_state="PHASE1",
+            symbol="BTCUSDT",
+            second_target_price=110.0,
+            available_usdt=200.0,
+            margin_buffer_pct=0.01,
+            filter_rules=self.filters,
+            position_mode="ONE_WAY",
+            create_call=fake_create,
+            retry_policy=RetryPolicy(max_attempts=1, retryable_reason_codes=()),
+            new_client_order_id="second-fallback-1",
+        )
+        self.assertTrue(result.success)
+        self.assertEqual(result.current_state, "PHASE1")
+        self.assertEqual(result.reason_code, "SECOND_ENTRY_SUBMITTED_AFTER_IMMEDIATE_TRIGGER_LIMIT_FALLBACK")
+        self.assertEqual(result.gateway_attempts, 2)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0].get("type"), "TAKE_PROFIT")
+        self.assertEqual(calls[1].get("type"), "LIMIT")
+        self.assertEqual(calls[1].get("price"), 110.0)
+        self.assertNotIn("stopPrice", calls[1])
 
 
 class Stage10LoggingTests(unittest.TestCase):

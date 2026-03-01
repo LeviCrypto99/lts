@@ -130,6 +130,10 @@ STOP_FAMILY_EXPECTED_WORKING_TYPE = "CONTRACT_PRICE"
 WORKING_TYPE_MONITOR_LOG_THROTTLE_SEC = 30.0
 WORKING_TYPE_MONITOR_SUMMARY_INTERVAL_SEC = 60.0
 ENTRY_CANCEL_SYNC_GUARD_SEC = 3.0
+FILL_SYNC_FALLBACK_RESET_CONFIRM_REQUIRED_SNAPSHOTS = 3
+FILL_SYNC_FALLBACK_RESET_CONFIRM_MIN_SEC = 8.0
+SECOND_ENTRY_TERMINAL_CONFIRM_REQUIRED_SNAPSHOTS = 3
+SECOND_ENTRY_TERMINAL_CONFIRM_MIN_SEC = 8.0
 EXCHANGE_INFO_CACHE_TTL_SEC = 60
 ACCOUNT_SNAPSHOT_CACHE_TTL_SEC = 0.9
 ACCOUNT_SNAPSHOT_STALE_FALLBACK_SEC = 30
@@ -314,6 +318,8 @@ DEFAULT_MDD = "15%"
 DEFAULT_TP_RATIO = "5%"
 DEFAULT_RISK_FILTER = "보수적"
 TP_RATIO_OPTIONS = ["0.5%", "3%", "5%"]
+# UI 표시 MDD와 별개로 실제 MDD stop 계산은 고정 20%를 사용한다.
+MDD_STOP_EFFECTIVE_RATIO = 0.20
 
 
 def _hex_to_rgba(value: str, alpha: int) -> Tuple[int, int, int, int]:
@@ -589,10 +595,15 @@ class TradePage(tk.Frame):
         self._oco_last_filled_exit_order_by_symbol: dict[str, int] = {}
         self._last_open_exit_order_ids_by_symbol: dict[str, set[int]] = {}
         self._pending_oco_retry_symbols: set[str] = set()
+        self._pending_entry_cancel_retry_symbols: set[str] = set()
         self._entry_order_ref_by_symbol: dict[str, int] = {}
         self._entry_cancel_sync_guard_until_by_symbol: dict[str, float] = {}
+        self._fill_sync_reset_confirm_streak_by_symbol: dict[str, int] = {}
+        self._fill_sync_reset_first_seen_at_by_symbol: dict[str, float] = {}
         self._second_entry_skip_latch: set[str] = set()
         self._second_entry_fully_filled_symbols: set[str] = set()
+        self._second_entry_terminal_confirm_streak_by_symbol: dict[str, int] = {}
+        self._second_entry_terminal_first_seen_at_by_symbol: dict[str, float] = {}
         self._phase1_tp_filled_symbols: set[str] = set()
         self._tp_trigger_submit_guard_by_symbol: dict[str, dict[str, object]] = {}
         self._last_position_qty_by_symbol: dict[str, float] = {}
@@ -605,6 +616,7 @@ class TradePage(tk.Frame):
         self._auth_error_popup_last_at = 0.0
         self._auth_error_popup_open = False
         self._last_dust_symbols: set[str] = set()
+        self._mdd_stop_ratio_override_logged = False
 
         exit_manager = getattr(self.root, "_exit_manager", None)
         if exit_manager is not None:
@@ -1329,6 +1341,20 @@ class TradePage(tk.Frame):
         if parsed <= 0:
             return float(default_ratio)
         return float(parsed)
+
+    def _resolve_effective_mdd_stop_ratio(self) -> float:
+        settings = self._saved_filter_settings or self._default_filter_settings()
+        ui_mdd_raw = settings.get("mdd")
+        ui_mdd_ratio = self._parse_percent_text(ui_mdd_raw, 0.15)
+        effective_ratio = float(MDD_STOP_EFFECTIVE_RATIO)
+        if not bool(getattr(self, "_mdd_stop_ratio_override_logged", False)):
+            _log_trade(
+                "MDD stop ratio override active: "
+                f"ui_mdd={ui_mdd_raw} ui_ratio={ui_mdd_ratio:.6f} "
+                f"effective_ratio={effective_ratio:.6f}"
+            )
+            self._mdd_stop_ratio_override_logged = True
+        return effective_ratio
 
     @staticmethod
     def _format_order_price(value: float) -> str:
@@ -3731,6 +3757,7 @@ class TradePage(tk.Frame):
                 self._second_entry_skip_latch.discard(symbol)
                 self._second_entry_fully_filled_symbols.discard(symbol)
                 self._phase1_tp_filled_symbols.discard(symbol)
+                self._pending_entry_cancel_retry_symbols.discard(symbol)
                 self._entry_order_ref_by_symbol.pop(symbol, None)
                 self._clear_entry_cancel_sync_guard(symbol)
                 self._last_open_exit_order_ids_by_symbol.pop(symbol, None)
@@ -3781,7 +3808,14 @@ class TradePage(tk.Frame):
         if len(filter_rules) != len(symbols):
             missing = sorted(set(symbols) - set(filter_rules))
             _log_trade(f"Trigger cycle skipped: missing_filter_rules={','.join(missing)}")
-            return
+            symbols = sorted(str(key).strip().upper() for key in filter_rules.keys() if str(key).strip())
+            if not symbols:
+                _log_trade("Trigger cycle deferred: no_valid_filter_rules_for_pending_candidates")
+                return
+            _log_trade(
+                "Trigger cycle continues with valid filter symbols only: "
+                f"valid_symbols={','.join(symbols)} ignored_symbols={','.join(missing) or '-'}"
+            )
         now = int(time.time())
         runtime_with_price = runtime
         mark_prices: dict[str, float] = {}
@@ -3838,6 +3872,7 @@ class TradePage(tk.Frame):
         failed_count = 0
         last_result = None
         max_iterations = max(1, len(symbols) + 2)
+        deferred_symbols_in_cycle: set[str] = set()
 
         def _run_single_cycle(inner_runtime, *, mode_unknown: bool):
             return run_trigger_entry_cycle(
@@ -3869,7 +3904,28 @@ class TradePage(tk.Frame):
         for _ in range(max_iterations):
             if not current_runtime.pending_trigger_candidates:
                 break
-            updated, result = _run_single_cycle(current_runtime, mode_unknown=mode_unknown)
+            runtime_for_cycle = current_runtime
+            deferred_candidates_for_merge: dict[str, TriggerCandidate] = {}
+            if deferred_symbols_in_cycle:
+                filtered_pending: dict[str, TriggerCandidate] = {}
+                for key, value in current_runtime.pending_trigger_candidates.items():
+                    normalized_key = str(key).strip().upper()
+                    if normalized_key in deferred_symbols_in_cycle:
+                        deferred_candidates_for_merge[normalized_key] = value
+                        continue
+                    filtered_pending[key] = value
+                if not filtered_pending:
+                    break
+                runtime_for_cycle = replace(current_runtime, pending_trigger_candidates=filtered_pending)
+
+            updated, result = _run_single_cycle(runtime_for_cycle, mode_unknown=mode_unknown)
+            if deferred_candidates_for_merge:
+                merged_pending = dict(updated.pending_trigger_candidates)
+                merged_symbols = {str(key).strip().upper() for key in merged_pending.keys()}
+                for symbol_key, candidate in deferred_candidates_for_merge.items():
+                    if symbol_key not in merged_symbols:
+                        merged_pending[symbol_key] = candidate
+                updated = replace(updated, pending_trigger_candidates=merged_pending)
             current_runtime = updated
             last_result = result
             if not result.attempted:
@@ -3879,6 +3935,21 @@ class TradePage(tk.Frame):
                 success_count += 1
             else:
                 failed_count += 1
+            if (
+                not result.success
+                and (
+                    str(result.reason_code or "").strip().upper().startswith("TRIGGER_PIPELINE_DEFERRED_")
+                    or str(result.reason_code or "").strip().upper().startswith("PRE_ORDER_SETUP_DEFERRED_")
+                )
+            ):
+                selected_symbol = str(result.selected_symbol or "").strip().upper()
+                if selected_symbol:
+                    deferred_symbols_in_cycle.add(selected_symbol)
+                _log_trade(
+                    "Trigger cycle deferred after retryable failure; "
+                    "candidate preserved while processing other pending candidates."
+                )
+                continue
             if (
                 result.success
                 and result.selected_symbol
@@ -3894,9 +3965,9 @@ class TradePage(tk.Frame):
                 if result.success:
                     self._second_entry_skip_latch.discard(symbol)
                 else:
-                    self._second_entry_skip_latch.add(symbol)
+                    self._second_entry_skip_latch.discard(symbol)
                     _log_trade(
-                        "Second-entry trigger skipped and latched: "
+                        "Second-entry trigger submit failed but retry remains enabled: "
                         f"symbol={symbol} pipeline_reason={result.pipeline_reason_code}"
                     )
 
@@ -3968,6 +4039,88 @@ class TradePage(tk.Frame):
             store.pop(target, None)
             return 0.0
         return float(remaining)
+
+    def _fill_sync_reset_confirm_streak_store(self) -> dict[str, int]:
+        store = getattr(self, "_fill_sync_reset_confirm_streak_by_symbol", None)
+        if isinstance(store, dict):
+            return store
+        store = {}
+        setattr(self, "_fill_sync_reset_confirm_streak_by_symbol", store)
+        return store
+
+    def _fill_sync_reset_first_seen_store(self) -> dict[str, float]:
+        store = getattr(self, "_fill_sync_reset_first_seen_at_by_symbol", None)
+        if isinstance(store, dict):
+            return store
+        store = {}
+        setattr(self, "_fill_sync_reset_first_seen_at_by_symbol", store)
+        return store
+
+    def _clear_fill_sync_fallback_reset_confirmation(self, symbol: str) -> None:
+        target = str(symbol or "").strip().upper()
+        if not target:
+            return
+        self._fill_sync_reset_confirm_streak_store().pop(target, None)
+        self._fill_sync_reset_first_seen_store().pop(target, None)
+
+    def _record_fill_sync_fallback_reset_confirmation(self, symbol: str) -> tuple[int, float]:
+        target = str(symbol or "").strip().upper()
+        if not target:
+            return 0, 0.0
+        now = time.time()
+        streak_store = self._fill_sync_reset_confirm_streak_store()
+        first_seen_store = self._fill_sync_reset_first_seen_store()
+        first_seen = float(first_seen_store.get(target, 0.0))
+        if first_seen <= 0.0:
+            first_seen = float(now)
+            first_seen_store[target] = first_seen
+            streak = 1
+        else:
+            streak = int(streak_store.get(target, 0)) + 1
+        streak_store[target] = int(streak)
+        elapsed = max(0.0, float(now - first_seen))
+        return int(streak), float(elapsed)
+
+    def _second_entry_terminal_confirm_streak_store(self) -> dict[str, int]:
+        store = getattr(self, "_second_entry_terminal_confirm_streak_by_symbol", None)
+        if isinstance(store, dict):
+            return store
+        store = {}
+        setattr(self, "_second_entry_terminal_confirm_streak_by_symbol", store)
+        return store
+
+    def _second_entry_terminal_first_seen_store(self) -> dict[str, float]:
+        store = getattr(self, "_second_entry_terminal_first_seen_at_by_symbol", None)
+        if isinstance(store, dict):
+            return store
+        store = {}
+        setattr(self, "_second_entry_terminal_first_seen_at_by_symbol", store)
+        return store
+
+    def _clear_second_entry_terminal_confirmation(self, symbol: str) -> None:
+        target = str(symbol or "").strip().upper()
+        if not target:
+            return
+        self._second_entry_terminal_confirm_streak_store().pop(target, None)
+        self._second_entry_terminal_first_seen_store().pop(target, None)
+
+    def _record_second_entry_terminal_confirmation(self, symbol: str) -> tuple[int, float]:
+        target = str(symbol or "").strip().upper()
+        if not target:
+            return 0, 0.0
+        now = time.time()
+        streak_store = self._second_entry_terminal_confirm_streak_store()
+        first_seen_store = self._second_entry_terminal_first_seen_store()
+        first_seen = float(first_seen_store.get(target, 0.0))
+        if first_seen <= 0.0:
+            first_seen = float(now)
+            first_seen_store[target] = first_seen
+            streak = 1
+        else:
+            streak = int(streak_store.get(target, 0)) + 1
+        streak_store[target] = int(streak)
+        elapsed = max(0.0, float(now - first_seen))
+        return int(streak), float(elapsed)
 
     def _has_open_entry_order_for_symbol(self, symbol: str) -> bool:
         target = str(symbol or "").strip().upper()
@@ -4147,6 +4300,11 @@ class TradePage(tk.Frame):
             open_orders=open_orders,
             loop_label=f"{loop_label}-oco-retry",
         )
+        current, open_orders = self._retry_pending_entry_cancellations(
+            current,
+            open_orders=open_orders,
+            loop_label=f"{loop_label}-entry-retry",
+        )
         account_transition = update_account_activity_with_logging(
             current.global_state,
             has_any_position=bool(positions),
@@ -4213,44 +4371,68 @@ class TradePage(tk.Frame):
 
             has_position = self._get_symbol_position(positions, active_symbol) is not None
             entry_orders, exit_orders = self._classify_orders_for_symbol(active_symbol, open_orders)
-            if (
+            fallback_reset_candidate = bool(
                 current.symbol_state in ("ENTRY_ORDER", "PHASE1", "PHASE2")
                 and not has_position
                 and not entry_orders
                 and not exit_orders
-            ):
+            )
+            if fallback_reset_candidate:
                 guard_remaining = self._entry_cancel_sync_guard_remaining(active_symbol)
                 if current.symbol_state == "ENTRY_ORDER" and guard_remaining > 0.0:
+                    self._clear_fill_sync_fallback_reset_confirmation(active_symbol)
                     _log_trade(
                         "Fill sync fallback reset deferred: "
                         f"symbol={active_symbol} state={current.symbol_state} "
-                        f"reason=entry_cancel_sync_guard remaining_sec={guard_remaining:.2f}"
+                        f"reason=entry_cancel_sync_guard remaining_sec={guard_remaining:.2f} loop={loop_label}"
                     )
                 elif not self._has_recent_account_snapshot():
+                    self._clear_fill_sync_fallback_reset_confirmation(active_symbol)
                     _log_trade(
                         "Fill sync fallback reset deferred: "
                         f"symbol={active_symbol} state={current.symbol_state} "
-                        "reason=account_snapshot_unavailable"
+                        f"reason=account_snapshot_unavailable loop={loop_label}"
                     )
                 else:
-                    _log_trade(
-                        "Fill sync fallback reset: "
-                        f"symbol={active_symbol} state={current.symbol_state} reason=no_position_no_orders"
+                    confirm_streak, confirm_elapsed = self._record_fill_sync_fallback_reset_confirmation(
+                        active_symbol
                     )
-                    current = replace(
-                        current,
-                        symbol_state="IDLE",
-                        active_symbol=None,
-                        pending_trigger_candidates={},
-                        second_entry_order_pending=False,
-                    )
-                    self._entry_order_ref_by_symbol.pop(active_symbol, None)
-                    self._clear_entry_cancel_sync_guard(active_symbol)
-                    self._second_entry_skip_latch.discard(active_symbol)
-                    self._second_entry_fully_filled_symbols.discard(active_symbol)
-                    self._phase1_tp_filled_symbols.discard(active_symbol)
-                    self._last_open_exit_order_ids_by_symbol.pop(active_symbol, None)
-                    self._oco_last_filled_exit_order_by_symbol.pop(active_symbol, None)
+                    required_snapshots = int(FILL_SYNC_FALLBACK_RESET_CONFIRM_REQUIRED_SNAPSHOTS)
+                    required_elapsed_sec = float(FILL_SYNC_FALLBACK_RESET_CONFIRM_MIN_SEC)
+                    if confirm_streak < required_snapshots or confirm_elapsed < required_elapsed_sec:
+                        _log_trade(
+                            "Fill sync fallback reset pending confirmation: "
+                            f"symbol={active_symbol} state={current.symbol_state} reason=no_position_no_orders "
+                            f"streak={confirm_streak}/{required_snapshots} "
+                            f"elapsed_sec={confirm_elapsed:.2f}/{required_elapsed_sec:.2f} loop={loop_label}"
+                        )
+                    else:
+                        _log_trade(
+                            "Fill sync fallback reset confirmed: "
+                            f"symbol={active_symbol} state={current.symbol_state} reason=no_position_no_orders "
+                            f"streak={confirm_streak}/{required_snapshots} "
+                            f"elapsed_sec={confirm_elapsed:.2f}/{required_elapsed_sec:.2f} loop={loop_label}"
+                        )
+                        current = replace(
+                            current,
+                            symbol_state="IDLE",
+                            active_symbol=None,
+                            pending_trigger_candidates={},
+                            second_entry_order_pending=False,
+                        )
+                        self._clear_fill_sync_fallback_reset_confirmation(active_symbol)
+                        self._clear_second_entry_terminal_confirmation(active_symbol)
+                        self._entry_order_ref_by_symbol.pop(active_symbol, None)
+                        self._clear_entry_cancel_sync_guard(active_symbol)
+                        self._second_entry_skip_latch.discard(active_symbol)
+                        self._second_entry_fully_filled_symbols.discard(active_symbol)
+                        self._phase1_tp_filled_symbols.discard(active_symbol)
+                        self._pending_entry_cancel_retry_symbols.discard(active_symbol)
+                        self._tp_trigger_submit_guard_by_symbol.pop(active_symbol, None)
+                        self._last_open_exit_order_ids_by_symbol.pop(active_symbol, None)
+                        self._oco_last_filled_exit_order_by_symbol.pop(active_symbol, None)
+            else:
+                self._clear_fill_sync_fallback_reset_confirmation(active_symbol)
 
         if current != runtime:
             with self._auto_trade_runtime_lock:
@@ -4312,6 +4494,58 @@ class TradePage(tk.Frame):
             current = replace(current, new_orders_locked=False)
             _log_trade(f"OCO retry lock released: loop={loop_label}")
         return current, open_orders
+
+    def _retry_pending_entry_cancellations(
+        self,
+        runtime: AutoTradeRuntime,
+        *,
+        open_orders: list[dict],
+        loop_label: str,
+    ) -> tuple[AutoTradeRuntime, list[dict]]:
+        if not self._pending_entry_cancel_retry_symbols:
+            return runtime, open_orders
+
+        refreshed_open_orders = open_orders
+        attempted_any_cancel = False
+        for symbol in sorted(self._pending_entry_cancel_retry_symbols):
+            entry_orders, _ = self._classify_orders_for_symbol(symbol, refreshed_open_orders)
+            if not entry_orders:
+                self._pending_entry_cancel_retry_symbols.discard(symbol)
+                _log_trade(
+                    "Entry cancel retry symbol cleared: "
+                    f"symbol={symbol} reason=no_remaining_entry_orders loop={loop_label}"
+                )
+                continue
+
+            cancel_result = self._cancel_entry_orders_for_symbol(
+                symbol=symbol,
+                open_orders=refreshed_open_orders,
+                loop_label=f"{loop_label}-{symbol}",
+            )
+            attempted_count = int(cancel_result.get("attempted_count") or 0)
+            failed_order_ids = [
+                int(value)
+                for value in (cancel_result.get("failed_order_ids") or [])
+                if int(value) > 0
+            ]
+            if attempted_count > 0:
+                attempted_any_cancel = True
+            if failed_order_ids:
+                _log_trade(
+                    "Entry cancel retry pending: "
+                    f"symbol={symbol} failed_order_ids={','.join(str(value) for value in failed_order_ids)} "
+                    f"loop={loop_label}"
+                )
+                continue
+            self._pending_entry_cancel_retry_symbols.discard(symbol)
+            _log_trade(
+                "Entry cancel retry completed: "
+                f"symbol={symbol} attempted={attempted_count} loop={loop_label}"
+            )
+
+        if attempted_any_cancel:
+            refreshed_open_orders = self._fetch_open_orders() or refreshed_open_orders
+        return runtime, refreshed_open_orders
 
     def _handle_position_quantity_reconciliation(
         self,
@@ -4398,12 +4632,15 @@ class TradePage(tk.Frame):
             refreshed_positions = self._fetch_open_positions() or []
             self._entry_order_ref_by_symbol.pop(target, None)
             self._clear_entry_cancel_sync_guard(target)
+            self._clear_fill_sync_fallback_reset_confirmation(target)
+            self._clear_second_entry_terminal_confirmation(target)
             self._second_entry_skip_latch.discard(target)
             self._second_entry_fully_filled_symbols.discard(target)
             self._phase1_tp_filled_symbols.discard(target)
             self._last_open_exit_order_ids_by_symbol.pop(target, None)
             self._oco_last_filled_exit_order_by_symbol.pop(target, None)
             self._pending_oco_retry_symbols.discard(target)
+            self._pending_entry_cancel_retry_symbols.discard(target)
             self._last_position_qty_by_symbol.pop(target, None)
             self._last_position_entry_price_by_symbol.pop(target, None)
             self._tp_trigger_submit_guard_by_symbol.pop(target, None)
@@ -4604,7 +4841,8 @@ class TradePage(tk.Frame):
             for row in open_orders:
                 if str(row.get("symbol") or "").strip().upper() == active_symbol:
                     return active_symbol
-            return active_symbol
+            if not open_orders:
+                return active_symbol
         for row in open_orders:
             symbol = str(row.get("symbol") or "").strip().upper()
             if symbol:
@@ -4663,14 +4901,31 @@ class TradePage(tk.Frame):
                 open_orders=open_orders,
                 loop_label=f"{loop_label}-winner-lock-cancel-{symbol}",
             )
+            failed_order_ids = [
+                int(value)
+                for value in (cancel_result.get("failed_order_ids") or [])
+                if int(value) > 0
+            ]
             if int(cancel_result.get("attempted_count") or 0) > 0:
                 canceled_symbols.append(symbol)
                 attempted_cancel_count += int(cancel_result.get("attempted_count") or 0)
+            if failed_order_ids:
+                self._pending_entry_cancel_retry_symbols.add(symbol)
+                _log_trade(
+                    "Winner policy loser entry cancel deferred for retry: "
+                    f"symbol={symbol} failed_order_ids={','.join(str(value) for value in failed_order_ids)} "
+                    f"loop={loop_label}"
+                )
+            elif int(cancel_result.get("attempted_count") or 0) > 0:
+                self._pending_entry_cancel_retry_symbols.discard(symbol)
             self._entry_order_ref_by_symbol.pop(symbol, None)
             self._clear_entry_cancel_sync_guard(symbol)
+            self._clear_fill_sync_fallback_reset_confirmation(symbol)
+            self._clear_second_entry_terminal_confirmation(symbol)
             self._second_entry_skip_latch.discard(symbol)
             self._second_entry_fully_filled_symbols.discard(symbol)
             self._phase1_tp_filled_symbols.discard(symbol)
+            self._tp_trigger_submit_guard_by_symbol.pop(symbol, None)
 
         forced_market_exit_symbols: list[str] = []
         for symbol in loser_position_symbols:
@@ -4775,8 +5030,12 @@ class TradePage(tk.Frame):
                         f"state_after={sync_result.symbol_state_after}"
                     )
                     if second_status in ("CANCELED", "EXPIRED", "REJECTED"):
-                        self._second_entry_skip_latch.add(symbol)
+                        self._second_entry_skip_latch.discard(symbol)
                         self._second_entry_fully_filled_symbols.discard(symbol)
+                        _log_trade(
+                            "Second-entry sync terminal status keeps retry enabled: "
+                            f"symbol={symbol} status={second_status} loop={loop_label}"
+                        )
                     if second_status in ("FILLED", "PARTIALLY_FILLED"):
                         self._second_entry_skip_latch.discard(symbol)
                     if second_status == "FILLED":
@@ -4793,6 +5052,7 @@ class TradePage(tk.Frame):
             )
         if current.symbol_state in ("IDLE", "ENTRY_ORDER", "PHASE1"):
             self._second_entry_fully_filled_symbols.discard(symbol)
+            self._clear_second_entry_terminal_confirmation(symbol)
         if current.symbol_state != "PHASE1":
             self._phase1_tp_filled_symbols.discard(symbol)
 
@@ -4897,6 +5157,12 @@ class TradePage(tk.Frame):
                 f"remaining_sec={guard_remaining:.2f} loop={loop_label}"
             )
             return "NEW"
+        if not self._has_recent_account_snapshot():
+            _log_trade(
+                "Entry fill sync canceled fallback deferred: "
+                f"symbol={target} reason=account_snapshot_unavailable loop={loop_label}"
+            )
+            return "NEW"
         return "CANCELED"
 
     def _infer_second_entry_order_status(
@@ -4909,6 +5175,8 @@ class TradePage(tk.Frame):
         loop_label: str,
     ) -> Optional[str]:
         target = str(symbol or "").strip().upper()
+        required_snapshots = int(SECOND_ENTRY_TERMINAL_CONFIRM_REQUIRED_SNAPSHOTS)
+        required_elapsed_sec = float(SECOND_ENTRY_TERMINAL_CONFIRM_MIN_SEC)
         scoped_entry_orders = [
             row for row in entry_orders
             if self._is_second_entry_client_order_id(self._extract_order_client_id(row))
@@ -4928,34 +5196,107 @@ class TradePage(tk.Frame):
                 ),
             )
             order_id = self._safe_int(latest.get("orderId"))
-            if order_id > 0:
+            latest_client_order_id = self._extract_order_client_id(latest)
+            if order_id > 0 and self._is_second_entry_client_order_id(latest_client_order_id):
                 self._entry_order_ref_by_symbol[target] = order_id
+            elif order_id > 0 and str(latest_client_order_id or "").strip():
+                _log_trade(
+                    "Second-entry status ignored non-second cached order ref candidate: "
+                    f"symbol={target} order_id={order_id} client_order_id={latest_client_order_id} loop={loop_label}"
+                )
             if "PARTIALLY_FILLED" in statuses:
+                self._clear_second_entry_terminal_confirmation(target)
                 return "PARTIALLY_FILLED"
             if "NEW" in statuses:
+                self._clear_second_entry_terminal_confirmation(target)
                 return "NEW"
             if "FILLED" in statuses:
+                self._clear_second_entry_terminal_confirmation(target)
                 return "FILLED"
             if "CANCELED" in statuses:
+                confirm_streak, confirm_elapsed = self._record_second_entry_terminal_confirmation(target)
+                if confirm_streak < required_snapshots or confirm_elapsed < required_elapsed_sec:
+                    _log_trade(
+                        "Second-entry terminal status confirmation deferred: "
+                        f"symbol={target} status=CANCELED source=open_orders "
+                        f"streak={confirm_streak}/{required_snapshots} "
+                        f"elapsed_sec={confirm_elapsed:.2f}/{required_elapsed_sec:.2f} loop={loop_label}"
+                    )
+                    return "NEW"
+                self._clear_second_entry_terminal_confirmation(target)
                 return "CANCELED"
+            self._clear_second_entry_terminal_confirmation(target)
             return "NEW"
 
         if not second_entry_pending:
+            self._clear_second_entry_terminal_confirmation(target)
             return None
 
         cached_order_id = self._entry_order_ref_by_symbol.get(target)
         if cached_order_id is not None:
-            queried = self._query_order_status_by_id(
+            payload = self._query_order_payload_by_id(
                 symbol=target,
                 order_id=int(cached_order_id),
                 loop_label=loop_label,
             )
+            if isinstance(payload, dict):
+                queried_client_order_id = self._extract_order_client_id(payload)
+                if (
+                    str(queried_client_order_id or "").strip()
+                    and not self._is_second_entry_client_order_id(queried_client_order_id)
+                ):
+                    self._entry_order_ref_by_symbol.pop(target, None)
+                    self._clear_second_entry_terminal_confirmation(target)
+                    _log_trade(
+                        "Second-entry cached order ref rejected by clientOrderId mismatch: "
+                        f"symbol={target} order_id={int(cached_order_id)} "
+                        f"client_order_id={queried_client_order_id} loop={loop_label}"
+                    )
+                    return "NEW"
+                queried = str(payload.get("status") or "").strip().upper()
+            else:
+                queried = ""
             if queried:
-                if queried in ("FILLED", "CANCELED", "REJECTED", "EXPIRED"):
+                normalized = str(queried or "").strip().upper()
+                if normalized in ("NEW", "PARTIALLY_FILLED", "FILLED"):
+                    self._clear_second_entry_terminal_confirmation(target)
+                if normalized in ("CANCELED", "REJECTED", "EXPIRED"):
+                    confirm_streak, confirm_elapsed = self._record_second_entry_terminal_confirmation(target)
+                    if confirm_streak < required_snapshots or confirm_elapsed < required_elapsed_sec:
+                        _log_trade(
+                            "Second-entry terminal status confirmation deferred: "
+                            f"symbol={target} status={normalized} source=query "
+                            f"streak={confirm_streak}/{required_snapshots} "
+                            f"elapsed_sec={confirm_elapsed:.2f}/{required_elapsed_sec:.2f} loop={loop_label}"
+                        )
+                        return "NEW"
+                    self._clear_second_entry_terminal_confirmation(target)
+                if normalized in ("FILLED", "CANCELED", "REJECTED", "EXPIRED"):
                     self._entry_order_ref_by_symbol.pop(target, None)
                     self._clear_entry_cancel_sync_guard(target)
-                return queried
-        return "FILLED" if has_position else "CANCELED"
+                return normalized
+
+        if has_position:
+            self._clear_second_entry_terminal_confirmation(target)
+            return "FILLED"
+
+        confirm_streak, confirm_elapsed = self._record_second_entry_terminal_confirmation(target)
+        if confirm_streak < required_snapshots or confirm_elapsed < required_elapsed_sec:
+            _log_trade(
+                "Second-entry terminal fallback deferred: "
+                f"symbol={target} fallback_status=CANCELED source=snapshot "
+                f"streak={confirm_streak}/{required_snapshots} "
+                f"elapsed_sec={confirm_elapsed:.2f}/{required_elapsed_sec:.2f} loop={loop_label}"
+            )
+            return "NEW"
+        self._clear_second_entry_terminal_confirmation(target)
+        _log_trade(
+            "Second-entry terminal fallback confirmed: "
+            f"symbol={target} fallback_status=CANCELED source=snapshot "
+            f"streak={confirm_streak}/{required_snapshots} "
+            f"elapsed_sec={confirm_elapsed:.2f}/{required_elapsed_sec:.2f} loop={loop_label}"
+        )
+        return "CANCELED"
 
     @staticmethod
     def _safe_int(value: object) -> int:
@@ -4999,7 +5340,11 @@ class TradePage(tk.Frame):
         if not target:
             return runtime
         if target in self._second_entry_skip_latch:
-            return runtime
+            self._second_entry_skip_latch.discard(target)
+            _log_trade(
+                "Second-entry skip latch ignored for retry: "
+                f"symbol={target} loop={loop_label}"
+            )
         if self._has_second_entry_candidate(runtime, target):
             return runtime
         position = self._get_symbol_position(positions, target)
@@ -5097,10 +5442,7 @@ class TradePage(tk.Frame):
             (self._saved_filter_settings or self._default_filter_settings()).get("tp_ratio"),
             0.05,
         )
-        mdd_ratio = self._parse_percent_text(
-            (self._saved_filter_settings or self._default_filter_settings()).get("mdd"),
-            0.15,
-        )
+        mdd_ratio = self._resolve_effective_mdd_stop_ratio()
 
         breakeven_target = round_price_by_tick_size(avg_entry, tick_size)
         mdd_target = round_price_by_tick_size(
@@ -5375,17 +5717,12 @@ class TradePage(tk.Frame):
             return runtime
 
         # PHASE2 policy.
-        if breakeven_stop_order_ids:
-            self._cancel_orders_by_ids(
-                symbol=target,
-                order_ids=breakeven_stop_order_ids,
-                loop_label=loop_label,
-                reason="phase2_disable_breakeven_stop",
-            )
+        second_entry_fully_filled = target in self._second_entry_fully_filled_symbols
 
         if split_plan and missing_split_plan:
             plan_signature = self._build_split_tp_plan_signature(phase=state, plan=split_plan)
             guard = self._tp_trigger_submit_guard_by_symbol.get(target)
+            submit_split_tp = True
             if isinstance(guard, Mapping):
                 guard_signature = str(guard.get("signature") or "")
                 guard_age = max(0.0, time.time() - float(guard.get("submitted_at") or 0.0))
@@ -5396,56 +5733,100 @@ class TradePage(tk.Frame):
                 ):
                     _log_trade(
                         "Phase2 split TP submit skipped by guard: "
-                        f"symbol={target} age_sec={guard_age:.2f} missing={len(missing_split_plan)} loop={loop_label}"
+                        f"symbol={target} age_sec={guard_age:.2f} missing={len(missing_split_plan)} "
+                        f"loop={loop_label} action=continue_protection_policy"
                     )
-                    return runtime
-            attempted, succeeded = self._submit_split_tp_triggers(
-                symbol=target,
-                positions=positions,
-                split_plan=missing_split_plan,
-                loop_label=f"{loop_label}-phase2-split-tp",
-            )
-            if attempted > 0 and succeeded == attempted:
-                self._tp_trigger_submit_guard_by_symbol[target] = {
-                    "submitted_at": float(time.time()),
-                    "signature": plan_signature,
-                    "submitted_count": int(succeeded),
-                }
-            else:
-                self._tp_trigger_submit_guard_by_symbol.pop(target, None)
-            _log_trade(
-                "Phase2 split TP ensured: "
-                f"symbol={target} mark_price={mark_price} desired={len(split_plan)} missing={len(missing_split_plan)} "
-                f"attempted={attempted} succeeded={succeeded} loop={loop_label}"
-            )
+                    submit_split_tp = False
+            if submit_split_tp:
+                attempted, succeeded = self._submit_split_tp_triggers(
+                    symbol=target,
+                    positions=positions,
+                    split_plan=missing_split_plan,
+                    loop_label=f"{loop_label}-phase2-split-tp",
+                )
+                if attempted > 0 and succeeded == attempted:
+                    self._tp_trigger_submit_guard_by_symbol[target] = {
+                        "submitted_at": float(time.time()),
+                        "signature": plan_signature,
+                        "submitted_count": int(succeeded),
+                    }
+                else:
+                    self._tp_trigger_submit_guard_by_symbol.pop(target, None)
+                _log_trade(
+                    "Phase2 split TP ensured: "
+                    f"symbol={target} mark_price={mark_price} desired={len(split_plan)} missing={len(missing_split_plan)} "
+                    f"attempted={attempted} succeeded={succeeded} loop={loop_label}"
+                )
         elif split_plan:
             self._tp_trigger_submit_guard_by_symbol.pop(target, None)
 
-        second_entry_fully_filled = target in self._second_entry_fully_filled_symbols
-        if second_entry_fully_filled:
-            if not mdd_stop_aligned:
-                if mdd_stop_order_ids:
-                    self._cancel_orders_by_ids(
-                        symbol=target,
-                        order_ids=mdd_stop_order_ids,
-                        loop_label=loop_label,
-                        reason="phase2_refresh_mdd_stop",
-                    )
-                submitted = self._submit_mdd_stop_market(
+        if not second_entry_fully_filled:
+            if mdd_stop_order_ids:
+                self._cancel_orders_by_ids(
+                    symbol=target,
+                    order_ids=mdd_stop_order_ids,
+                    loop_label=loop_label,
+                    reason="phase2_disable_mdd_until_second_filled",
+                )
+            if not breakeven_stop_order_ids:
+                breakeven_submitted = self._submit_breakeven_stop_market(
                     symbol=target,
                     positions=positions,
-                    loop_label=f"{loop_label}-phase2-mdd-stop",
+                    loop_label=f"{loop_label}-phase2-pre-full-fill-breakeven-stop",
                 )
                 _log_trade(
-                    "Phase2 MDD stop evaluated: "
-                    f"symbol={target} target={mdd_target} submitted={submitted} fully_filled={second_entry_fully_filled}"
+                    "Phase2 pre-full-fill breakeven stop ensured: "
+                    f"symbol={target} submitted={breakeven_submitted} fully_filled={second_entry_fully_filled} "
+                    f"loop={loop_label}"
                 )
-        elif mdd_stop_order_ids:
-            self._cancel_orders_by_ids(
+            return runtime
+
+        mdd_protection_ready = bool(mdd_stop_aligned)
+        mdd_submitted = False
+        if not mdd_stop_aligned:
+            if mdd_stop_order_ids:
+                self._cancel_orders_by_ids(
+                    symbol=target,
+                    order_ids=mdd_stop_order_ids,
+                    loop_label=loop_label,
+                    reason="phase2_refresh_mdd_stop",
+                )
+            mdd_submitted = self._submit_mdd_stop_market(
                 symbol=target,
-                order_ids=mdd_stop_order_ids,
-                loop_label=loop_label,
-                reason="phase2_disable_mdd_until_second_filled",
+                positions=positions,
+                loop_label=f"{loop_label}-phase2-mdd-stop",
+            )
+            mdd_protection_ready = bool(mdd_submitted)
+            _log_trade(
+                "Phase2 MDD stop evaluated: "
+                f"symbol={target} target={mdd_target} effective_ratio={mdd_ratio:.6f} "
+                f"submitted={mdd_submitted} fully_filled={second_entry_fully_filled} loop={loop_label}"
+            )
+
+        if mdd_protection_ready:
+            if breakeven_stop_order_ids:
+                self._cancel_orders_by_ids(
+                    symbol=target,
+                    order_ids=breakeven_stop_order_ids,
+                    loop_label=loop_label,
+                    reason="phase2_disable_breakeven_stop",
+                )
+                _log_trade(
+                    "Phase2 breakeven stop removed after MDD protection ready: "
+                    f"symbol={target} mdd_aligned={mdd_stop_aligned} mdd_submitted={mdd_submitted} loop={loop_label}"
+                )
+        else:
+            fallback_submitted = False
+            if not breakeven_stop_order_ids:
+                fallback_submitted = self._submit_breakeven_stop_market(
+                    symbol=target,
+                    positions=positions,
+                    loop_label=f"{loop_label}-phase2-mdd-fallback-breakeven-stop",
+                )
+            _log_trade(
+                "Phase2 protection fallback to breakeven stop: "
+                f"symbol={target} fallback_submitted={fallback_submitted} "
+                f"had_existing_breakeven={bool(breakeven_stop_order_ids)} loop={loop_label}"
             )
         return runtime
 
@@ -5528,8 +5909,9 @@ class TradePage(tk.Frame):
 
         previous_exit_ids = self._last_open_exit_order_ids_by_symbol.get(target, set())
         removed_ids = sorted(previous_exit_ids - current_exit_ids)
+        preserve_previous_exit_snapshot = False
         if removed_ids and current_exit_ids:
-            filled_exit = self._resolve_filled_exit_order_id(
+            filled_exit, removed_status_resolved = self._resolve_filled_exit_order_id(
                 symbol=target,
                 removed_order_ids=removed_ids,
                 loop_label=f"{loop_label}-oco-detect-fill",
@@ -5540,6 +5922,13 @@ class TradePage(tk.Frame):
                     f"symbol={target} removed_exit_orders={','.join(str(value) for value in removed_ids)} "
                     "reason=no_filled_exit_order_confirmed"
                 )
+                if not removed_status_resolved:
+                    preserve_previous_exit_snapshot = True
+                    _log_trade(
+                        "OCO fill detection deferred for retry: "
+                        f"symbol={target} unresolved_removed_orders={','.join(str(value) for value in removed_ids)} "
+                        f"loop={loop_label}"
+                    )
             else:
                 filled_order_id = int(filled_exit.get("order_id") or 0)
                 filled_order_type = str(filled_exit.get("order_type") or "").strip().upper()
@@ -5583,7 +5972,10 @@ class TradePage(tk.Frame):
                         )
 
         if current_exit_ids:
-            self._last_open_exit_order_ids_by_symbol[target] = set(current_exit_ids)
+            if preserve_previous_exit_snapshot and previous_exit_ids:
+                self._last_open_exit_order_ids_by_symbol[target] = set(previous_exit_ids)
+            else:
+                self._last_open_exit_order_ids_by_symbol[target] = set(current_exit_ids)
         else:
             self._last_open_exit_order_ids_by_symbol.pop(target, None)
             self._oco_last_filled_exit_order_by_symbol.pop(target, None)
@@ -5596,7 +5988,8 @@ class TradePage(tk.Frame):
         symbol: str,
         removed_order_ids: list[int],
         loop_label: str,
-    ) -> Optional[dict[str, object]]:
+    ) -> tuple[Optional[dict[str, object]], bool]:
+        status_resolved = True
         for order_id in sorted((int(value) for value in removed_order_ids), reverse=True):
             payload = self._query_order_payload_by_id(
                 symbol=symbol,
@@ -5606,11 +5999,14 @@ class TradePage(tk.Frame):
             status = str(payload.get("status") or "").strip().upper() if isinstance(payload, Mapping) else ""
             if status == "FILLED":
                 order_type = str(payload.get("type") or payload.get("orderType") or "").strip().upper()
-                return {
-                    "order_id": int(order_id),
-                    "order_type": str(order_type or "-"),
-                    "payload": dict(payload),
-                }
+                return (
+                    {
+                        "order_id": int(order_id),
+                        "order_type": str(order_type or "-"),
+                        "payload": dict(payload),
+                    },
+                    True,
+                )
             if status:
                 _log_trade(
                     "Removed exit order status checked: "
@@ -5618,11 +6014,12 @@ class TradePage(tk.Frame):
                     f"type={str(payload.get('type') or payload.get('orderType') or '-').strip().upper()}"
                 )
             else:
+                status_resolved = False
                 _log_trade(
                     "Removed exit order status unresolved: "
                     f"symbol={symbol} order_id={int(order_id)}"
                 )
-        return None
+        return None, bool(status_resolved)
 
     def _execute_risk_signal_actions(
         self,
@@ -5733,11 +6130,15 @@ class TradePage(tk.Frame):
                 self._phase1_tp_filled_symbols.discard(symbol)
                 self._entry_order_ref_by_symbol.pop(symbol, None)
                 self._clear_entry_cancel_sync_guard(symbol)
+                self._clear_fill_sync_fallback_reset_confirmation(symbol)
+                self._clear_second_entry_terminal_confirmation(symbol)
                 self._last_open_exit_order_ids_by_symbol.pop(symbol, None)
                 self._oco_last_filled_exit_order_by_symbol.pop(symbol, None)
                 self._pending_oco_retry_symbols.discard(symbol)
+                self._pending_entry_cancel_retry_symbols.discard(symbol)
                 self._last_position_qty_by_symbol.pop(symbol, None)
                 self._position_zero_confirm_streak_by_symbol.pop(symbol, None)
+                self._tp_trigger_submit_guard_by_symbol.pop(symbol, None)
         return risk_market_exit_submitted, cancel_entry_reset_ready
 
     def _cancel_open_orders_for_symbols(
@@ -6114,13 +6515,14 @@ class TradePage(tk.Frame):
         avg_entry = self._safe_float(position.get("entryPrice")) or 0.0
         if avg_entry <= 0:
             return False
-        mdd_ratio = self._parse_percent_text(
-            (self._saved_filter_settings or self._default_filter_settings()).get("mdd"),
-            0.15,
-        )
+        mdd_ratio = self._resolve_effective_mdd_stop_ratio()
         stop_price = avg_entry * (1.0 + mdd_ratio if position_amt < 0 else 1.0 - mdd_ratio)
         if stop_price <= 0:
             return False
+        _log_trade(
+            "MDD stop price prepared: "
+            f"symbol={symbol} avg_entry={avg_entry} effective_ratio={mdd_ratio:.6f} stop_price={stop_price}"
+        )
         return self._submit_stop_market_exit(
             symbol=symbol,
             positions=positions,
@@ -6454,12 +6856,18 @@ class TradePage(tk.Frame):
             self._sync_recovery_state_from_orchestrator_locked()
         self._entry_order_ref_by_symbol.clear()
         self._entry_cancel_sync_guard_until_by_symbol.clear()
+        self._fill_sync_reset_confirm_streak_by_symbol.clear()
+        self._fill_sync_reset_first_seen_at_by_symbol.clear()
         self._second_entry_skip_latch.clear()
         self._second_entry_fully_filled_symbols.clear()
+        self._second_entry_terminal_confirm_streak_by_symbol.clear()
+        self._second_entry_terminal_first_seen_at_by_symbol.clear()
         self._phase1_tp_filled_symbols.clear()
+        self._tp_trigger_submit_guard_by_symbol.clear()
         self._last_open_exit_order_ids_by_symbol.clear()
         self._oco_last_filled_exit_order_by_symbol.clear()
         self._pending_oco_retry_symbols.clear()
+        self._pending_entry_cancel_retry_symbols.clear()
         self._last_position_qty_by_symbol.clear()
         self._last_position_entry_price_by_symbol.clear()
         self._position_zero_confirm_streak_by_symbol.clear()
@@ -6770,7 +7178,9 @@ class TradePage(tk.Frame):
         return None
 
     def _fetch_position_mode(self) -> str:
-        if not self._api_key or not self._secret_key:
+        api_key = str(getattr(self, "_api_key", "") or "")
+        secret_key = str(getattr(self, "_secret_key", "") or "")
+        if not api_key or not secret_key:
             return "UNKNOWN"
         payload = self._binance_signed_get("https://fapi.binance.com", POSITION_MODE_PATH)
         return self._parse_position_mode(payload)
@@ -6789,7 +7199,9 @@ class TradePage(tk.Frame):
         return None
 
     def _fetch_multi_assets_margin_mode(self) -> tuple[Optional[bool], str]:
-        if not self._api_key or not self._secret_key:
+        api_key = str(getattr(self, "_api_key", "") or "")
+        secret_key = str(getattr(self, "_secret_key", "") or "")
+        if not api_key or not secret_key:
             return None, "api_credentials_missing"
         payload = self._binance_signed_get("https://fapi.binance.com", MULTI_ASSETS_MARGIN_MODE_PATH)
         if payload is None:
@@ -7250,14 +7662,23 @@ class TradePage(tk.Frame):
             if open_order_blocked and not cancel_attempted:
                 cancel_attempted = True
                 _log_trade(
-                    "Pre-order setup blocked by open orders; retrying after symbol cancel: "
+                    "Pre-order setup blocked by open orders; retrying after entry-order cancel: "
                     f"symbol={target} entry_mode={normalized_entry_mode} "
                     f"target_leverage={desired_leverage} reason={reason_code} failure={failure_reason} "
                     f"loop={loop_label}"
                 )
-                self._cancel_open_orders_for_symbols(
-                    symbols=[target],
-                    loop_label=f"{loop_label}-cancel-open-orders",
+                open_orders_for_cancel = self._fetch_open_orders() or []
+                cancel_result = self._cancel_entry_orders_for_symbol(
+                    symbol=target,
+                    open_orders=open_orders_for_cancel,
+                    loop_label=f"{loop_label}-cancel-entry-orders",
+                )
+                _log_trade(
+                    "Pre-order setup entry-order cancel summary: "
+                    f"symbol={target} attempted={int(cancel_result.get('attempted_count') or 0)} "
+                    f"success={int(cancel_result.get('success_count') or 0)} "
+                    f"failed_order_ids={','.join(str(value) for value in cancel_result.get('failed_order_ids') or []) or '-'} "
+                    f"used_cached_ref={bool(cancel_result.get('used_cached_order_ref'))} loop={loop_label}"
                 )
                 snapshot_ok, leverage, margin_type, snapshot_failure = self._fetch_symbol_leverage_and_margin_type(
                     symbol=target,
@@ -7299,7 +7720,7 @@ class TradePage(tk.Frame):
         )
         if setup_ok:
             return True, reason_code, "-", False
-        return False, reason_code, failure_reason, True
+        return False, reason_code, failure_reason, False
 
     def _reject_pre_order_when_position_mode_unknown(
         self,

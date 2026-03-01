@@ -112,6 +112,7 @@ def _make_trade_page_stub(runtime: AutoTradeRuntime | None = None) -> TradePage:
     page._last_open_exit_order_ids_by_symbol = {}
     page._oco_last_filled_exit_order_by_symbol = {}
     page._pending_oco_retry_symbols = set()
+    page._pending_entry_cancel_retry_symbols = set()
     page._account_snapshot_cache_lock = threading.Lock()
     page._account_snapshot_invalidation_seq = 0
     page._position_zero_confirm_streak_by_symbol = {}
@@ -619,7 +620,7 @@ class TradePageRegressionTests(unittest.TestCase):
                 "type": "STOP_MARKET",
                 "side": "BUY",
                 "stopPrice": "0",
-                "triggerPrice": "19.786",
+                "triggerPrice": "20.646",
                 "closePosition": "true",
             },
         ]
@@ -1377,6 +1378,245 @@ class TradePageRegressionTests(unittest.TestCase):
 
         self.assertEqual(len(fallback_calls), 1)
         self.assertEqual(fallback_calls[0].get("symbols"), ["DYMUSDT"])
+
+    def test_register_second_entry_trigger_ignores_skip_latch_and_registers_candidate(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE1",
+            active_symbol="DENTUSDT",
+            message_id_by_symbol={"DENTUSDT": 321},
+            received_at_by_symbol={"DENTUSDT": 1_777_000_000},
+        )
+        page = _make_trade_page_stub(runtime)
+        page._selected_entry_mode = lambda: "CONSERVATIVE"
+        page._second_entry_skip_latch = {"DENTUSDT"}
+
+        updated = page._register_second_entry_trigger_if_needed(
+            runtime,
+            symbol="DENTUSDT",
+            positions=[{"symbol": "DENTUSDT", "entryPrice": "0.00025"}],
+            loop_label="stage15-second-entry-retry-register",
+        )
+
+        self.assertNotIn("DENTUSDT", page._second_entry_skip_latch)
+        candidate = updated.pending_trigger_candidates.get("DENTUSDT")
+        self.assertIsNotNone(candidate)
+        self.assertEqual(candidate.trigger_kind, "SECOND_ENTRY")
+        self.assertAlmostEqual(float(candidate.target_price), 0.0002875, places=10)
+
+    def test_second_entry_trigger_cycle_failure_keeps_retry_eligible_without_latch(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE1",
+            active_symbol="DENTUSDT",
+            position_mode="ONE_WAY",
+            pending_trigger_candidates={
+                "DENTUSDT": TriggerCandidate(
+                    symbol="DENTUSDT",
+                    trigger_kind="SECOND_ENTRY",
+                    target_price=0.0002875,
+                    received_at_local=1_777_000_000,
+                    message_id=321,
+                    entry_mode="CONSERVATIVE",
+                )
+            },
+        )
+        page = _make_trade_page_stub(runtime)
+        page._sync_recovery_state_from_orchestrator_locked = lambda: None
+        page._persist_auto_trade_runtime = lambda: None
+        page._wallet_balance = 100.0
+        page._gateway_create_order_call = lambda _request: GatewayCallResult(
+            ok=False,
+            reason_code="NOOP",
+            payload=None,
+            error_code=None,
+            error_message=None,
+        )
+        page._fetch_futures_available_balance = lambda **_kwargs: 100.0
+        page._build_filter_rules_by_symbols = lambda _symbols: {
+            "DENTUSDT": SymbolFilterRules(
+                tick_size=0.000001,
+                step_size=1.0,
+                min_qty=1.0,
+                min_notional=5.0,
+            )
+        }
+
+        failed_result = types.SimpleNamespace(
+            attempted=True,
+            success=False,
+            reason_code="TRIGGER_PIPELINE_FAILED_SECOND_ENTRY_CREATE_FAILED_KEEP_STATE",
+            failure_reason="exchange_reject",
+            selected_symbol="DENTUSDT",
+            selected_trigger_kind="SECOND_ENTRY",
+            pipeline_reason_code="SECOND_ENTRY_CREATE_FAILED_KEEP_STATE",
+        )
+
+        def _run_cycle_once(inner_runtime, **_kwargs):
+            return trade_page.replace(inner_runtime, pending_trigger_candidates={}), failed_result
+
+        with patch.object(
+            trade_page,
+            "get_mark_price_with_logging",
+            return_value=types.SimpleNamespace(state=runtime.price_state, mark_price=0.00029),
+        ), patch.object(trade_page, "run_trigger_entry_cycle", side_effect=_run_cycle_once):
+            page._run_trigger_cycle_once()
+
+        self.assertNotIn("DENTUSDT", page._second_entry_skip_latch)
+        self.assertEqual(page._orchestrator_runtime.pending_trigger_candidates, {})
+
+    def test_resolve_active_symbol_snapshot_ignores_stale_active_when_open_orders_exist(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            active_symbol="STALEUSDT",
+        )
+        page = _make_trade_page_stub(runtime)
+
+        resolved = page._resolve_active_symbol_snapshot(
+            runtime,
+            open_orders=[{"symbol": "LIVEUSDT", "orderId": 10}],
+            positions=[],
+        )
+
+        self.assertEqual(resolved, "LIVEUSDT")
+
+    def test_trigger_cycle_deferred_symbol_allows_other_candidate_in_same_cycle(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="MONITORING",
+            active_symbol="SLOWUSDT",
+            position_mode="ONE_WAY",
+            pending_trigger_candidates={
+                "SLOWUSDT": TriggerCandidate(
+                    symbol="SLOWUSDT",
+                    trigger_kind="FIRST_ENTRY",
+                    target_price=100.0,
+                    received_at_local=2_000,
+                    message_id=2,
+                    entry_mode="CONSERVATIVE",
+                ),
+                "FASTUSDT": TriggerCandidate(
+                    symbol="FASTUSDT",
+                    trigger_kind="FIRST_ENTRY",
+                    target_price=90.0,
+                    received_at_local=1_000,
+                    message_id=1,
+                    entry_mode="CONSERVATIVE",
+                ),
+            },
+        )
+        page = _make_trade_page_stub(runtime)
+        page._sync_recovery_state_from_orchestrator_locked = lambda: None
+        page._persist_auto_trade_runtime = lambda: None
+        page._wallet_balance = 100.0
+        page._fetch_futures_available_balance = lambda **_kwargs: 100.0
+        page._build_filter_rules_by_symbols = lambda _symbols: {
+            "SLOWUSDT": SymbolFilterRules(
+                tick_size=0.1,
+                step_size=0.001,
+                min_qty=0.001,
+                min_notional=5.0,
+            ),
+            "FASTUSDT": SymbolFilterRules(
+                tick_size=0.1,
+                step_size=0.001,
+                min_qty=0.001,
+                min_notional=5.0,
+            ),
+        }
+        page._gateway_create_order_call = lambda _request: GatewayCallResult(
+            ok=False,
+            reason_code="NOOP",
+            payload=None,
+            error_code=None,
+            error_message=None,
+        )
+        call_keys: list[list[str]] = []
+
+        def _run_cycle_once(inner_runtime, **_kwargs):
+            keys = sorted(inner_runtime.pending_trigger_candidates.keys())
+            call_keys.append(keys)
+            if "SLOWUSDT" in keys:
+                deferred_result = types.SimpleNamespace(
+                    attempted=True,
+                    success=False,
+                    reason_code="PRE_ORDER_SETUP_DEFERRED_POSITION_MODE_UNKNOWN",
+                    failure_reason="position mode unresolved",
+                    selected_symbol="SLOWUSDT",
+                    selected_trigger_kind="FIRST_ENTRY",
+                    pipeline_reason_code="NO_PIPELINE_CALL_PRE_ORDER_SETUP_DEFERRED",
+                )
+                return inner_runtime, deferred_result
+            success_result = types.SimpleNamespace(
+                attempted=True,
+                success=True,
+                reason_code="TRIGGER_EXECUTED_AND_ORDER_SUBMITTED",
+                failure_reason="-",
+                selected_symbol="FASTUSDT",
+                selected_trigger_kind="FIRST_ENTRY",
+                pipeline_reason_code="FIRST_ENTRY_ORDER_SUBMITTED",
+            )
+            updated = trade_page.replace(inner_runtime, pending_trigger_candidates={})
+            return updated, success_result
+
+        with patch.object(
+            trade_page,
+            "get_mark_price_with_logging",
+            return_value=types.SimpleNamespace(state=runtime.price_state, mark_price=100.0),
+        ), patch.object(trade_page, "run_trigger_entry_cycle", side_effect=_run_cycle_once):
+            page._run_trigger_cycle_once()
+
+        self.assertGreaterEqual(len(call_keys), 2)
+        self.assertEqual(call_keys[0], ["FASTUSDT", "SLOWUSDT"])
+        self.assertEqual(call_keys[1], ["FASTUSDT"])
+        self.assertIn("SLOWUSDT", page._orchestrator_runtime.pending_trigger_candidates)
+        self.assertNotIn("FASTUSDT", page._orchestrator_runtime.pending_trigger_candidates)
+
+    def test_winner_policy_failed_loser_entry_cancel_registers_retry_symbol(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="PHASE1",
+            active_symbol="WINUSDT",
+        )
+        page = _make_trade_page_stub(runtime)
+        page._cancel_entry_orders_for_symbol = lambda **_kwargs: {
+            "attempted_count": 1,
+            "success_count": 0,
+            "failed_order_ids": [12345],
+            "used_cached_order_ref": False,
+        }
+        page._submit_market_exit_for_symbol = lambda **_kwargs: True
+        page._fetch_loop_account_snapshot = lambda **_kwargs: ([], [])
+
+        page._enforce_first_fill_winner_policy(
+            runtime,
+            open_orders=[
+                {
+                    "symbol": "LOSEUSDT",
+                    "orderId": 12345,
+                    "side": "SELL",
+                    "type": "STOP",
+                    "clientOrderId": "LTS-E1-LOSE",
+                }
+            ],
+            positions=[
+                {"symbol": "WINUSDT", "positionAmt": "-1", "updateTime": 100},
+                {"symbol": "LOSEUSDT", "positionAmt": "-1", "updateTime": 101},
+            ],
+            loop_label="stage15-winner-cancel-retry",
+        )
+
+        self.assertIn("LOSEUSDT", page._pending_entry_cancel_retry_symbols)
 
 
 if __name__ == "__main__":

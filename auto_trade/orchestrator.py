@@ -96,6 +96,21 @@ def _normalize_entry_mode(value: Any) -> EntryMode:
     return "CONSERVATIVE"
 
 
+def _should_defer_pre_order_setup_failure(setup_reason: str) -> bool:
+    normalized = _normalize(setup_reason)
+    return bool(
+        normalized == "POSITION_MODE_UNKNOWN"
+        or normalized.startswith("SYMBOL_SETUP_")
+        or normalized.startswith("LEVERAGE_SET_FAILED_")
+        or normalized.startswith("MARGIN_TYPE_SET_FAILED_")
+    )
+
+
+def _should_preserve_selected_candidate_on_pipeline_failure(pipeline_reason_code: str) -> bool:
+    normalized = _normalize(pipeline_reason_code)
+    return normalized.endswith("_KEEP_STATE")
+
+
 def _to_epoch_millis(value: Any) -> Optional[int]:
     try:
         parsed = int(float(value))
@@ -1147,6 +1162,34 @@ def run_trigger_entry_cycle(
             loop_label,
         )
         if not setup_ok:
+            normalized_setup_reason = _normalize(setup_reason)
+            if not setup_reset and _should_defer_pre_order_setup_failure(normalized_setup_reason):
+                current = runtime
+                result = TriggerCycleProcessResult(
+                    attempted=True,
+                    success=False,
+                    reason_code=f"PRE_ORDER_SETUP_DEFERRED_{normalized_setup_reason}",
+                    failure_reason=_normalize(setup_failure),
+                    selected_symbol=selected_symbol,
+                    selected_trigger_kind=selected.trigger_kind,
+                    pipeline_reason_code="NO_PIPELINE_CALL_PRE_ORDER_SETUP_DEFERRED",
+                    symbol_state_before=before_state,
+                    symbol_state_after=current.symbol_state,
+                )
+                _log_orchestrator_event(
+                    event="run_trigger_entry_cycle",
+                    input_data=(
+                        f"selected_symbol={selected_symbol} trigger_kind={selected.trigger_kind} "
+                        f"setup_reason={normalized_setup_reason} reset={setup_reset}"
+                    ),
+                    decision="run_pre_order_setup_hook_before_pipeline",
+                    result="deferred",
+                    state_before=_state_label(runtime),
+                    state_after=_state_label(current),
+                    failure_reason=result.reason_code,
+                    loop_label=loop_label,
+                )
+                return current, result
             if setup_reset:
                 current = replace(
                     runtime,
@@ -1193,7 +1236,7 @@ def run_trigger_entry_cycle(
             result = TriggerCycleProcessResult(
                 attempted=True,
                 success=False,
-                reason_code=f"PRE_ORDER_SETUP_FAILED_{_normalize(setup_reason)}",
+                reason_code=f"PRE_ORDER_SETUP_FAILED_{normalized_setup_reason}",
                 failure_reason=_normalize(setup_failure),
                 selected_symbol=selected_symbol,
                 selected_trigger_kind=selected.trigger_kind,
@@ -1205,7 +1248,7 @@ def run_trigger_entry_cycle(
                 event="run_trigger_entry_cycle",
                 input_data=(
                     f"selected_symbol={selected_symbol} trigger_kind={selected.trigger_kind} "
-                    f"setup_reason={_normalize(setup_reason)} reset={setup_reset}"
+                    f"setup_reason={normalized_setup_reason} reset={setup_reset}"
                 ),
                 decision="run_pre_order_setup_hook_before_pipeline",
                 result="failed",
@@ -1279,11 +1322,17 @@ def run_trigger_entry_cycle(
         )
         return runtime, result
 
-    pending_after_selected = {
-        key: value
-        for key, value in runtime.pending_trigger_candidates.items()
-        if _normalize_symbol(str(key)) != selected_symbol
-    }
+    preserve_selected_on_failure = bool(
+        not pipeline.success and _should_preserve_selected_candidate_on_pipeline_failure(pipeline.reason_code)
+    )
+    if preserve_selected_on_failure:
+        pending_after_selected = dict(runtime.pending_trigger_candidates)
+    else:
+        pending_after_selected = {
+            key: value
+            for key, value in runtime.pending_trigger_candidates.items()
+            if _normalize_symbol(str(key)) != selected_symbol
+        }
     current = replace(
         runtime,
         symbol_state=pipeline.current_state,
@@ -1310,7 +1359,13 @@ def run_trigger_entry_cycle(
         attempted=True,
         success=pipeline.success,
         reason_code=(
-            "TRIGGER_EXECUTED_AND_ORDER_SUBMITTED" if pipeline.success else f"TRIGGER_PIPELINE_FAILED_{pipeline.reason_code}"
+            "TRIGGER_EXECUTED_AND_ORDER_SUBMITTED"
+            if pipeline.success
+            else (
+                f"TRIGGER_PIPELINE_DEFERRED_{pipeline.reason_code}"
+                if preserve_selected_on_failure
+                else f"TRIGGER_PIPELINE_FAILED_{pipeline.reason_code}"
+            )
         ),
         failure_reason="-" if pipeline.success else pipeline.failure_reason,
         selected_symbol=selected_symbol,

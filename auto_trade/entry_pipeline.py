@@ -13,6 +13,7 @@ from .event_logging import StructuredLogEvent, log_structured_event
 from .order_gateway import create_order_with_retry, round_price_by_tick_size
 from .order_gateway_models import (
     GatewayCallResult,
+    GatewayRetryResult,
     OrderCreateRequest,
     PositionMode,
     RetryPolicy,
@@ -37,6 +38,7 @@ ENTRY_MODE_TO_FIRST_ENTRY_BUDGET_MULTIPLIER: dict[str, float] = {
     "CONSERVATIVE": 1.0,
 }
 DEFAULT_ENTRY_MODE = "CONSERVATIVE"
+ENTRY_IMMEDIATE_TRIGGER_REJECT_ERROR_CODE = -2021
 
 
 def _resolve_entry_trigger_order_type(
@@ -81,6 +83,142 @@ def _resolve_entry_trigger_price(
     if rounded is None or float(rounded) <= 0.0:
         return target
     return float(rounded)
+
+
+def _is_entry_immediate_trigger_reject(gateway_result: GatewayRetryResult) -> bool:
+    if gateway_result.success:
+        return False
+    if str(gateway_result.reason_code or "").strip().upper() != "EXCHANGE_REJECTED":
+        return False
+    return int(gateway_result.last_result.error_code or 0) == ENTRY_IMMEDIATE_TRIGGER_REJECT_ERROR_CODE
+
+
+def _build_entry_create_request(
+    *,
+    symbol: str,
+    target_price: float,
+    quantity: float,
+    order_type: str,
+    tick_size: float,
+    new_client_order_id: Optional[str],
+) -> OrderCreateRequest:
+    normalized_order_type = str(order_type or "").strip().upper()
+    stop_price: Optional[float] = None
+    if normalized_order_type in ("STOP", "TAKE_PROFIT"):
+        stop_price = _resolve_entry_trigger_price(
+            side="SELL",
+            order_type=normalized_order_type,
+            target_price=float(target_price),
+            tick_size=float(tick_size),
+        )
+    return OrderCreateRequest(
+        symbol=symbol,
+        side="SELL",
+        order_type=normalized_order_type,  # type: ignore[arg-type]
+        purpose="ENTRY",
+        quantity=quantity,
+        price=target_price,
+        stop_price=stop_price,
+        reference_price=target_price,
+        new_client_order_id=new_client_order_id,
+    )
+
+
+def _submit_entry_order_with_immediate_trigger_limit_fallback(
+    *,
+    phase: EntryPhase,
+    symbol: str,
+    target_price: float,
+    quantity: float,
+    primary_order_type: str,
+    filter_rules: SymbolFilterRules,
+    position_mode: PositionMode,
+    create_call: Callable[[Mapping[str, Any]], GatewayCallResult],
+    retry_policy: Optional[RetryPolicy],
+    new_client_order_id: Optional[str],
+) -> tuple[GatewayRetryResult, int, bool]:
+    primary_request = _build_entry_create_request(
+        symbol=symbol,
+        target_price=target_price,
+        quantity=quantity,
+        order_type=primary_order_type,
+        tick_size=float(filter_rules.tick_size),
+        new_client_order_id=new_client_order_id,
+    )
+    primary_gateway_result = create_order_with_retry(
+        primary_request,
+        filter_rules=filter_rules,
+        position_mode=position_mode,
+        call=create_call,
+        retry_policy=retry_policy,
+    )
+    total_attempts = int(primary_gateway_result.attempts)
+    if not _is_entry_immediate_trigger_reject(primary_gateway_result):
+        return primary_gateway_result, total_attempts, False
+
+    log_structured_event(
+        StructuredLogEvent(
+            component="entry_pipeline",
+            event="fallback_entry_limit_on_immediate_trigger_reject",
+            input_data=(
+                f"phase={phase} symbol={_normalize(symbol)} target_price={target_price} "
+                f"primary_order_type={_normalize(primary_order_type)}"
+            ),
+            decision="switch_entry_order_type_to_limit_at_target_price",
+            result="fallback_requested",
+            state_before="entry_trigger_order_rejected",
+            state_after="entry_limit_fallback_pending",
+            failure_reason=primary_gateway_result.reason_code,
+        ),
+        reason_code=primary_gateway_result.reason_code,
+        exchange_error_code=(
+            primary_gateway_result.last_result.error_code
+            if primary_gateway_result.last_result.error_code is not None
+            else "-"
+        ),
+    )
+
+    fallback_request = _build_entry_create_request(
+        symbol=symbol,
+        target_price=target_price,
+        quantity=quantity,
+        order_type="LIMIT",
+        tick_size=float(filter_rules.tick_size),
+        new_client_order_id=new_client_order_id,
+    )
+    fallback_gateway_result = create_order_with_retry(
+        fallback_request,
+        filter_rules=filter_rules,
+        position_mode=position_mode,
+        call=create_call,
+        retry_policy=retry_policy,
+    )
+    total_attempts += int(fallback_gateway_result.attempts)
+
+    log_structured_event(
+        StructuredLogEvent(
+            component="entry_pipeline",
+            event="fallback_entry_limit_on_immediate_trigger_reject",
+            input_data=(
+                f"phase={phase} symbol={_normalize(symbol)} target_price={target_price} "
+                f"fallback_order_type=LIMIT"
+            ),
+            decision="submit_limit_entry_order_after_immediate_trigger_reject",
+            result="fallback_submitted" if fallback_gateway_result.success else "fallback_failed",
+            state_before="entry_limit_fallback_pending",
+            state_after="entry_limit_fallback_done",
+            failure_reason=fallback_gateway_result.reason_code if not fallback_gateway_result.success else "-",
+        ),
+        reason_code=fallback_gateway_result.reason_code,
+        exchange_error_code=(
+            fallback_gateway_result.last_result.error_code
+            if fallback_gateway_result.last_result.error_code is not None
+            else "-"
+        ),
+        gateway_attempts=fallback_gateway_result.attempts,
+    )
+
+    return fallback_gateway_result, total_attempts, True
 
 
 def _normalize_entry_mode_token(entry_mode: Any) -> str:
@@ -325,28 +463,17 @@ def run_first_entry_pipeline(
         target_price=float(target_price),
         reference_mark_price=reference_mark_price,
     )
-    request = OrderCreateRequest(
+    gateway_result, gateway_attempts_total, used_limit_fallback = _submit_entry_order_with_immediate_trigger_limit_fallback(
+        phase="FIRST_ENTRY",
         symbol=symbol,
-        side="SELL",
-        order_type=order_type,  # type: ignore[arg-type]
-        purpose="ENTRY",
-        quantity=quantity_result.quantity,
-        price=target_price,
-        stop_price=_resolve_entry_trigger_price(
-            side="SELL",
-            order_type=order_type,
-            target_price=float(target_price),
-            tick_size=float(filter_rules.tick_size),
-        ),
-        reference_price=target_price,
-        new_client_order_id=new_client_order_id,
-    )
-    gateway_result = create_order_with_retry(
-        request,
+        target_price=float(target_price),
+        quantity=float(quantity_result.quantity),
+        primary_order_type=order_type,
         filter_rules=filter_rules,
         position_mode=position_mode,
-        call=create_call,
+        create_call=create_call,
         retry_policy=retry_policy,
+        new_client_order_id=new_client_order_id,
     )
     if gateway_result.success:
         if current_state == "MONITORING":
@@ -357,7 +484,7 @@ def run_first_entry_pipeline(
                     current_state=current_state,
                     reason_code="FIRST_ENTRY_STATE_TRANSITION_REJECTED",
                     failure_reason=transition.reason_code,
-                    gateway_attempts=gateway_result.attempts,
+                    gateway_attempts=gateway_attempts_total,
                     gateway_reason_code=gateway_result.reason_code,
                     budget_usdt=budget_result.budget_usdt,
                     raw_quantity=quantity_result.quantity,
@@ -371,12 +498,16 @@ def run_first_entry_pipeline(
             phase="FIRST_ENTRY",
             success=True,
             action="ENTRY_SUBMITTED",
-            reason_code="FIRST_ENTRY_SUBMITTED",
+            reason_code=(
+                "FIRST_ENTRY_SUBMITTED_AFTER_IMMEDIATE_TRIGGER_LIMIT_FALLBACK"
+                if used_limit_fallback
+                else "FIRST_ENTRY_SUBMITTED"
+            ),
             failure_reason="-",
             previous_state=current_state,
             current_state=next_state,
             state_transition_reason=transition_reason,
-            gateway_attempts=gateway_result.attempts,
+            gateway_attempts=gateway_attempts_total,
             gateway_reason_code=gateway_result.reason_code,
             budget_usdt=budget_result.budget_usdt,
             raw_quantity=quantity_result.quantity,
@@ -393,7 +524,7 @@ def run_first_entry_pipeline(
             previous_state=current_state,
             current_state=current_state,
             state_transition_reason="FIRST_ENTRY_KEEP_STATE",
-            gateway_attempts=gateway_result.attempts,
+            gateway_attempts=gateway_attempts_total,
             gateway_reason_code=gateway_result.reason_code,
             budget_usdt=budget_result.budget_usdt,
             raw_quantity=quantity_result.quantity,
@@ -406,7 +537,7 @@ def run_first_entry_pipeline(
             current_state=current_state,
             reason_code="FIRST_ENTRY_INSUFFICIENT_MARGIN_RESET",
             failure_reason="insufficient margin on first entry",
-            gateway_attempts=gateway_result.attempts,
+            gateway_attempts=gateway_attempts_total,
             gateway_reason_code=gateway_result.reason_code,
             budget_usdt=budget_result.budget_usdt,
             raw_quantity=quantity_result.quantity,
@@ -417,7 +548,7 @@ def run_first_entry_pipeline(
         current_state=current_state,
         reason_code="FIRST_ENTRY_CREATE_FAILED_RESET",
         failure_reason=gateway_result.reason_code,
-        gateway_attempts=gateway_result.attempts,
+        gateway_attempts=gateway_attempts_total,
         gateway_reason_code=gateway_result.reason_code,
         budget_usdt=budget_result.budget_usdt,
         raw_quantity=quantity_result.quantity,
@@ -490,28 +621,17 @@ def run_second_entry_pipeline(
         target_price=float(second_target_price),
         reference_mark_price=reference_mark_price,
     )
-    request = OrderCreateRequest(
+    gateway_result, gateway_attempts_total, used_limit_fallback = _submit_entry_order_with_immediate_trigger_limit_fallback(
+        phase="SECOND_ENTRY",
         symbol=symbol,
-        side="SELL",
-        order_type=order_type,  # type: ignore[arg-type]
-        purpose="ENTRY",
-        quantity=quantity_result.quantity,
-        price=second_target_price,
-        stop_price=_resolve_entry_trigger_price(
-            side="SELL",
-            order_type=order_type,
-            target_price=float(second_target_price),
-            tick_size=float(filter_rules.tick_size),
-        ),
-        reference_price=second_target_price,
-        new_client_order_id=new_client_order_id,
-    )
-    gateway_result = create_order_with_retry(
-        request,
+        target_price=float(second_target_price),
+        quantity=float(quantity_result.quantity),
+        primary_order_type=order_type,
         filter_rules=filter_rules,
         position_mode=position_mode,
-        call=create_call,
+        create_call=create_call,
         retry_policy=retry_policy,
+        new_client_order_id=new_client_order_id,
     )
     if gateway_result.success:
         transition = apply_symbol_event(current_state, "SUBMIT_SECOND_ENTRY_ORDER")
@@ -520,7 +640,7 @@ def run_second_entry_pipeline(
                 current_state=current_state,
                 reason_code="SECOND_ENTRY_STATE_TRANSITION_REJECTED_KEEP_STATE",
                 failure_reason=transition.reason_code,
-                gateway_attempts=gateway_result.attempts,
+                gateway_attempts=gateway_attempts_total,
                 gateway_reason_code=gateway_result.reason_code,
                 budget_usdt=budget_result.budget_usdt,
                 raw_quantity=quantity_result.quantity,
@@ -530,12 +650,16 @@ def run_second_entry_pipeline(
             phase="SECOND_ENTRY",
             success=True,
             action="ENTRY_SUBMITTED",
-            reason_code="SECOND_ENTRY_SUBMITTED",
+            reason_code=(
+                "SECOND_ENTRY_SUBMITTED_AFTER_IMMEDIATE_TRIGGER_LIMIT_FALLBACK"
+                if used_limit_fallback
+                else "SECOND_ENTRY_SUBMITTED"
+            ),
             failure_reason="-",
             previous_state=current_state,
             current_state=transition.current_state,
             state_transition_reason=transition.reason_code,
-            gateway_attempts=gateway_result.attempts,
+            gateway_attempts=gateway_attempts_total,
             gateway_reason_code=gateway_result.reason_code,
             budget_usdt=budget_result.budget_usdt,
             raw_quantity=quantity_result.quantity,
@@ -547,7 +671,7 @@ def run_second_entry_pipeline(
             current_state=current_state,
             reason_code="SECOND_ENTRY_CREATE_FAILED_KEEP_STATE",
             failure_reason=gateway_result.reason_code,
-            gateway_attempts=gateway_result.attempts,
+            gateway_attempts=gateway_attempts_total,
             gateway_reason_code=gateway_result.reason_code,
             budget_usdt=budget_result.budget_usdt,
             raw_quantity=quantity_result.quantity,
@@ -559,7 +683,7 @@ def run_second_entry_pipeline(
             current_state=current_state,
             reason_code="SECOND_ENTRY_INSUFFICIENT_MARGIN_SKIP_KEEP_STATE",
             failure_reason="no available balance refresher",
-            gateway_attempts=gateway_result.attempts,
+            gateway_attempts=gateway_attempts_total,
             gateway_reason_code=gateway_result.reason_code,
             budget_usdt=budget_result.budget_usdt,
             raw_quantity=quantity_result.quantity,
@@ -573,7 +697,7 @@ def run_second_entry_pipeline(
             current_state=current_state,
             reason_code="SECOND_ENTRY_REFRESH_AVAILABLE_FAILED_KEEP_STATE",
             failure_reason="available balance refresh failed",
-            gateway_attempts=gateway_result.attempts,
+            gateway_attempts=gateway_attempts_total,
             gateway_reason_code=gateway_result.reason_code,
             budget_usdt=budget_result.budget_usdt,
             raw_quantity=quantity_result.quantity,
@@ -589,7 +713,7 @@ def run_second_entry_pipeline(
             current_state=current_state,
             reason_code="SECOND_ENTRY_REFRESH_BUDGET_REJECTED_KEEP_STATE",
             failure_reason=refreshed_budget.reason_code,
-            gateway_attempts=gateway_result.attempts,
+            gateway_attempts=gateway_attempts_total,
             gateway_reason_code=gateway_result.reason_code,
             budget_usdt=None,
             raw_quantity=None,
@@ -605,27 +729,20 @@ def run_second_entry_pipeline(
             current_state=current_state,
             reason_code="SECOND_ENTRY_REFRESH_QUANTITY_REJECTED_KEEP_STATE",
             failure_reason=refreshed_quantity.reason_code,
-            gateway_attempts=gateway_result.attempts,
+            gateway_attempts=gateway_attempts_total,
             gateway_reason_code=gateway_result.reason_code,
             budget_usdt=refreshed_budget.budget_usdt,
             raw_quantity=None,
             refreshed_available_usdt=refreshed_available,
         )
 
-    refreshed_request = OrderCreateRequest(
+    refreshed_order_type = "LIMIT" if used_limit_fallback else order_type
+    refreshed_request = _build_entry_create_request(
         symbol=symbol,
-        side="SELL",
-        order_type=order_type,  # type: ignore[arg-type]
-        purpose="ENTRY",
-        quantity=refreshed_quantity.quantity,
-        price=second_target_price,
-        stop_price=_resolve_entry_trigger_price(
-            side="SELL",
-            order_type=order_type,
-            target_price=float(second_target_price),
-            tick_size=float(filter_rules.tick_size),
-        ),
-        reference_price=second_target_price,
+        target_price=float(second_target_price),
+        quantity=float(refreshed_quantity.quantity),
+        order_type=refreshed_order_type,
+        tick_size=float(filter_rules.tick_size),
         new_client_order_id=new_client_order_id,
     )
     refreshed_gateway_result = create_order_with_retry(
@@ -640,7 +757,7 @@ def run_second_entry_pipeline(
             current_state=current_state,
             reason_code="SECOND_ENTRY_MARGIN_REFRESH_RETRY_FAILED_KEEP_STATE",
             failure_reason=refreshed_gateway_result.reason_code,
-            gateway_attempts=gateway_result.attempts + refreshed_gateway_result.attempts,
+            gateway_attempts=gateway_attempts_total + refreshed_gateway_result.attempts,
             gateway_reason_code=refreshed_gateway_result.reason_code,
             budget_usdt=refreshed_budget.budget_usdt,
             raw_quantity=refreshed_quantity.quantity,
@@ -653,7 +770,7 @@ def run_second_entry_pipeline(
             current_state=current_state,
             reason_code="SECOND_ENTRY_REFRESH_STATE_TRANSITION_REJECTED_KEEP_STATE",
             failure_reason=transition.reason_code,
-            gateway_attempts=gateway_result.attempts + refreshed_gateway_result.attempts,
+            gateway_attempts=gateway_attempts_total + refreshed_gateway_result.attempts,
             gateway_reason_code=refreshed_gateway_result.reason_code,
             budget_usdt=refreshed_budget.budget_usdt,
             raw_quantity=refreshed_quantity.quantity,
@@ -668,7 +785,7 @@ def run_second_entry_pipeline(
         previous_state=current_state,
         current_state=transition.current_state,
         state_transition_reason=transition.reason_code,
-        gateway_attempts=gateway_result.attempts + refreshed_gateway_result.attempts,
+        gateway_attempts=gateway_attempts_total + refreshed_gateway_result.attempts,
         gateway_reason_code=refreshed_gateway_result.reason_code,
         budget_usdt=refreshed_budget.budget_usdt,
         raw_quantity=refreshed_quantity.quantity,
