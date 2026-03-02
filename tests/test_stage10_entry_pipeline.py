@@ -19,32 +19,32 @@ from auto_trade import (
 
 
 class EntryBudgetTests(unittest.TestCase):
-    def test_first_entry_budget_is_wallet_50_percent(self) -> None:
+    def test_first_entry_budget_is_wallet_45_percent(self) -> None:
         result = compute_first_entry_budget(100.0)
         self.assertTrue(result.ok)
-        self.assertEqual(result.budget_usdt, 50.0)
+        self.assertEqual(result.budget_usdt, 45.0)
         self.assertEqual(result.reason_code, "FIRST_ENTRY_BUDGET_READY")
 
-    def test_first_entry_budget_aggressive_mode_applies_double_multiplier(self) -> None:
+    def test_first_entry_budget_is_same_for_aggressive_and_conservative_modes(self) -> None:
         result = compute_first_entry_budget(100.0, entry_mode="AGGRESSIVE")
         self.assertTrue(result.ok)
-        self.assertEqual(result.budget_usdt, 100.0)
+        self.assertEqual(result.budget_usdt, 45.0)
         self.assertEqual(result.reason_code, "FIRST_ENTRY_BUDGET_READY")
 
-    def test_second_entry_budget_is_available_with_margin_buffer(self) -> None:
+    def test_second_entry_budget_uses_full_available_balance(self) -> None:
         result = compute_second_entry_budget(200.0, margin_buffer_pct=0.01)
         self.assertTrue(result.ok)
-        self.assertEqual(result.budget_usdt, 198.0)
+        self.assertEqual(result.budget_usdt, 200.0)
         self.assertEqual(result.reason_code, "SECOND_ENTRY_BUDGET_READY")
 
-    def test_second_entry_budget_aggressive_mode_applies_double_multiplier(self) -> None:
+    def test_second_entry_budget_is_same_for_aggressive_and_conservative_modes(self) -> None:
         result = compute_second_entry_budget(
             200.0,
             margin_buffer_pct=0.01,
             entry_mode="AGGRESSIVE",
         )
         self.assertTrue(result.ok)
-        self.assertEqual(result.budget_usdt, 396.0)
+        self.assertEqual(result.budget_usdt, 200.0)
         self.assertEqual(result.reason_code, "SECOND_ENTRY_BUDGET_READY")
 
 
@@ -79,12 +79,12 @@ class FirstEntryPipelineTests(unittest.TestCase):
         self.assertEqual(result.action, "ENTRY_SUBMITTED")
         self.assertEqual(result.current_state, "ENTRY_ORDER")
         self.assertEqual(captured.get("newClientOrderId"), "first-1")
-        self.assertEqual(captured.get("quantity"), 0.5)
+        self.assertEqual(captured.get("quantity"), 0.45)
         self.assertEqual(captured.get("type"), "TAKE_PROFIT")
         self.assertEqual(captured.get("price"), 100.0)
         self.assertEqual(captured.get("stopPrice"), 99.9)
 
-    def test_first_entry_aggressive_mode_doubles_order_quantity(self) -> None:
+    def test_first_entry_aggressive_mode_keeps_same_order_quantity(self) -> None:
         captured = {}
 
         def fake_create(params: dict) -> GatewayCallResult:
@@ -107,7 +107,7 @@ class FirstEntryPipelineTests(unittest.TestCase):
         self.assertEqual(result.action, "ENTRY_SUBMITTED")
         self.assertEqual(result.current_state, "ENTRY_ORDER")
         self.assertEqual(captured.get("newClientOrderId"), "first-agg-1")
-        self.assertEqual(captured.get("quantity"), 1.0)
+        self.assertEqual(captured.get("quantity"), 0.45)
         self.assertEqual(captured.get("price"), 100.0)
 
     def test_first_entry_insufficient_margin_resets(self) -> None:
@@ -233,7 +233,7 @@ class SecondEntryPipelineTests(unittest.TestCase):
         self.assertEqual(captured.get("price"), 110.0)
         self.assertEqual(captured.get("stopPrice"), 109.9)
 
-    def test_second_entry_aggressive_mode_doubles_order_quantity(self) -> None:
+    def test_second_entry_aggressive_mode_keeps_same_order_quantity(self) -> None:
         captured = {}
 
         def fake_create(params: dict) -> GatewayCallResult:
@@ -256,9 +256,9 @@ class SecondEntryPipelineTests(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(result.action, "ENTRY_SUBMITTED")
         self.assertEqual(result.current_state, "PHASE1")
-        self.assertEqual(result.budget_usdt, 396.0)
+        self.assertEqual(result.budget_usdt, 200.0)
         self.assertEqual(captured.get("newClientOrderId"), "second-agg-1")
-        self.assertEqual(captured.get("quantity"), 3.6)
+        self.assertEqual(captured.get("quantity"), 1.81)
         self.assertEqual(captured.get("price"), 110.0)
 
     def test_second_entry_non_margin_failure_skips_and_keeps_state(self) -> None:

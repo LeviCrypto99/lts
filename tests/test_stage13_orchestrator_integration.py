@@ -247,7 +247,7 @@ class OrchestratorIntegrationTests(unittest.TestCase):
         self.assertEqual(result.reason_code, "GLOBAL_BLOCKED_OR_NEW_ORDER_LOCKED")
         self.assertEqual(updated, runtime)
 
-    def test_trigger_cycle_first_entry_uses_aggressive_budget_multiplier(self) -> None:
+    def test_trigger_cycle_first_entry_budget_is_mode_independent(self) -> None:
         runtime = AutoTradeRuntime(
             settings=_default_settings(),
             signal_loop_paused=False,
@@ -289,7 +289,7 @@ class OrchestratorIntegrationTests(unittest.TestCase):
         )
         self.assertTrue(result.success)
         self.assertEqual(updated.symbol_state, "ENTRY_ORDER")
-        self.assertEqual(captured.get("quantity"), 10.0)
+        self.assertEqual(captured.get("quantity"), 4.5)
 
     def test_trigger_cycle_uses_stable_client_order_id_on_retries(self) -> None:
         runtime = AutoTradeRuntime(

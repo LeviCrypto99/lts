@@ -40,7 +40,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(settings.risk_signal_channel_id, -1003761851285)
         self.assertEqual(settings.cooldown_minutes, 10)
         self.assertEqual(settings.second_entry_percent, 15.0)
-        self.assertEqual(settings.margin_buffer_pct, 0.01)
+        self.assertEqual(settings.margin_buffer_pct, 0.0)
         self.assertEqual(settings.ws_stale_fallback_seconds, 5)
         self.assertEqual(settings.stale_mark_price_seconds, 15)
         self.assertEqual(settings.rate_limit_fail_threshold, 5)
@@ -55,7 +55,7 @@ class ConfigTests(unittest.TestCase):
             }
         )
         self.assertEqual(settings.cooldown_minutes, 10)
-        self.assertEqual(settings.margin_buffer_pct, 0.01)
+        self.assertEqual(settings.margin_buffer_pct, 0.0)
         self.assertEqual(settings.rate_limit_fail_threshold, 5)
 
 

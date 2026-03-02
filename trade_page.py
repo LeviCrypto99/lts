@@ -121,11 +121,29 @@ SIGNAL_LOOP_INTERVAL_SEC = 1.0
 TP_TRIGGER_SUBMISSION_GUARD_SEC = 20.0
 TP_SPLIT_ORDER_COUNT = 10
 TP_SPLIT_STEP_RATIO = 0.001
-PHASE2_TP_START_RATIO = -0.01
+PHASE2_TP_START_RATIO = 0.0
+PHASE2_TP_END_RATIO = 0.01
 PHASE2_TP_STEP_RATIO = 0.001
 ENTRY_CLIENT_ID_PREFIXES = ("LTS-E1-", "LTS-E2-")
 FIRST_ENTRY_CLIENT_ID_PREFIX = "LTS-E1-"
 SECOND_ENTRY_CLIENT_ID_PREFIX = "LTS-E2-"
+ORDER_ROLE_ENTRY_LIMIT = "ENTRY_LIMIT"
+ORDER_ROLE_ENTRY_TRIGGER = "ENTRY_TRIGGER"
+ORDER_ROLE_EXIT_LIMIT = "EXIT_LIMIT"
+ORDER_ROLE_EXIT_TRIGGER = "EXIT_TRIGGER"
+ENTRY_STAGE_E1 = "E1"
+ENTRY_STAGE_E2 = "E2"
+ENTRY_STAGE_UNKNOWN = "UNKNOWN"
+ENTRY_STAGE_NONE = "-"
+EXIT_INTENT_TP = "TP"
+EXIT_INTENT_BE = "BE"
+EXIT_INTENT_MDD = "MDD"
+EXIT_INTENT_FORCED_MARKET = "FORCED_MARKET"
+EXIT_INTENT_UNKNOWN = "UNKNOWN"
+EXIT_INTENT_NONE = "-"
+CLASSIFICATION_CONFIDENCE_STRICT = "STRICT"
+CLASSIFICATION_CONFIDENCE_HEURISTIC = "HEURISTIC"
+CLASSIFICATION_CONFIDENCE_UNKNOWN = "UNKNOWN"
 STOP_FAMILY_EXPECTED_WORKING_TYPE = "CONTRACT_PRICE"
 WORKING_TYPE_MONITOR_LOG_THROTTLE_SEC = 30.0
 WORKING_TYPE_MONITOR_SUMMARY_INTERVAL_SEC = 60.0
@@ -318,8 +336,8 @@ DEFAULT_MDD = "15%"
 DEFAULT_TP_RATIO = "5%"
 DEFAULT_RISK_FILTER = "보수적"
 TP_RATIO_OPTIONS = ["0.5%", "3%", "5%"]
-# UI 표시 MDD와 별개로 실제 MDD stop 계산은 고정 20%를 사용한다.
-MDD_STOP_EFFECTIVE_RATIO = 0.20
+# UI 표시 MDD와 동일하게 실제 MDD stop 계산은 고정 15%를 사용한다.
+MDD_STOP_EFFECTIVE_RATIO = 0.15
 
 
 def _hex_to_rgba(value: str, alpha: int) -> Tuple[int, int, int, int]:
@@ -1349,7 +1367,7 @@ class TradePage(tk.Frame):
         effective_ratio = float(MDD_STOP_EFFECTIVE_RATIO)
         if not bool(getattr(self, "_mdd_stop_ratio_override_logged", False)):
             _log_trade(
-                "MDD stop ratio override active: "
+                "MDD stop ratio resolved: "
                 f"ui_mdd={ui_mdd_raw} ui_ratio={ui_mdd_ratio:.6f} "
                 f"effective_ratio={effective_ratio:.6f}"
             )
@@ -1471,8 +1489,20 @@ class TradePage(tk.Frame):
                 if rounded is not None and rounded > 0.0:
                     desired_targets.append(float(rounded))
         else:
-            for idx in range(TP_SPLIT_ORDER_COUNT):
-                pnl_ratio = float(PHASE2_TP_START_RATIO) + (float(PHASE2_TP_STEP_RATIO) * float(idx))
+            phase2_start = float(PHASE2_TP_START_RATIO)
+            phase2_end = float(PHASE2_TP_END_RATIO)
+            phase2_step = float(PHASE2_TP_STEP_RATIO)
+            if phase2_step <= 0.0:
+                _log_trade(
+                    "Split TP plan unavailable: "
+                    f"symbol={target} state={state} reason=phase2_step_non_positive "
+                    f"phase2_step={phase2_step} loop={loop_label}"
+                )
+                return []
+            phase2_count = int(math.floor(((phase2_end - phase2_start) / phase2_step) + 1e-12)) + 1
+            phase2_count = max(1, phase2_count)
+            for idx in range(phase2_count):
+                pnl_ratio = float(phase2_start) + (float(phase2_step) * float(idx))
                 raw_target = float(avg_entry) * (1.0 - pnl_ratio if is_short else 1.0 + pnl_ratio)
                 rounded = round_price_by_tick_size(raw_target, float(tick_size))
                 if rounded is not None and rounded > 0.0:
@@ -1489,9 +1519,13 @@ class TradePage(tk.Frame):
             )
             return []
 
+        requested_split_count = min(TP_SPLIT_ORDER_COUNT, len(desired_targets))
+        if state == "PHASE2":
+            requested_split_count = len(desired_targets)
+
         quantities = self._allocate_split_exit_quantities(
             abs(float(position_amt)),
-            split_count=min(TP_SPLIT_ORDER_COUNT, len(desired_targets)),
+            split_count=requested_split_count,
             step_size=float(step_size),
             min_qty=float(min_qty),
         )
@@ -1506,10 +1540,10 @@ class TradePage(tk.Frame):
         effective_count = min(len(desired_targets), len(quantities))
         if effective_count <= 0:
             return []
-        if effective_count < TP_SPLIT_ORDER_COUNT:
+        if effective_count < requested_split_count:
             _log_trade(
                 "Split TP plan reduced order count: "
-                f"symbol={target} state={state} requested={TP_SPLIT_ORDER_COUNT} "
+                f"symbol={target} state={state} requested={requested_split_count} "
                 f"effective={effective_count} loop={loop_label}"
             )
 
@@ -4232,16 +4266,16 @@ class TradePage(tk.Frame):
                     or 0.0
                 )
 
-        has_open_entry_order = False
+        role_buckets = self._classify_orders_for_symbol_by_role(symbol, open_orders)
+        entry_limit_orders = role_buckets[ORDER_ROLE_ENTRY_LIMIT]
+        entry_trigger_orders = role_buckets[ORDER_ROLE_ENTRY_TRIGGER]
+        exit_limit_orders = role_buckets[ORDER_ROLE_EXIT_LIMIT]
+        exit_trigger_orders = role_buckets[ORDER_ROLE_EXIT_TRIGGER]
+        has_open_entry_order = bool(entry_limit_orders or entry_trigger_orders)
         has_tp_order = False
-        for order in open_orders:
-            if not isinstance(order, dict):
-                continue
-            if str(order.get("symbol", "")).upper() != symbol:
-                continue
+        for order in list(exit_limit_orders) + list(exit_trigger_orders):
             order_type = str(order.get("type", "")).upper()
             reduce_only = self._to_bool(order.get("reduceOnly"))
-            close_position = self._to_bool(order.get("closePosition"))
             side = str(order.get("side", "")).upper()
             price = self._safe_float(order.get("price"))
             if (
@@ -4256,8 +4290,59 @@ class TradePage(tk.Frame):
                 )
             ):
                 has_tp_order = True
-            if side == "SELL" and not reduce_only and not close_position:
-                has_open_entry_order = True
+                break
+        if symbol:
+            all_symbol_orders = (
+                list(entry_limit_orders)
+                + list(entry_trigger_orders)
+                + list(exit_limit_orders)
+                + list(exit_trigger_orders)
+            )
+            entry_stage_e1_count = 0
+            entry_stage_e2_count = 0
+            entry_stage_unknown_count = 0
+            exit_intent_tp_count = 0
+            exit_intent_be_count = 0
+            exit_intent_mdd_count = 0
+            exit_intent_forced_market_count = 0
+            exit_intent_unknown_count = 0
+            classification_unknown_count = 0
+            for order in all_symbol_orders:
+                entry_stage = str(order.get("_entry_stage") or "").strip().upper()
+                exit_intent = str(order.get("_exit_intent") or "").strip().upper()
+                classification_confidence = str(order.get("_classification_confidence") or "").strip().upper()
+                if entry_stage == ENTRY_STAGE_E1:
+                    entry_stage_e1_count += 1
+                elif entry_stage == ENTRY_STAGE_E2:
+                    entry_stage_e2_count += 1
+                elif entry_stage == ENTRY_STAGE_UNKNOWN:
+                    entry_stage_unknown_count += 1
+                if exit_intent == EXIT_INTENT_TP:
+                    exit_intent_tp_count += 1
+                elif exit_intent == EXIT_INTENT_BE:
+                    exit_intent_be_count += 1
+                elif exit_intent == EXIT_INTENT_MDD:
+                    exit_intent_mdd_count += 1
+                elif exit_intent == EXIT_INTENT_FORCED_MARKET:
+                    exit_intent_forced_market_count += 1
+                elif exit_intent == EXIT_INTENT_UNKNOWN:
+                    exit_intent_unknown_count += 1
+                if classification_confidence == CLASSIFICATION_CONFIDENCE_UNKNOWN:
+                    classification_unknown_count += 1
+            _log_trade(
+                "Risk context order-role summary: "
+                f"symbol={symbol} entry_limit={len(entry_limit_orders)} "
+                f"entry_trigger={len(entry_trigger_orders)} "
+                f"exit_limit={len(exit_limit_orders)} "
+                f"exit_trigger={len(exit_trigger_orders)} "
+                f"entry_stage_e1={entry_stage_e1_count} entry_stage_e2={entry_stage_e2_count} "
+                f"entry_stage_unknown={entry_stage_unknown_count} "
+                f"exit_intent_tp={exit_intent_tp_count} exit_intent_be={exit_intent_be_count} "
+                f"exit_intent_mdd={exit_intent_mdd_count} exit_intent_forced_market={exit_intent_forced_market_count} "
+                f"exit_intent_unknown={exit_intent_unknown_count} "
+                f"classification_unknown={classification_unknown_count} "
+                f"has_open_entry_order={has_open_entry_order} has_tp_order={has_tp_order}"
+            )
         second_entry_fully_filled = False
         if symbol:
             second_entry_fully_filled = symbol in self._second_entry_fully_filled_symbols
@@ -4345,6 +4430,13 @@ class TradePage(tk.Frame):
             _log_trade(f"Active symbol synchronized from exchange snapshot: symbol={active_symbol}")
 
         if active_symbol:
+            current = self._promote_idle_state_for_open_entry_orders(
+                current,
+                active_symbol=active_symbol,
+                open_orders=open_orders,
+                positions=positions,
+                loop_label=f"{loop_label}-idle-promotion",
+            )
             current = self._sync_entry_fill_by_symbol(
                 current,
                 symbol=active_symbol,
@@ -4438,6 +4530,31 @@ class TradePage(tk.Frame):
             with self._auto_trade_runtime_lock:
                 self._orchestrator_runtime = current
                 self._sync_recovery_state_from_orchestrator_locked()
+
+    def _promote_idle_state_for_open_entry_orders(
+        self,
+        runtime: AutoTradeRuntime,
+        *,
+        active_symbol: str,
+        open_orders: list[dict],
+        positions: list[dict],
+        loop_label: str,
+    ) -> AutoTradeRuntime:
+        target = str(active_symbol or "").strip().upper()
+        if runtime.symbol_state != "IDLE" or not target:
+            return runtime
+        if self._get_symbol_position(positions, target) is not None:
+            return runtime
+        entry_orders, _ = self._classify_orders_for_symbol(target, open_orders)
+        if not entry_orders:
+            return runtime
+        promoted = replace(runtime, symbol_state="ENTRY_ORDER")
+        _log_trade(
+            "Fill sync state promoted by open entry orders: "
+            f"symbol={target} state_before={runtime.symbol_state} state_after={promoted.symbol_state} "
+            f"entry_order_count={len(entry_orders)} open_order_count={len(open_orders)} loop={loop_label}"
+        )
+        return promoted
 
     def _retry_pending_oco_cancellations(
         self,
@@ -5063,33 +5180,186 @@ class TradePage(tk.Frame):
         symbol: str,
         open_orders: list[dict],
     ) -> tuple[list[dict], list[dict]]:
+        buckets = self._classify_orders_for_symbol_by_role(symbol, open_orders)
+        entry_orders = list(buckets[ORDER_ROLE_ENTRY_LIMIT]) + list(buckets[ORDER_ROLE_ENTRY_TRIGGER])
+        exit_orders = list(buckets[ORDER_ROLE_EXIT_LIMIT]) + list(buckets[ORDER_ROLE_EXIT_TRIGGER])
+        return entry_orders, exit_orders
+
+    def _classify_orders_for_symbol_by_role(
+        self,
+        symbol: str,
+        open_orders: list[dict],
+    ) -> dict[str, list[dict]]:
         target = str(symbol or "").strip().upper()
-        entry_orders: list[dict] = []
-        exit_orders: list[dict] = []
+        buckets: dict[str, list[dict]] = {
+            ORDER_ROLE_ENTRY_LIMIT: [],
+            ORDER_ROLE_ENTRY_TRIGGER: [],
+            ORDER_ROLE_EXIT_LIMIT: [],
+            ORDER_ROLE_EXIT_TRIGGER: [],
+        }
+        if not target:
+            return buckets
         for row in open_orders:
             if str(row.get("symbol") or "").strip().upper() != target:
                 continue
-            side = str(row.get("side") or "").strip().upper()
-            reduce_only = self._to_bool(row.get("reduceOnly"))
-            close_position = self._to_bool(row.get("closePosition"))
-            order_type = str(row.get("type") or "").strip().upper()
-            client_order_id = self._extract_order_client_id(row)
-            is_entry_by_prefix = self._is_entry_client_order_id(client_order_id)
-            is_stop_family = order_type in ("STOP_MARKET", "TAKE_PROFIT_MARKET", "STOP", "TAKE_PROFIT")
-            is_exit = bool(
-                not is_entry_by_prefix
-                and (
-                    side == "BUY"
-                    or reduce_only
-                    or close_position
-                    or is_stop_family
-                )
+            role, tags = self._classify_single_order_role(row=row, target_symbol=target)
+            if role not in buckets:
+                continue
+            if isinstance(row, dict):
+                row.update(tags)
+            buckets[role].append(row)
+        return buckets
+
+    def _classify_single_order_role(
+        self,
+        *,
+        row: Mapping[str, Any],
+        target_symbol: str,
+    ) -> tuple[str, dict[str, str]]:
+        side = str(row.get("side") or "").strip().upper()
+        reduce_only = self._to_bool(row.get("reduceOnly"))
+        close_position = self._to_bool(row.get("closePosition"))
+        order_type = str(row.get("type") or "").strip().upper()
+        client_order_id = self._extract_order_client_id(row)
+        is_entry_by_prefix = self._is_entry_client_order_id(client_order_id)
+        is_trigger_order = self._is_algo_order_type(order_type)
+
+        is_exit = bool(
+            not is_entry_by_prefix
+            and (
+                side == "BUY"
+                or reduce_only
+                or close_position
             )
-            if is_exit:
-                exit_orders.append(row)
-            else:
-                entry_orders.append(row)
-        return entry_orders, exit_orders
+        )
+        role = ORDER_ROLE_EXIT_TRIGGER if (is_exit and is_trigger_order) else (
+            ORDER_ROLE_EXIT_LIMIT if is_exit else (
+                ORDER_ROLE_ENTRY_TRIGGER if is_trigger_order else ORDER_ROLE_ENTRY_LIMIT
+            )
+        )
+        if (
+            not is_entry_by_prefix
+            and side == "BUY"
+            and not reduce_only
+            and not close_position
+        ):
+            _log_trade(
+                "Order role fallback classified BUY order as exit: "
+                f"symbol={target_symbol} order_type={order_type or '-'} "
+                f"client_order_id={client_order_id or '-'}"
+            )
+        if not is_exit and self._is_stop_family_order_type(order_type) and side == "SELL":
+            _log_trade(
+                "Stop-family SELL order classified as entry: "
+                f"symbol={target_symbol} order_type={order_type} reduce_only={reduce_only} "
+                f"close_position={close_position} client_order_id={client_order_id or '-'}"
+            )
+        role_confidence = self._infer_order_role_confidence(
+            side=side,
+            reduce_only=reduce_only,
+            close_position=close_position,
+            is_entry_by_prefix=is_entry_by_prefix,
+        )
+        entry_stage, entry_stage_confidence = self._infer_entry_stage(
+            role=role,
+            client_order_id=client_order_id,
+            is_entry_by_prefix=is_entry_by_prefix,
+        )
+        exit_intent, exit_intent_confidence = self._infer_exit_intent(
+            role=role,
+            order_type=order_type,
+            side=side,
+            reduce_only=reduce_only,
+            close_position=close_position,
+            client_order_id=client_order_id,
+        )
+        tags = {
+            "_order_role": role,
+            "_entry_stage": entry_stage,
+            "_entry_stage_confidence": entry_stage_confidence,
+            "_exit_intent": exit_intent,
+            "_exit_intent_confidence": exit_intent_confidence,
+            "_classification_confidence": role_confidence,
+        }
+        return role, tags
+
+    def _infer_order_role_confidence(
+        self,
+        *,
+        side: str,
+        reduce_only: bool,
+        close_position: bool,
+        is_entry_by_prefix: bool,
+    ) -> str:
+        if is_entry_by_prefix or reduce_only or close_position:
+            return CLASSIFICATION_CONFIDENCE_STRICT
+        if side in ("BUY", "SELL"):
+            return CLASSIFICATION_CONFIDENCE_HEURISTIC
+        return CLASSIFICATION_CONFIDENCE_UNKNOWN
+
+    def _infer_entry_stage(
+        self,
+        *,
+        role: str,
+        client_order_id: str,
+        is_entry_by_prefix: bool,
+    ) -> tuple[str, str]:
+        if role not in (ORDER_ROLE_ENTRY_LIMIT, ORDER_ROLE_ENTRY_TRIGGER):
+            return ENTRY_STAGE_NONE, CLASSIFICATION_CONFIDENCE_STRICT
+        if self._is_first_entry_client_order_id(client_order_id):
+            return ENTRY_STAGE_E1, CLASSIFICATION_CONFIDENCE_STRICT
+        if self._is_second_entry_client_order_id(client_order_id):
+            return ENTRY_STAGE_E2, CLASSIFICATION_CONFIDENCE_STRICT
+        if is_entry_by_prefix:
+            return ENTRY_STAGE_UNKNOWN, CLASSIFICATION_CONFIDENCE_HEURISTIC
+        return ENTRY_STAGE_UNKNOWN, CLASSIFICATION_CONFIDENCE_HEURISTIC
+
+    def _infer_exit_intent(
+        self,
+        *,
+        role: str,
+        order_type: str,
+        side: str,
+        reduce_only: bool,
+        close_position: bool,
+        client_order_id: str,
+    ) -> tuple[str, str]:
+        if role not in (ORDER_ROLE_EXIT_LIMIT, ORDER_ROLE_EXIT_TRIGGER):
+            return EXIT_INTENT_NONE, CLASSIFICATION_CONFIDENCE_STRICT
+        normalized_client_id = str(client_order_id or "").strip().upper()
+        if order_type in ("TAKE_PROFIT", "TAKE_PROFIT_MARKET"):
+            return EXIT_INTENT_TP, CLASSIFICATION_CONFIDENCE_STRICT
+        if order_type == "MARKET":
+            return EXIT_INTENT_FORCED_MARKET, CLASSIFICATION_CONFIDENCE_HEURISTIC
+        if order_type in ("STOP", "STOP_MARKET"):
+            if self._has_client_order_id_tag(normalized_client_id, tags=("MDD",)):
+                return EXIT_INTENT_MDD, CLASSIFICATION_CONFIDENCE_STRICT
+            if self._has_client_order_id_tag(normalized_client_id, tags=("BREAKEVEN", "BE")):
+                return EXIT_INTENT_BE, CLASSIFICATION_CONFIDENCE_HEURISTIC
+            if close_position:
+                return EXIT_INTENT_UNKNOWN, CLASSIFICATION_CONFIDENCE_HEURISTIC
+            return EXIT_INTENT_UNKNOWN, CLASSIFICATION_CONFIDENCE_UNKNOWN
+        if order_type == "LIMIT" and side == "BUY" and reduce_only:
+            if self._has_client_order_id_tag(normalized_client_id, tags=("MDD",)):
+                return EXIT_INTENT_MDD, CLASSIFICATION_CONFIDENCE_HEURISTIC
+            if self._has_client_order_id_tag(normalized_client_id, tags=("BREAKEVEN", "BE")):
+                return EXIT_INTENT_BE, CLASSIFICATION_CONFIDENCE_HEURISTIC
+            return EXIT_INTENT_TP, CLASSIFICATION_CONFIDENCE_HEURISTIC
+        return EXIT_INTENT_UNKNOWN, CLASSIFICATION_CONFIDENCE_UNKNOWN
+
+    @staticmethod
+    def _has_client_order_id_tag(client_order_id: str, *, tags: tuple[str, ...]) -> bool:
+        normalized = str(client_order_id or "").strip().upper().replace("_", "-")
+        if not normalized:
+            return False
+        padded = f"-{normalized}-"
+        for tag in tags:
+            normalized_tag = str(tag or "").strip().upper()
+            if not normalized_tag:
+                continue
+            if f"-{normalized_tag}-" in padded:
+                return True
+        return False
 
     def _infer_entry_order_status(
         self,

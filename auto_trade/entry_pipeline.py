@@ -32,9 +32,9 @@ def _is_positive_finite(value: float) -> bool:
     return math.isfinite(float(value)) and float(value) > 0.0
 
 
-FIRST_ENTRY_BUDGET_BASE_RATIO = 0.5
+FIRST_ENTRY_BUDGET_BASE_RATIO = 0.45
 ENTRY_MODE_TO_FIRST_ENTRY_BUDGET_MULTIPLIER: dict[str, float] = {
-    "AGGRESSIVE": 2.0,
+    "AGGRESSIVE": 1.0,
     "CONSERVATIVE": 1.0,
 }
 DEFAULT_ENTRY_MODE = "CONSERVATIVE"
@@ -278,28 +278,16 @@ def compute_second_entry_budget(
             reason_code="INVALID_AVAILABLE_BALANCE",
             failure_reason="available balance must be positive finite number",
         )
-    if not math.isfinite(float(margin_buffer_pct)):
-        return EntryBudgetResult(
-            ok=False,
-            budget_usdt=None,
-            reason_code="INVALID_MARGIN_BUFFER",
-            failure_reason="margin_buffer_pct must be finite",
-        )
-    if float(margin_buffer_pct) < 0.0 or float(margin_buffer_pct) >= 1.0:
-        return EntryBudgetResult(
-            ok=False,
-            budget_usdt=None,
-            reason_code="MARGIN_BUFFER_OUT_OF_RANGE",
-            failure_reason="margin_buffer_pct must be >= 0 and < 1",
-        )
+    # Keep the input for backward compatibility, but second entry now uses full available balance.
+    _ = margin_buffer_pct
     mode_multiplier = _resolve_second_entry_budget_multiplier(entry_mode)
-    budget = float(available_usdt) * (1.0 - float(margin_buffer_pct)) * float(mode_multiplier)
+    budget = float(available_usdt) * float(mode_multiplier)
     if budget <= 0:
         return EntryBudgetResult(
             ok=False,
             budget_usdt=None,
             reason_code="SECOND_ENTRY_BUDGET_NON_POSITIVE",
-            failure_reason="available balance after buffer is not positive",
+            failure_reason="available balance is not positive",
         )
     return EntryBudgetResult(
         ok=True,
@@ -811,7 +799,7 @@ def compute_first_entry_budget_with_logging(
                 f"wallet_balance_usdt={wallet_balance_usdt} "
                 f"entry_mode={normalized_mode}"
             ),
-            decision="wallet_balance_times_50pct_then_apply_entry_mode_multiplier",
+            decision="wallet_balance_times_45pct_with_mode_multiplier_fixed_at_1x",
             result="ready" if result.ok else "rejected",
             state_before="budget_pending",
             state_after="budget_ready" if result.ok else "budget_rejected",
@@ -846,7 +834,7 @@ def compute_second_entry_budget_with_logging(
                 f"available_usdt={available_usdt} margin_buffer_pct={margin_buffer_pct} "
                 f"entry_mode={normalized_mode}"
             ),
-            decision="available_balance_apply_margin_buffer_then_apply_entry_mode_multiplier",
+            decision="available_balance_full_allocation_with_mode_multiplier_fixed_at_1x",
             result="ready" if result.ok else "rejected",
             state_before="budget_pending",
             state_after="budget_ready" if result.ok else "budget_rejected",

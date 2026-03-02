@@ -30,3 +30,11 @@
 - 거래소 메타 조회 실패(`filter_rules` 누락)는 일시 장애일 수 있으므로 pending 후보를 즉시 삭제하지 말고 유효 심볼만 진행하거나 다음 루프로 재시도하도록 설계한다.
 - 사용자가 "새 이슈가 계속 튀어나온다"는 피드백을 주면, 추가 스캔 결과를 즉시 패치 배치(예: 고위험 3건)로 고정하고 그 배치 외 변경은 금지해 반복 발견/수정 사이클을 끊는다.
 - 거래 로직 검토 답변에서 "문제 없음"을 단정하기 전에 `상태(state)`와 `실계정 스냅샷(has_position/has_open_entry_order)` 불일치 케이스를 반드시 별도 시나리오로 확인하고, 확증 로그 라인과 함께 결론을 낸다.
+- `ENTRY_LOCK` 이슈 분석 시에는 `symbol_state`만 보지 말고 `open_order entry/exit 분류 기준`과 `active_symbol 스냅샷 동기화`를 함께 확인한다. 특히 stop-family `SELL`은 `reduceOnly/closePosition` 플래그 없으면 ENTRY로 분류되어야 한다.
+- 주문 취소 안정성이 요구되는 멀티오더 전략에서는 `entry/exit` 2분류만 두지 말고 최소 `ENTRY_LIMIT/ENTRY_TRIGGER/EXIT_LIMIT/EXIT_TRIGGER` 4버킷으로 명시 분류해 취소 대상 범위를 코드/테스트에서 고정한다.
+- 리스크 시그널의 `has_open_entry_order` 같은 판정 값은 별도 휴리스틱으로 다시 계산하지 말고, 주문 분류(동일 함수/동일 규칙)를 재사용해 판단 기준 드리프트를 막는다.
+- 주문 분류 확장이 필요할 때는 기존 반환 인터페이스(`entry/exit` 리스트)를 깨지 말고 row 내부 태그(`_entry_stage`, `_exit_intent`, `_classification_confidence`)를 추가해 하위 호환을 유지한 채 검증 범위를 넓힌다.
+- 손절 용어를 설명할 때 `MDD STOP`(최대손실 스탑)과 `BREAKEVEN STOP`(본절 스탑)을 절대 혼용하지 말고, 답변 전에 `order_context`/상수(`MDD_STOP_MARKET`, `BREAKEVEN_STOP_MARKET`)를 코드 라인으로 재확인한 뒤 사용자 용어로 풀어쓴다.
+- 사용자가 진입 물량 정책을 명시하면(`1차 xx%`, `2차 남은 전량`, `모드 차이는 레버리지뿐`) 예산 계산식/기본 설정/테스트 기대값을 동시에 고정해, 일부 경로에서만 옛 multiplier/버퍼가 남는 반쪽 반영을 방지한다.
+- 사용자가 TP 범위를 “평단부터”로 수정하면 시작/끝 비율의 부호를 먼저 고정하고(예: 숏 `+1%~0%` vs `0%~-1%`), 분할 개수(고정 N개 vs 구간 기반 N+1개)와 테스트 기대값을 같은 커밋에서 함께 갱신한다.
+- UI 표시값과 실제 계산 상수가 분리돼 있는 항목(MDD 등)은 사용자 요청으로 값을 되돌릴 때 상수/주석/로그 문구와 함께 관련 fixture(정렬된 stopPrice/triggerPrice)도 동시에 갱신해야 테스트가 깨지지 않는다.

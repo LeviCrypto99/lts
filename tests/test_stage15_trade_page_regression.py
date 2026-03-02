@@ -308,6 +308,292 @@ class TradePageRegressionTests(unittest.TestCase):
         self.assertEqual(row.get("_type_source"), "orderType")
         self.assertAlmostEqual(float(row.get("origQty") or 0.0), 15.8, places=9)
 
+    def test_classify_orders_treats_stop_family_sell_without_reduce_flags_as_entry(self) -> None:
+        page = _make_trade_page_stub()
+        open_orders = [
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 2000000545523993,
+                "type": "TAKE_PROFIT",
+                "side": "SELL",
+                "status": "NEW",
+                "reduceOnly": False,
+                "closePosition": False,
+            }
+        ]
+
+        entry_orders, exit_orders = page._classify_orders_for_symbol("PHAUSDT", open_orders)
+
+        self.assertEqual(len(entry_orders), 1)
+        self.assertEqual(len(exit_orders), 0)
+
+    def test_classify_orders_treats_stop_family_sell_reduce_only_as_exit(self) -> None:
+        page = _make_trade_page_stub()
+        open_orders = [
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 2000000545523993,
+                "type": "TAKE_PROFIT",
+                "side": "SELL",
+                "status": "NEW",
+                "reduceOnly": True,
+                "closePosition": False,
+            }
+        ]
+
+        entry_orders, exit_orders = page._classify_orders_for_symbol("PHAUSDT", open_orders)
+
+        self.assertEqual(len(entry_orders), 0)
+        self.assertEqual(len(exit_orders), 1)
+
+    def test_classify_orders_by_role_distinguishes_four_order_buckets(self) -> None:
+        page = _make_trade_page_stub()
+        open_orders = [
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 1001,
+                "type": "LIMIT",
+                "side": "SELL",
+                "reduceOnly": False,
+                "closePosition": False,
+                "clientOrderId": "LTS-E1-1001-aaaa",
+            },
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 1002,
+                "type": "TAKE_PROFIT",
+                "side": "SELL",
+                "reduceOnly": False,
+                "closePosition": False,
+                "clientOrderId": "LTS-E2-1002-bbbb",
+            },
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 2001,
+                "type": "TAKE_PROFIT",
+                "side": "BUY",
+                "reduceOnly": True,
+                "closePosition": False,
+            },
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 2002,
+                "type": "LIMIT",
+                "side": "BUY",
+                "reduceOnly": True,
+                "closePosition": False,
+            },
+        ]
+
+        buckets = page._classify_orders_for_symbol_by_role("PHAUSDT", open_orders)
+
+        self.assertEqual([row["orderId"] for row in buckets["ENTRY_LIMIT"]], [1001])
+        self.assertEqual([row["orderId"] for row in buckets["ENTRY_TRIGGER"]], [1002])
+        self.assertEqual([row["orderId"] for row in buckets["EXIT_TRIGGER"]], [2001])
+        self.assertEqual([row["orderId"] for row in buckets["EXIT_LIMIT"]], [2002])
+        self.assertEqual(str(open_orders[0].get("_entry_stage")), "E1")
+        self.assertEqual(str(open_orders[1].get("_entry_stage")), "E2")
+        self.assertEqual(str(open_orders[2].get("_exit_intent")), "TP")
+        self.assertEqual(str(open_orders[2].get("_exit_intent_confidence")), "STRICT")
+        self.assertEqual(str(open_orders[3].get("_exit_intent")), "TP")
+        self.assertEqual(str(open_orders[3].get("_exit_intent_confidence")), "HEURISTIC")
+        self.assertEqual(str(open_orders[0].get("_classification_confidence")), "STRICT")
+        self.assertEqual(str(open_orders[1].get("_classification_confidence")), "STRICT")
+
+    def test_classify_entry_without_prefix_marks_unknown_entry_stage(self) -> None:
+        page = _make_trade_page_stub()
+        open_orders = [
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 3001,
+                "type": "LIMIT",
+                "side": "SELL",
+                "reduceOnly": False,
+                "closePosition": False,
+            }
+        ]
+
+        buckets = page._classify_orders_for_symbol_by_role("PHAUSDT", open_orders)
+
+        self.assertEqual([row["orderId"] for row in buckets["ENTRY_LIMIT"]], [3001])
+        self.assertEqual(str(open_orders[0].get("_entry_stage")), "UNKNOWN")
+        self.assertEqual(str(open_orders[0].get("_entry_stage_confidence")), "HEURISTIC")
+        self.assertEqual(str(open_orders[0].get("_classification_confidence")), "HEURISTIC")
+
+    def test_classify_exit_market_order_marks_forced_market_intent(self) -> None:
+        page = _make_trade_page_stub()
+        open_orders = [
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 4001,
+                "type": "MARKET",
+                "side": "BUY",
+                "reduceOnly": True,
+                "closePosition": False,
+            }
+        ]
+
+        buckets = page._classify_orders_for_symbol_by_role("PHAUSDT", open_orders)
+
+        self.assertEqual([row["orderId"] for row in buckets["EXIT_LIMIT"]], [4001])
+        self.assertEqual(str(open_orders[0].get("_exit_intent")), "FORCED_MARKET")
+        self.assertEqual(str(open_orders[0].get("_exit_intent_confidence")), "HEURISTIC")
+
+    def test_cancel_entry_orders_only_cancels_entry_roles_in_mixed_orders(self) -> None:
+        page = _make_trade_page_stub()
+        canceled: list[int] = []
+        page._cancel_order_with_gateway = (
+            lambda *, symbol, order_id, loop_label: canceled.append(int(order_id)) or True
+        )
+        open_orders = [
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 1001,
+                "type": "LIMIT",
+                "side": "SELL",
+                "reduceOnly": False,
+                "closePosition": False,
+                "clientOrderId": "LTS-E1-1001-aaaa",
+            },
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 1002,
+                "type": "TAKE_PROFIT",
+                "side": "SELL",
+                "reduceOnly": False,
+                "closePosition": False,
+                "clientOrderId": "LTS-E1-1002-bbbb",
+            },
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 2001,
+                "type": "TAKE_PROFIT",
+                "side": "BUY",
+                "reduceOnly": True,
+                "closePosition": False,
+            },
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 2002,
+                "type": "LIMIT",
+                "side": "BUY",
+                "reduceOnly": True,
+                "closePosition": False,
+            },
+        ]
+
+        summary = page._cancel_entry_orders_for_symbol(
+            symbol="PHAUSDT",
+            open_orders=open_orders,
+            loop_label="stage15-cancel-entry-mixed-role-orders",
+        )
+
+        self.assertEqual(sorted(canceled), [1001, 1002])
+        self.assertEqual(int(summary["attempted_count"]), 2)
+        self.assertEqual(int(summary["success_count"]), 2)
+        self.assertEqual(list(summary["failed_order_ids"]), [])
+
+    def test_build_risk_context_marks_open_entry_order_for_limit_and_trigger_entries(self) -> None:
+        page = _make_trade_page_stub()
+        page._fetch_exchange_info_snapshot = lambda: {"symbols": []}
+        page._fetch_open_positions = lambda: []
+        page._binance_public_get = lambda *_args, **_kwargs: {"price": "1.0"}
+        page._fetch_open_orders = lambda: [
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 1001,
+                "type": "LIMIT",
+                "side": "SELL",
+                "reduceOnly": False,
+                "closePosition": False,
+                "clientOrderId": "LTS-E1-1001-aaaa",
+            },
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 1002,
+                "type": "TAKE_PROFIT",
+                "side": "SELL",
+                "reduceOnly": False,
+                "closePosition": False,
+                "clientOrderId": "LTS-E1-1002-bbbb",
+            },
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 2001,
+                "type": "TAKE_PROFIT",
+                "side": "BUY",
+                "reduceOnly": True,
+                "closePosition": False,
+            },
+        ]
+
+        context = page._build_risk_context("invalid-risk-message", "PHAUSDT")
+
+        self.assertTrue(bool(context["has_open_entry_order"]))
+        self.assertTrue(bool(context["has_tp_order"]))
+
+    def test_build_risk_context_does_not_mark_entry_order_when_only_exit_orders_exist(self) -> None:
+        page = _make_trade_page_stub()
+        page._fetch_exchange_info_snapshot = lambda: {"symbols": []}
+        page._fetch_open_positions = lambda: []
+        page._binance_public_get = lambda *_args, **_kwargs: {"price": "1.0"}
+        page._fetch_open_orders = lambda: [
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 2001,
+                "type": "TAKE_PROFIT",
+                "side": "BUY",
+                "reduceOnly": True,
+                "closePosition": False,
+            },
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 2002,
+                "type": "LIMIT",
+                "side": "BUY",
+                "reduceOnly": True,
+                "closePosition": False,
+                "price": "0.1000",
+            },
+        ]
+
+        context = page._build_risk_context("invalid-risk-message", "PHAUSDT")
+
+        self.assertFalse(bool(context["has_open_entry_order"]))
+        self.assertTrue(bool(context["has_tp_order"]))
+
+    def test_promote_idle_state_for_open_entry_orders_sets_entry_order_state(self) -> None:
+        runtime = AutoTradeRuntime(
+            settings=_default_settings(),
+            signal_loop_paused=False,
+            signal_loop_running=True,
+            symbol_state="IDLE",
+            active_symbol="PHAUSDT",
+            global_state=GlobalState(has_any_open_order=True, has_any_position=False),
+        )
+        page = _make_trade_page_stub(runtime)
+        open_orders = [
+            {
+                "symbol": "PHAUSDT",
+                "orderId": 2000000545523993,
+                "type": "TAKE_PROFIT",
+                "side": "SELL",
+                "status": "NEW",
+                "reduceOnly": False,
+                "closePosition": False,
+            }
+        ]
+
+        updated = page._promote_idle_state_for_open_entry_orders(
+            runtime,
+            active_symbol="PHAUSDT",
+            open_orders=open_orders,
+            positions=[],
+            loop_label="stage15-idle-entry-promotion",
+        )
+
+        self.assertEqual(updated.symbol_state, "ENTRY_ORDER")
+
     def test_phase1_tp_target_uses_three_percent_ratio_when_selected(self) -> None:
         runtime = AutoTradeRuntime(
             settings=_default_settings(),
@@ -620,7 +906,7 @@ class TradePageRegressionTests(unittest.TestCase):
                 "type": "STOP_MARKET",
                 "side": "BUY",
                 "stopPrice": "0",
-                "triggerPrice": "20.646",
+                "triggerPrice": "19.786",
                 "closePosition": "true",
             },
         ]
@@ -680,13 +966,13 @@ class TradePageRegressionTests(unittest.TestCase):
             loop_label="stage15-phase2-breakeven-trigger",
         )
 
-        self.assertEqual(submit_counter["tp_trigger"], 10)
+        self.assertEqual(submit_counter["tp_trigger"], 11)
         targets = [pair[0] for pair in submitted_pairs]
         triggers = [pair[1] for pair in submitted_pairs]
-        self.assertAlmostEqual(min(targets), 99.0, places=8)
-        self.assertAlmostEqual(max(targets), 99.9, places=8)
-        self.assertAlmostEqual(min(triggers), 98.9, places=8)
-        self.assertAlmostEqual(max(triggers), 99.8, places=8)
+        self.assertAlmostEqual(min(targets), 100.0, places=8)
+        self.assertAlmostEqual(max(targets), 101.0, places=8)
+        self.assertAlmostEqual(min(triggers), 99.9, places=8)
+        self.assertAlmostEqual(max(triggers), 100.9, places=8)
 
     def test_safety_lock_drops_signal_queue_immediately(self) -> None:
         runtime = AutoTradeRuntime(
@@ -991,7 +1277,7 @@ class TradePageRegressionTests(unittest.TestCase):
             loop_label="stage15-qty-sync",
         )
 
-        self.assertEqual(submitted_order_types, ["TP_LIMIT"] * 10)
+        self.assertEqual(submitted_order_types, ["TP_LIMIT"] * 11)
         self.assertTrue(updated_runtime.global_state.has_any_position)
         self.assertEqual(page._last_position_qty_by_symbol["BTCUSDT"], 0.5)
 
