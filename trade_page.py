@@ -85,7 +85,7 @@ PANEL_BORDER_ALPHA = 210
 PANEL_RADIUS = 18
 PANEL_BORDER_WIDTH = 2
 
-STATUS_REFRESH_MS = 5000
+STATUS_REFRESH_MS = 10 * 60 * 1000
 BALANCE_SYNC_INTERVAL_SEC = 10 * 60
 SUBSCRIBER_WEBHOOK_URL = (
     "https://script.google.com/macros/s/AKfycbyKBEsD_GQ125wrjPm8kUrcRvnZSuZ4DlHZTg-lEr1X_UX-CiY2U9W9g3Pd6JBc6xIS/exec"
@@ -674,6 +674,10 @@ class TradePage(tk.Frame):
             "trigger_working_type=CONTRACT_PRICE "
             f"primary_mode=ONE_TICK_LEAD "
             f"fallback_buffer_pct={TRIGGER_BUFFER_RATIO_DEFAULT * 100:.1f}"
+        )
+        _log_trade(
+            "Status refresh interval configured: "
+            f"interval_sec={STATUS_REFRESH_MS / 1000:.0f}"
         )
         self._start_wallet_fetch()
         self._start_status_refresh()
@@ -5548,7 +5552,11 @@ class TradePage(tk.Frame):
 
         if has_position:
             self._clear_second_entry_terminal_confirmation(target)
-            return "FILLED"
+            _log_trade(
+                "Second-entry fill inference deferred: "
+                f"symbol={target} reason=position_exists_without_second_entry_fill_evidence loop={loop_label}"
+            )
+            return "NEW"
 
         confirm_streak, confirm_elapsed = self._record_second_entry_terminal_confirmation(target)
         if confirm_streak < required_snapshots or confirm_elapsed < required_elapsed_sec:

@@ -24,6 +24,13 @@ _CATEGORY_EXCLUDED_KEYWORDS = [
     "binance alpha spotlight",
 ]
 
+_LONG_DIRECTION_ALIASES = {
+    "롱",
+    "long",
+    "매수",
+    "상방",
+}
+
 
 def _normalize(value: Any) -> str:
     text = " ".join(str(value).split())
@@ -32,6 +39,20 @@ def _normalize(value: Any) -> str:
 
 def _normalize_direction(value: str) -> str:
     return (value or "").strip()
+
+
+def _normalize_market_direction_token(value: str) -> str:
+    return "".join((value or "").strip().lower().split())
+
+
+def _is_long_market_direction(value: str) -> bool:
+    normalized = _normalize_market_direction_token(value)
+    if not normalized:
+        return False
+    for alias in _LONG_DIRECTION_ALIASES:
+        if normalized == alias or normalized.startswith(alias):
+            return True
+    return False
 
 
 def _normalized_category_lower(category: str) -> str:
@@ -91,6 +112,7 @@ def evaluate_common_filters(
     ranking_direction: str,
     ranking_position: int,
     funding_rate_pct: float,
+    market_direction: str = "",
     signal_received_at_local: Optional[int] = None,
 ) -> CommonFilterResult:
     blocked_by_time, blocked_reason = _evaluate_kst_entry_block_window(signal_received_at_local)
@@ -99,6 +121,13 @@ def evaluate_common_filters(
             passed=False,
             reason_code="KST_MORNING_ENTRY_BLOCK",
             failure_reason=blocked_reason,
+        )
+
+    if _is_long_market_direction(market_direction):
+        return CommonFilterResult(
+            passed=False,
+            reason_code="LONG_DIRECTION_BLOCK",
+            failure_reason=f"market_direction={market_direction} blocks entry",
         )
 
     matched_keyword = _match_excluded_keyword(category)
@@ -155,6 +184,7 @@ def evaluate_common_filters_with_logging(
     ranking_direction: str,
     ranking_position: int,
     funding_rate_pct: float,
+    market_direction: str = "",
     signal_received_at_local: Optional[int] = None,
     symbol: Optional[str] = None,
 ) -> CommonFilterResult:
@@ -164,6 +194,7 @@ def evaluate_common_filters_with_logging(
         ranking_direction=ranking_direction,
         ranking_position=ranking_position,
         funding_rate_pct=funding_rate_pct,
+        market_direction=market_direction,
         signal_received_at_local=signal_received_at_local,
     )
     if result.passed:
@@ -173,6 +204,7 @@ def evaluate_common_filters_with_logging(
                 event="evaluate_common_filters",
                 input_data=(
                     f"category={_normalize(category)} direction={_normalize(ranking_direction)} "
+                    f"market_direction={_normalize(market_direction)} "
                     f"rank={ranking_position} funding_rate_pct={funding_rate_pct} "
                     f"signal_received_at_local={_normalize(signal_received_at_local)} "
                     f"signal_time_kst={signal_time_kst}"
@@ -194,6 +226,7 @@ def evaluate_common_filters_with_logging(
             event="evaluate_common_filters",
             input_data=(
                 f"category={_normalize(category)} direction={_normalize(ranking_direction)} "
+                f"market_direction={_normalize(market_direction)} "
                 f"rank={ranking_position} funding_rate_pct={funding_rate_pct} "
                 f"signal_received_at_local={_normalize(signal_received_at_local)} "
                 f"signal_time_kst={signal_time_kst}"

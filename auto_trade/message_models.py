@@ -16,6 +16,7 @@ class LeadingMarketMessage:
     ranking_direction: str
     ranking_position: int
     category: str
+    market_direction: str
 
 
 @dataclass(frozen=True)

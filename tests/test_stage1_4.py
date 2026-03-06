@@ -28,6 +28,7 @@ LEADING_MARKET_TEXT = """🔥 실시간 주도 마켓 분석 (btc)
 ⏱️Binance 펀딩비 및 카운트다운 : -0.0250% / 01:23:45 (4h)
 🥇지난 24H 등락률 및 순위 : +12.34% / (상승) 상위 11위
 🏷️카테고리 : AI
+🧭방향 : 숏
 """
 
 RISK_MANAGEMENT_TEXT = "🥈 Binance : btcusdt.p 에서 숏 리스크관리 권장"
@@ -74,6 +75,15 @@ class MessageParserTests(unittest.TestCase):
         self.assertEqual(result.data.ranking_direction, "상승")
         self.assertEqual(result.data.ranking_position, 11)
         self.assertEqual(result.data.category, "AI")
+        self.assertEqual(result.data.market_direction, "숏")
+
+    def test_parse_leading_market_accept_without_direction_line(self) -> None:
+        text_without_direction = LEADING_MARKET_TEXT.replace("🧭방향 : 숏\n", "")
+        result = parse_leading_market_message(text_without_direction)
+        self.assertTrue(result.ok)
+        self.assertIsNotNone(result.data)
+        assert result.data is not None
+        self.assertEqual(result.data.market_direction, "")
 
     def test_parse_leading_market_reject_invalid_ticker(self) -> None:
         bad_text = LEADING_MARKET_TEXT.replace("(btc)", "(bt c)")

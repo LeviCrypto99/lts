@@ -161,6 +161,16 @@ def parse_leading_market_message(message_text: str) -> LeadingMarketParseResult:
     if not category:
         return LeadingMarketParseResult(False, None, "CATEGORY_PARSE_FAILED", "empty category")
 
+    market_direction = ""
+    direction_line = _find_first_line(lines, ("🧭", "방향"))
+    if direction_line is not None:
+        direction_payload = _split_label_payload(direction_line)
+        if direction_payload is None:
+            return LeadingMarketParseResult(False, None, "DIRECTION_PAYLOAD_NOT_FOUND", "missing direction payload")
+        market_direction = direction_payload.strip()
+        if not market_direction:
+            return LeadingMarketParseResult(False, None, "DIRECTION_PARSE_FAILED", "empty direction")
+
     return LeadingMarketParseResult(
         True,
         LeadingMarketMessage(
@@ -172,6 +182,7 @@ def parse_leading_market_message(message_text: str) -> LeadingMarketParseResult:
             ranking_direction=ranking_direction,
             ranking_position=ranking_position,
             category=category,
+            market_direction=market_direction,
         ),
         PARSE_OK,
         "-",
@@ -256,7 +267,7 @@ def parse_leading_market_message_with_logging(
                 event="parse_leading_market",
                 input_data=f"text={_log_text_preview(message_text)}",
                 decision="parse_fields_and_normalize",
-                result=f"ok symbol={result.data.symbol}",
+                result=f"ok symbol={result.data.symbol} market_direction={result.data.market_direction or '-'}",
                 state_before="received",
                 state_after="parsed",
                 failure_reason="-",

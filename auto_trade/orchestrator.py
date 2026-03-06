@@ -714,6 +714,7 @@ def handle_leading_market_signal(
         ranking_direction=parse_result.data.ranking_direction,
         ranking_position=parse_result.data.ranking_position,
         funding_rate_pct=parse_result.data.funding_rate_pct,
+        market_direction=parse_result.data.market_direction,
         signal_received_at_local=received_at_local,
         symbol=symbol,
     )

@@ -281,3 +281,57 @@
 - `LTS V2.1.7.exe` = `4ca655fd842fc1c1cd76aba208fe417ccdf763459f06e615fc7e47de0cf7eeb2`
 - `LTS-Updater.exe` = `8f4a74c49b448c46adb689bc06d393d8c5cda4a10ae752b89d4f7c6f638521e3`
 - 자동업데이트 메타 점검: `min_version=2.1.7`, `app_url=LTS%20V2.1.7.exe`, `app_sha256/updater_sha256` 모두 신규 산출물과 일치
+
+## Direction-Guard Feature Plan
+
+- [x] Add `market_direction` field to leading-market message model
+- [x] Parse `🧭방향 : ...` line in leading-market parser
+- [x] Reject entry when parsed direction is `롱` in common filters
+- [x] Wire new direction field through orchestrator filter call
+- [x] Run targeted verification (unit/manual log-based checks)
+- [x] Document review result
+
+## Review (Direction-Guard)
+
+- Implemented direction-aware entry block.
+- Behavior:
+  - Leading-market parser now extracts `market_direction` from `🧭방향 : ...` when present.
+  - Common filter now rejects with `LONG_DIRECTION_BLOCK` when `market_direction` resolves to long (`롱`, `long`, `매수`, `상방`).
+  - Orchestrator passes parsed `market_direction` into common-filter evaluation.
+- Backward compatibility:
+  - If direction line is missing, parser keeps `market_direction=""` and existing behavior is preserved.
+- Verification:
+  - `python3 -m unittest tests/test_stage1_4.py tests/test_stage6_filtering_targets.py`
+  - Result: `Ran 43 tests ... OK`
+  - `python3 -m py_compile auto_trade/message_models.py auto_trade/message_parser.py auto_trade/filtering.py auto_trade/orchestrator.py tests/test_stage1_4.py tests/test_stage6_filtering_targets.py`
+  - Result: `OK`
+
+## Release 3.0.1 Plan
+
+- [x] Update `config.py` and `version.json` base version to `3.0.1`
+- [x] Rebuild launcher/updater artifacts
+- [x] Calculate SHA256 for rebuilt EXEs
+- [x] Update `version.json` (`app_url`, `app_sha256`, `updater_sha256`) with rebuilt artifacts
+- [x] Validate release metadata consistency for auto-update
+- [x] Document release review
+
+## Review (Release 3.0.1)
+
+- Updated files: `config.py`, `version.json`, `tasks/todo.md`
+- Build:
+  - `cmd.exe /c ".venv\\Scripts\\python.exe build.py --target all"` completed
+  - Outputs: `dist/LTS V3.0.1.exe`, `dist/LTS-Updater.exe`
+- Deployment file sync:
+  - `dist/LTS V3.0.1.exe` -> root `LTS V3.0.1.exe`
+  - `dist/LTS-Updater.exe` -> root `LTS-Updater.exe`
+- SHA256:
+  - `LTS V3.0.1.exe` = `b3604b823c593713961c5b7383645cf2f7c84610107f2e54e6ffd7fb35b5d641`
+  - `LTS-Updater.exe` = `8440bf61c1ddb563e405db4191c4d0c545973491ddaa5d86ac7eaf1397140c0a`
+- `version.json` update:
+  - `min_version` = `3.0.1`
+  - `app_url` = `https://raw.githubusercontent.com/LeviCrypto99/lts/main/LTS%20V3.0.1.exe`
+  - `app_sha256` = `b3604b823c593713961c5b7383645cf2f7c84610107f2e54e6ffd7fb35b5d641`
+  - `updater_url` = `https://raw.githubusercontent.com/LeviCrypto99/lts/main/LTS-Updater.exe`
+  - `updater_sha256` = `8440bf61c1ddb563e405db4191c4d0c545973491ddaa5d86ac7eaf1397140c0a`
+- Auto-update consistency check:
+  - `config.VERSION`, `version.json.min_version`, `app_url` naming, and both SHA fields/file hashes all matched (`consistency=OK`)

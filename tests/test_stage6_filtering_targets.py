@@ -31,10 +31,35 @@ class CommonFilteringTests(unittest.TestCase):
             ranking_direction="상승",
             ranking_position=11,
             funding_rate_pct=-0.09,
+            market_direction="숏",
             signal_received_at_local=_ALLOWED_SIGNAL_TS,
         )
         self.assertTrue(result.passed)
         self.assertEqual(result.reason_code, "FILTER_PASS")
+
+    def test_common_filter_fail_long_direction_block(self) -> None:
+        result = evaluate_common_filters(
+            category="AI",
+            ranking_direction="상승",
+            ranking_position=11,
+            funding_rate_pct=-0.09,
+            market_direction="롱",
+            signal_received_at_local=_ALLOWED_SIGNAL_TS,
+        )
+        self.assertFalse(result.passed)
+        self.assertEqual(result.reason_code, "LONG_DIRECTION_BLOCK")
+
+    def test_common_filter_fail_long_direction_with_suffix_text(self) -> None:
+        result = evaluate_common_filters(
+            category="AI",
+            ranking_direction="상승",
+            ranking_position=11,
+            funding_rate_pct=-0.09,
+            market_direction="롱 🔗Liq HeatMap",
+            signal_received_at_local=_ALLOWED_SIGNAL_TS,
+        )
+        self.assertFalse(result.passed)
+        self.assertEqual(result.reason_code, "LONG_DIRECTION_BLOCK")
 
     def test_common_filter_fail_kst_morning_entry_block_start_inclusive(self) -> None:
         result = evaluate_common_filters(
