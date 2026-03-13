@@ -38,3 +38,1513 @@
 [2026-03-03 04:16:19] check_server_permission completed: api_key=UXFj***6Nx3 result=success
 [2026-03-03 04:16:19] login_click permission_result: api_key=UXFj***6Nx3 result=success
 [2026-03-03 04:16:19] login_click success: api_key=UXFj***6Nx3
+[2026-03-06 13:40:18] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-06 13:40:18] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-06 13:40:18] help_button_cluster_shift applied: shift_x=60
+[2026-03-06 13:40:29] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-06 13:40:29] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-06 13:40:31] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-06 13:40:31] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-06 13:40:31] login_click success: api_key=UXFj***6Nx3
+[2026-03-10 12:31:54] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-10 12:31:54] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-10 12:31:54] help_button_cluster_shift applied: shift_x=60
+[2026-03-10 12:32:07] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-10 12:32:07] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-10 12:32:10] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-10 12:32:10] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-10 12:32:10] login_click success: api_key=UXFj***6Nx3
+[2026-03-10 13:12:25] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-10 13:12:25] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-10 13:12:25] help_button_cluster_shift applied: shift_x=60
+[2026-03-10 13:13:07] guide_button_clicked: kind=lts_guidebook
+[2026-03-10 13:13:07] guide_pdf_opened: kind=lts_guidebook path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\lts_connect_guide.pdf
+[2026-03-10 13:13:20] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-10 13:13:20] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-10 13:13:24] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-10 13:13:24] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-10 13:13:24] login_click success: api_key=UXFj***6Nx3
+[2026-03-10 13:18:17] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-10 13:18:17] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-10 13:18:17] help_button_cluster_shift applied: shift_x=60
+[2026-03-10 13:18:23] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-10 13:18:23] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-10 13:18:27] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-10 13:18:27] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-10 13:18:27] login_click success: api_key=UXFj***6Nx3
+[2026-03-10 13:22:22] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-10 13:22:23] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-10 13:22:23] help_button_cluster_shift applied: shift_x=60
+[2026-03-10 13:24:21] guide_button_clicked: kind=lts_guidebook
+[2026-03-10 13:24:21] guide_pdf_opened: kind=lts_guidebook path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\lts_connect_guide.pdf
+[2026-03-10 13:25:42] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-10 13:25:42] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-10 13:25:42] help_button_cluster_shift applied: shift_x=60
+[2026-03-10 13:25:50] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-10 13:25:50] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-10 13:25:55] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-10 13:25:55] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-10 13:25:55] login_click success: api_key=UXFj***6Nx3
+[2026-03-10 13:26:05] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-10 13:26:05] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-10 13:26:05] help_button_cluster_shift applied: shift_x=60
+[2026-03-10 13:26:09] guide_button_clicked: kind=lts_guidebook
+[2026-03-10 13:26:09] guide_pdf_opened: kind=lts_guidebook path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\lts_connect_guide.pdf
+[2026-03-10 15:46:42] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-10 15:46:42] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-10 15:46:42] help_button_cluster_shift applied: shift_x=60
+[2026-03-10 15:46:48] guide_button_clicked: kind=binance_account_guide
+[2026-03-10 15:46:48] binance_account_guide_window_layout: centered_option_blocks
+[2026-03-10 15:46:48] binance_account_guide_window_opened
+[2026-03-10 15:46:48] binance_account_guide_window_created
+[2026-03-10 16:16:21] binance_account_guide_window_closed
+[2026-03-10 16:16:24] guide_button_clicked: kind=lts_guidebook
+[2026-03-10 16:16:24] guide_pdf_opened: kind=lts_guidebook path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\lts_connect_guide.pdf
+[2026-03-10 16:16:47] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-10 16:16:47] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-10 16:16:47] help_button_cluster_shift applied: shift_x=60
+[2026-03-11 10:21:37] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-11 10:21:37] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-11 10:21:37] help_button_cluster_shift applied: shift_x=60
+[2026-03-11 10:21:53] guide_button_clicked: kind=lts_guidebook
+[2026-03-11 10:21:53] guide_pdf_opened: kind=lts_guidebook path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\lts_connect_guide.pdf
+[2026-03-11 10:22:03] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-11 10:22:03] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-11 10:22:07] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-11 10:22:07] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-11 10:22:07] login_click success: api_key=UXFj***6Nx3
+[2026-03-11 11:15:42] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-11 11:15:42] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-11 11:15:42] help_button_cluster_shift applied: shift_x=60
+[2026-03-11 11:15:50] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-11 11:15:50] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-11 11:15:54] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-11 11:15:54] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-11 11:15:54] login_click success: api_key=UXFj***6Nx3
+[2026-03-11 11:40:50] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-11 11:40:50] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-11 11:40:50] help_button_cluster_shift applied: shift_x=60
+[2026-03-11 11:40:50] market_info_fetch_disabled: reason=trading_logic_removed
+[2026-03-11 11:40:57] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-11 11:40:57] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-11 11:41:01] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-11 11:41:01] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-11 11:41:01] login_click success: api_key=UXFj***6Nx3
+[2026-03-11 11:55:01] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-11 11:55:01] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-11 11:55:01] help_button_cluster_shift applied: shift_x=60
+[2026-03-11 11:55:27] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-11 11:55:27] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-11 11:55:30] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-11 11:55:30] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-11 11:55:30] login_click success: api_key=UXFj***6Nx3
+[2026-03-11 12:07:55] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-11 12:07:55] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-11 12:07:55] help_button_cluster_shift applied: shift_x=60
+[2026-03-11 12:08:04] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-11 12:08:04] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-11 12:08:08] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-11 12:08:08] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-11 12:08:08] login_click success: api_key=UXFj***6Nx3
+[2026-03-11 12:57:45] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-11 12:57:45] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-11 12:57:45] help_button_cluster_shift applied: shift_x=60
+[2026-03-11 12:57:45] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 12:57:52] login_click submitted: api_key=* secret_key_present=True
+[2026-03-11 12:57:52] check_server_permission bypassed: api_key=* reason=ui_only_mode
+[2026-03-11 12:57:52] login_click permission_result: api_key=* result=success
+[2026-03-11 12:57:52] login_click success: api_key=*
+[2026-03-11 13:04:13] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-11 13:04:13] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-11 13:04:13] help_button_cluster_shift applied: shift_x=60
+[2026-03-11 13:04:13] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:04:22] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-11 13:04:22] check_server_permission bypassed: api_key=UXFj***6Nx3 reason=ui_only_mode
+[2026-03-11 13:04:22] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-11 13:04:22] login_click success: api_key=UXFj***6Nx3
+[2026-03-11 13:04:37] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-11 13:04:37] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-11 13:04:37] help_button_cluster_shift applied: shift_x=60
+[2026-03-11 13:04:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:04:39] guide_button_clicked: kind=lts_guidebook
+[2026-03-11 13:04:39] guide_pdf_opened: kind=lts_guidebook path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\lts_connect_guide.pdf
+[2026-03-11 13:04:45] guide_button_clicked: kind=binance_account_guide
+[2026-03-11 13:04:45] binance_account_guide_window_layout: centered_option_blocks
+[2026-03-11 13:04:45] binance_account_guide_window_opened
+[2026-03-11 13:04:45] binance_account_guide_window_created
+[2026-03-11 13:04:47] binance_account_guide_option_clicked: option=no_account
+[2026-03-11 13:04:47] binance_account_guide_pdf_opened: option=no_account path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\binance_sign_up_guide_if_already_has_no_account.pdf
+[2026-03-11 13:05:07] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:05:11] subscriber_request_bypassed: api_key=**** tv_nick='fds' tg_nick='fds' uid='fdsa'
+[2026-03-11 13:05:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:06:07] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:06:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:07:07] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:07:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:08:07] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:08:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:09:07] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:09:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:10:07] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:10:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:11:07] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:11:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:12:07] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:12:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:13:07] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:13:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:14:07] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:14:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:15:07] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:15:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:16:07] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:16:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:17:07] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:17:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:18:07] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:18:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:19:07] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:19:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:20:07] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:20:37] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:21:08] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:21:38] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:22:08] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:22:38] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:23:08] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:23:38] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:24:08] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:24:38] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:25:08] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:25:38] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:26:08] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:26:38] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:27:08] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:27:38] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:28:08] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:28:38] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:29:08] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:29:38] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:30:08] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:30:38] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:31:08] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:31:38] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:32:08] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:32:38] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:33:08] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:33:38] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:34:08] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:34:38] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:35:08] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:35:38] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:36:08] market_info_fetch_bypassed: reason=ui_only_mode
+[2026-03-11 13:36:36] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-11 13:36:36] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-11 13:36:36] help_button_cluster_shift applied: shift_x=60
+[2026-03-11 13:36:45] market_info_fetch_success: symbol=BTC/USDT last=70015.31 percent=0.07 ping_ms=2906
+[2026-03-11 13:37:06] login_click rejected: api_key_missing
+[2026-03-11 13:37:18] market_info_fetch_success: symbol=BTC/USDT last=69995.00 percent=0.02 ping_ms=2859
+[2026-03-11 13:37:18] guide_button_clicked: kind=binance_account_guide
+[2026-03-11 13:37:18] binance_account_guide_window_layout: centered_option_blocks
+[2026-03-11 13:37:18] binance_account_guide_window_opened
+[2026-03-11 13:37:18] binance_account_guide_window_created
+[2026-03-11 13:37:22] binance_account_guide_window_closed
+[2026-03-11 13:37:26] login_click submitted: api_key=* secret_key_present=True
+[2026-03-11 13:37:26] login_click opening_ui_only_trade_page: api_key=*
+[2026-03-11 13:37:29] trade_page_opened: api_key=* secret_key_present=True
+[2026-03-11 13:38:11] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-11 13:38:12] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-11 13:38:12] help_button_cluster_shift applied: shift_x=60
+[2026-03-11 13:38:16] market_info_fetch_success: symbol=BTC/USDT last=69931.38 percent=-0.03 ping_ms=2682
+[2026-03-11 13:38:22] guide_button_clicked: kind=lts_guidebook
+[2026-03-11 13:38:22] guide_pdf_opened: kind=lts_guidebook path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\lts_connect_guide.pdf
+[2026-03-11 13:38:49] market_info_fetch_success: symbol=BTC/USDT last=69937.27 percent=-0.02 ping_ms=3074
+[2026-03-11 13:39:22] market_info_fetch_success: symbol=BTC/USDT last=69920.52 percent=-0.01 ping_ms=3341
+[2026-03-11 13:39:55] market_info_fetch_success: symbol=BTC/USDT last=69951.42 percent=0.02 ping_ms=3041
+[2026-03-11 13:40:28] market_info_fetch_success: symbol=BTC/USDT last=69940.17 percent=-0.06 ping_ms=3041
+[2026-03-11 13:41:01] market_info_fetch_success: symbol=BTC/USDT last=69934.98 percent=-0.08 ping_ms=2616
+[2026-03-11 13:41:34] market_info_fetch_success: symbol=BTC/USDT last=69966.07 percent=-0.01 ping_ms=2995
+[2026-03-11 13:41:34] guide_button_clicked: kind=lts_guidebook
+[2026-03-11 13:41:34] guide_pdf_opened: kind=lts_guidebook path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\lts_connect_guide.pdf
+[2026-03-11 13:41:34] guide_button_clicked: kind=lts_guidebook
+[2026-03-11 13:41:35] guide_pdf_opened: kind=lts_guidebook path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\lts_connect_guide.pdf
+[2026-03-11 13:42:07] market_info_fetch_success: symbol=BTC/USDT last=69985.43 percent=0.01 ping_ms=3052
+[2026-03-11 13:42:13] guide_button_clicked: kind=lts_guidebook
+[2026-03-11 13:42:13] guide_pdf_opened: kind=lts_guidebook path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\lts_connect_guide.pdf
+[2026-03-11 13:42:40] market_info_fetch_success: symbol=BTC/USDT last=70010.85 percent=0.06 ping_ms=2959
+[2026-03-12 00:58:25] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 00:58:25] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 00:58:25] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 00:58:29] market_info_fetch_success: symbol=BTC/USDT last=70234.01 percent=-1.51 ping_ms=1250
+[2026-03-12 00:58:36] login_click submitted: api_key=** secret_key_present=True
+[2026-03-12 00:58:36] login_click opening_ui_only_trade_page: api_key=**
+[2026-03-12 00:58:37] trade_page_opened: api_key=** secret_key_present=True
+[2026-03-12 01:02:14] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 01:02:14] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 01:02:14] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 01:02:18] market_info_fetch_success: symbol=BTC/USDT last=70272.19 percent=-1.24 ping_ms=1617
+[2026-03-12 01:02:21] login_click submitted: api_key=*** secret_key_present=True
+[2026-03-12 01:02:21] check_server_permission started: api_key=*** timeout=8
+[2026-03-12 01:02:25] check_server_permission completed: api_key=*** result=fail
+[2026-03-12 01:02:25] login_click permission_result: api_key=*** result=fail
+[2026-03-12 01:02:25] login_click unregistered: api_key=***
+[2026-03-12 01:02:50] market_info_fetch_success: symbol=BTC/USDT last=70316.38 percent=-1.29 ping_ms=1477
+[2026-03-12 01:03:21] market_info_fetch_success: symbol=BTC/USDT last=70308.94 percent=-1.28 ping_ms=1528
+[2026-03-12 01:03:53] market_info_fetch_success: symbol=BTC/USDT last=70317.28 percent=-1.32 ping_ms=1460
+[2026-03-12 01:04:24] market_info_fetch_success: symbol=BTC/USDT last=70170.66 percent=-1.57 ping_ms=1436
+[2026-03-12 01:04:56] market_info_fetch_success: symbol=BTC/USDT last=70223.63 percent=-1.40 ping_ms=1443
+[2026-03-12 01:05:27] market_info_fetch_success: symbol=BTC/USDT last=70305.16 percent=-1.07 ping_ms=1330
+[2026-03-12 01:05:59] market_info_fetch_success: symbol=BTC/USDT last=70318.44 percent=-0.94 ping_ms=1385
+[2026-03-12 01:06:30] market_info_fetch_success: symbol=BTC/USDT last=70325.34 percent=-0.94 ping_ms=1322
+[2026-03-12 01:06:41] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 01:06:41] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-12 01:06:45] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-12 01:06:45] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-12 01:06:45] login_click success: api_key=UXFj***6Nx3
+[2026-03-12 01:06:46] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 01:29:49] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 01:29:49] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 01:29:49] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 01:29:53] market_info_fetch_success: symbol=BTC/USDT last=70452.97 percent=-1.28 ping_ms=1327
+[2026-03-12 01:30:02] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 01:30:02] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-12 01:30:05] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-12 01:30:05] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-12 01:30:05] login_click success: api_key=UXFj***6Nx3
+[2026-03-12 01:30:06] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 01:34:53] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 01:34:54] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 01:34:54] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 01:34:57] market_info_fetch_success: symbol=BTC/USDT last=70708.62 percent=-0.92 ping_ms=1313
+[2026-03-12 01:35:08] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 01:35:08] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-12 01:35:12] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-12 01:35:12] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-12 01:35:12] login_click success: api_key=UXFj***6Nx3
+[2026-03-12 01:35:12] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 01:37:45] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 01:37:45] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 01:37:45] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 01:37:47] market_info_fetch_success: symbol=BTC/USDT last=70745.03 percent=-0.85 ping_ms=1259
+[2026-03-12 01:37:58] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 01:37:58] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-12 01:38:02] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-12 01:38:02] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-12 01:38:02] login_click success: api_key=UXFj***6Nx3
+[2026-03-12 01:38:02] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 01:42:46] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 01:42:46] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 01:42:46] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 01:42:50] market_info_fetch_success: symbol=BTC/USDT last=70664.20 percent=-0.85 ping_ms=1465
+[2026-03-12 01:42:56] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 01:42:56] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-12 01:43:00] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-12 01:43:00] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-12 01:43:00] login_click success: api_key=UXFj***6Nx3
+[2026-03-12 01:43:00] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 01:43:34] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 01:43:34] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 01:43:34] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 01:43:38] market_info_fetch_success: symbol=BTC/USDT last=70645.24 percent=-0.98 ping_ms=1304
+[2026-03-12 01:43:44] subscriber_request_recorded_locally: api_key=fd***sf tv_nick='fsda' tg_nick='fdsa' uid='fasd'
+[2026-03-12 01:44:09] market_info_fetch_success: symbol=BTC/USDT last=70665.44 percent=-0.98 ping_ms=1394
+[2026-03-12 01:46:15] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 01:46:15] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 01:46:15] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 01:46:19] market_info_fetch_success: symbol=BTC/USDT last=70724.00 percent=-0.77 ping_ms=1350
+[2026-03-12 01:46:40] subscriber_request_started: api_key=*** tv_nick='fdsa' tg_nick='fdsa' uid='fasd' timeout=8
+[2026-03-12 01:46:46] subscriber_request_completed: api_key=*** result=registered
+[2026-03-12 01:46:50] market_info_fetch_success: symbol=BTC/USDT last=70741.43 percent=-0.77 ping_ms=1261
+[2026-03-12 01:46:54] login_click submitted: api_key=*** secret_key_present=True
+[2026-03-12 01:46:54] check_server_permission started: api_key=*** timeout=8
+[2026-03-12 01:46:59] check_server_permission completed: api_key=*** result=pending
+[2026-03-12 01:46:59] login_click permission_result: api_key=*** result=pending
+[2026-03-12 01:46:59] login_click pending: api_key=***
+[2026-03-12 01:47:11] login_click submitted: api_key=*** secret_key_present=True
+[2026-03-12 01:47:11] check_server_permission started: api_key=*** timeout=8
+[2026-03-12 01:47:15] check_server_permission completed: api_key=*** result=banned
+[2026-03-12 01:47:15] login_click permission_result: api_key=*** result=banned
+[2026-03-12 01:47:15] login_click banned: api_key=***
+[2026-03-12 01:47:21] market_info_fetch_success: symbol=BTC/USDT last=70826.39 percent=-0.59 ping_ms=1340
+[2026-03-12 01:47:21] login_click submitted: api_key=*** secret_key_present=True
+[2026-03-12 01:47:21] check_server_permission started: api_key=*** timeout=8
+[2026-03-12 01:47:25] check_server_permission completed: api_key=*** result=success
+[2026-03-12 01:47:25] login_click permission_result: api_key=*** result=success
+[2026-03-12 01:47:25] login_click success: api_key=***
+[2026-03-12 01:47:27] trade_page_opened: api_key=*** secret_key_present=True
+[2026-03-12 01:47:54] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 01:47:55] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 01:47:55] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 01:47:58] market_info_fetch_success: symbol=BTC/USDT last=70750.04 percent=-0.62 ping_ms=1391
+[2026-03-12 01:48:30] market_info_fetch_success: symbol=BTC/USDT last=70703.29 percent=-0.74 ping_ms=1290
+[2026-03-12 01:49:01] market_info_fetch_success: symbol=BTC/USDT last=70628.00 percent=-0.86 ping_ms=1529
+[2026-03-12 01:49:33] market_info_fetch_success: symbol=BTC/USDT last=70645.37 percent=-0.89 ping_ms=1435
+[2026-03-12 01:50:05] market_info_fetch_success: symbol=BTC/USDT last=70677.00 percent=-0.80 ping_ms=1637
+[2026-03-12 01:50:36] market_info_fetch_success: symbol=BTC/USDT last=70707.61 percent=-0.74 ping_ms=1492
+[2026-03-12 01:51:08] market_info_fetch_success: symbol=BTC/USDT last=70713.66 percent=-0.79 ping_ms=1407
+[2026-03-12 01:51:39] market_info_fetch_success: symbol=BTC/USDT last=70686.77 percent=-0.89 ping_ms=1403
+[2026-03-12 01:52:11] market_info_fetch_success: symbol=BTC/USDT last=70690.00 percent=-0.90 ping_ms=1441
+[2026-03-12 01:52:42] market_info_fetch_success: symbol=BTC/USDT last=70701.47 percent=-0.86 ping_ms=1381
+[2026-03-12 01:53:14] market_info_fetch_success: symbol=BTC/USDT last=70701.05 percent=-0.91 ping_ms=1349
+[2026-03-12 01:53:45] market_info_fetch_success: symbol=BTC/USDT last=70678.67 percent=-0.96 ping_ms=1380
+[2026-03-12 01:54:16] market_info_fetch_success: symbol=BTC/USDT last=70632.60 percent=-0.98 ping_ms=1367
+[2026-03-12 01:54:48] market_info_fetch_success: symbol=BTC/USDT last=70637.13 percent=-0.96 ping_ms=1339
+[2026-03-12 01:55:19] market_info_fetch_success: symbol=BTC/USDT last=70598.90 percent=-1.01 ping_ms=1279
+[2026-03-12 01:55:51] market_info_fetch_success: symbol=BTC/USDT last=70578.29 percent=-1.00 ping_ms=1332
+[2026-03-12 01:56:22] market_info_fetch_success: symbol=BTC/USDT last=70543.21 percent=-0.98 ping_ms=1339
+[2026-03-12 01:56:53] market_info_fetch_success: symbol=BTC/USDT last=70543.05 percent=-0.97 ping_ms=1338
+[2026-03-12 01:57:25] market_info_fetch_success: symbol=BTC/USDT last=70569.42 percent=-0.93 ping_ms=1399
+[2026-03-12 01:57:56] market_info_fetch_success: symbol=BTC/USDT last=70551.58 percent=-0.90 ping_ms=1270
+[2026-03-12 01:58:28] market_info_fetch_success: symbol=BTC/USDT last=70538.83 percent=-0.95 ping_ms=1385
+[2026-03-12 01:58:59] market_info_fetch_success: symbol=BTC/USDT last=70549.30 percent=-0.93 ping_ms=1384
+[2026-03-12 01:59:30] market_info_fetch_success: symbol=BTC/USDT last=70555.29 percent=-0.96 ping_ms=1402
+[2026-03-12 02:00:02] market_info_fetch_success: symbol=BTC/USDT last=70593.38 percent=-0.92 ping_ms=1504
+[2026-03-12 02:00:33] market_info_fetch_success: symbol=BTC/USDT last=70616.88 percent=-0.88 ping_ms=1377
+[2026-03-12 02:01:05] market_info_fetch_success: symbol=BTC/USDT last=70625.27 percent=-0.86 ping_ms=1366
+[2026-03-12 02:01:36] market_info_fetch_success: symbol=BTC/USDT last=70631.61 percent=-0.89 ping_ms=1334
+[2026-03-12 02:02:08] market_info_fetch_success: symbol=BTC/USDT last=70568.30 percent=-0.96 ping_ms=1235
+[2026-03-12 02:02:39] market_info_fetch_success: symbol=BTC/USDT last=70669.47 percent=-0.83 ping_ms=1373
+[2026-03-12 02:03:10] market_info_fetch_success: symbol=BTC/USDT last=70798.18 percent=-0.66 ping_ms=1333
+[2026-03-12 02:03:42] market_info_fetch_success: symbol=BTC/USDT last=70868.47 percent=-0.50 ping_ms=1499
+[2026-03-12 02:04:14] market_info_fetch_success: symbol=BTC/USDT last=70918.00 percent=-0.44 ping_ms=1508
+[2026-03-12 02:04:45] market_info_fetch_success: symbol=BTC/USDT last=70900.05 percent=-0.47 ping_ms=1477
+[2026-03-12 02:05:17] market_info_fetch_success: symbol=BTC/USDT last=70868.43 percent=-0.56 ping_ms=1478
+[2026-03-12 02:05:48] market_info_fetch_success: symbol=BTC/USDT last=70915.94 percent=-0.61 ping_ms=1377
+[2026-03-12 02:06:20] market_info_fetch_success: symbol=BTC/USDT last=70873.29 percent=-0.71 ping_ms=1475
+[2026-03-12 02:06:51] market_info_fetch_success: symbol=BTC/USDT last=70884.96 percent=-0.74 ping_ms=1309
+[2026-03-12 02:07:22] market_info_fetch_success: symbol=BTC/USDT last=70930.73 percent=-0.71 ping_ms=1289
+[2026-03-12 02:07:54] market_info_fetch_success: symbol=BTC/USDT last=70862.17 percent=-0.66 ping_ms=1347
+[2026-03-12 02:08:25] market_info_fetch_success: symbol=BTC/USDT last=70841.55 percent=-0.60 ping_ms=1319
+[2026-03-12 02:08:56] market_info_fetch_success: symbol=BTC/USDT last=70841.25 percent=-0.69 ping_ms=1267
+[2026-03-12 02:09:28] market_info_fetch_success: symbol=BTC/USDT last=70861.81 percent=-0.61 ping_ms=1329
+[2026-03-12 02:10:00] market_info_fetch_success: symbol=BTC/USDT last=70875.89 percent=-0.60 ping_ms=2014
+[2026-03-12 02:10:33] market_info_fetch_success: symbol=BTC/USDT last=70875.90 percent=-0.65 ping_ms=2767
+[2026-03-12 02:11:04] market_info_fetch_success: symbol=BTC/USDT last=70899.65 percent=-0.62 ping_ms=1299
+[2026-03-12 02:11:35] market_info_fetch_success: symbol=BTC/USDT last=70929.07 percent=-0.57 ping_ms=1257
+[2026-03-12 02:12:07] market_info_fetch_success: symbol=BTC/USDT last=70943.02 percent=-0.51 ping_ms=1333
+[2026-03-12 02:12:38] market_info_fetch_success: symbol=BTC/USDT last=70874.57 percent=-0.58 ping_ms=1237
+[2026-03-12 02:13:09] market_info_fetch_success: symbol=BTC/USDT last=70875.12 percent=-0.50 ping_ms=1198
+[2026-03-12 02:13:41] market_info_fetch_success: symbol=BTC/USDT last=70916.00 percent=-0.42 ping_ms=1313
+[2026-03-12 02:14:12] market_info_fetch_success: symbol=BTC/USDT last=70869.78 percent=-0.56 ping_ms=1296
+[2026-03-12 02:14:43] market_info_fetch_success: symbol=BTC/USDT last=70882.13 percent=-0.54 ping_ms=1271
+[2026-03-12 02:15:15] market_info_fetch_success: symbol=BTC/USDT last=70860.92 percent=-0.57 ping_ms=1293
+[2026-03-12 02:15:46] market_info_fetch_success: symbol=BTC/USDT last=70922.28 percent=-0.56 ping_ms=1300
+[2026-03-12 02:16:17] market_info_fetch_success: symbol=BTC/USDT last=70954.50 percent=-0.57 ping_ms=1205
+[2026-03-12 02:16:49] market_info_fetch_success: symbol=BTC/USDT last=70989.37 percent=-0.42 ping_ms=1225
+[2026-03-12 02:17:20] market_info_fetch_success: symbol=BTC/USDT last=70991.57 percent=-0.30 ping_ms=1288
+[2026-03-12 02:17:51] market_info_fetch_success: symbol=BTC/USDT last=70982.84 percent=-0.38 ping_ms=1245
+[2026-03-12 02:18:23] market_info_fetch_success: symbol=BTC/USDT last=70934.78 percent=-0.44 ping_ms=1258
+[2026-03-12 02:18:54] market_info_fetch_success: symbol=BTC/USDT last=70940.80 percent=-0.46 ping_ms=1271
+[2026-03-12 02:19:25] market_info_fetch_success: symbol=BTC/USDT last=70927.23 percent=-0.45 ping_ms=1266
+[2026-03-12 02:19:57] market_info_fetch_success: symbol=BTC/USDT last=70989.75 percent=-0.37 ping_ms=1228
+[2026-03-12 02:20:28] market_info_fetch_success: symbol=BTC/USDT last=71002.29 percent=-0.33 ping_ms=1228
+[2026-03-12 02:20:59] market_info_fetch_success: symbol=BTC/USDT last=70959.88 percent=-0.39 ping_ms=1278
+[2026-03-12 02:21:30] market_info_fetch_success: symbol=BTC/USDT last=70947.54 percent=-0.42 ping_ms=1252
+[2026-03-12 02:22:02] market_info_fetch_success: symbol=BTC/USDT last=70995.94 percent=-0.35 ping_ms=1341
+[2026-03-12 02:22:33] market_info_fetch_success: symbol=BTC/USDT last=70937.55 percent=-0.42 ping_ms=1298
+[2026-03-12 02:23:05] market_info_fetch_success: symbol=BTC/USDT last=70979.99 percent=-0.38 ping_ms=1258
+[2026-03-12 02:23:36] market_info_fetch_success: symbol=BTC/USDT last=70998.87 percent=-0.36 ping_ms=1324
+[2026-03-12 02:24:07] market_info_fetch_success: symbol=BTC/USDT last=70997.44 percent=-0.42 ping_ms=1321
+[2026-03-12 02:24:39] market_info_fetch_success: symbol=BTC/USDT last=71133.61 percent=-0.25 ping_ms=1220
+[2026-03-12 02:25:10] market_info_fetch_success: symbol=BTC/USDT last=71268.93 percent=0.05 ping_ms=1318
+[2026-03-12 02:25:41] market_info_fetch_success: symbol=BTC/USDT last=71226.09 percent=0.06 ping_ms=1375
+[2026-03-12 02:26:13] market_info_fetch_success: symbol=BTC/USDT last=71306.34 percent=0.33 ping_ms=1270
+[2026-03-12 02:26:44] market_info_fetch_success: symbol=BTC/USDT last=71228.55 percent=0.32 ping_ms=1446
+[2026-03-12 02:27:16] market_info_fetch_success: symbol=BTC/USDT last=71257.35 percent=0.28 ping_ms=1236
+[2026-03-12 02:27:47] market_info_fetch_success: symbol=BTC/USDT last=71307.14 percent=0.33 ping_ms=1267
+[2026-03-12 02:28:18] market_info_fetch_success: symbol=BTC/USDT last=71232.26 percent=0.16 ping_ms=1214
+[2026-03-12 02:28:49] market_info_fetch_success: symbol=BTC/USDT last=71202.83 percent=0.15 ping_ms=1311
+[2026-03-12 02:29:21] market_info_fetch_success: symbol=BTC/USDT last=71201.63 percent=0.22 ping_ms=1222
+[2026-03-12 02:29:52] market_info_fetch_success: symbol=BTC/USDT last=71245.83 percent=0.26 ping_ms=1243
+[2026-03-12 02:30:23] market_info_fetch_success: symbol=BTC/USDT last=71251.24 percent=0.28 ping_ms=1227
+[2026-03-12 02:30:55] market_info_fetch_success: symbol=BTC/USDT last=71319.27 percent=0.36 ping_ms=1441
+[2026-03-12 02:31:26] market_info_fetch_success: symbol=BTC/USDT last=71201.91 percent=0.28 ping_ms=1252
+[2026-03-12 02:31:57] market_info_fetch_success: symbol=BTC/USDT last=71254.41 percent=0.19 ping_ms=1292
+[2026-03-12 02:32:29] market_info_fetch_success: symbol=BTC/USDT last=71180.11 percent=-0.01 ping_ms=1225
+[2026-03-12 02:33:00] market_info_fetch_success: symbol=BTC/USDT last=71114.66 percent=-0.17 ping_ms=1192
+[2026-03-12 02:33:31] market_info_fetch_success: symbol=BTC/USDT last=71081.09 percent=-0.18 ping_ms=1245
+[2026-03-12 02:34:03] market_info_fetch_success: symbol=BTC/USDT last=71017.03 percent=-0.17 ping_ms=1253
+[2026-03-12 02:34:34] market_info_fetch_success: symbol=BTC/USDT last=70986.66 percent=-0.15 ping_ms=1200
+[2026-03-12 02:35:05] market_info_fetch_success: symbol=BTC/USDT last=70974.35 percent=-0.10 ping_ms=1292
+[2026-03-12 02:35:36] market_info_fetch_success: symbol=BTC/USDT last=71051.28 percent=0.10 ping_ms=1208
+[2026-03-12 02:36:08] market_info_fetch_success: symbol=BTC/USDT last=70947.83 percent=-0.06 ping_ms=1312
+[2026-03-12 02:36:39] market_info_fetch_success: symbol=BTC/USDT last=70777.17 percent=-0.28 ping_ms=1274
+[2026-03-12 02:37:10] market_info_fetch_success: symbol=BTC/USDT last=70648.73 percent=-0.24 ping_ms=1257
+[2026-03-12 02:37:42] market_info_fetch_success: symbol=BTC/USDT last=70598.94 percent=-0.36 ping_ms=1395
+[2026-03-12 02:38:13] market_info_fetch_success: symbol=BTC/USDT last=70618.72 percent=-0.09 ping_ms=1485
+[2026-03-12 02:38:45] market_info_fetch_success: symbol=BTC/USDT last=70591.79 percent=-0.05 ping_ms=1276
+[2026-03-12 02:39:16] market_info_fetch_success: symbol=BTC/USDT last=70700.00 percent=0.08 ping_ms=1413
+[2026-03-12 02:39:48] market_info_fetch_success: symbol=BTC/USDT last=70644.68 percent=-0.01 ping_ms=1242
+[2026-03-12 02:40:19] market_info_fetch_success: symbol=BTC/USDT last=70818.22 percent=0.21 ping_ms=1207
+[2026-03-12 02:40:50] market_info_fetch_success: symbol=BTC/USDT last=70822.76 percent=0.33 ping_ms=1408
+[2026-03-12 02:41:22] market_info_fetch_success: symbol=BTC/USDT last=70774.76 percent=0.17 ping_ms=1259
+[2026-03-12 02:41:53] market_info_fetch_success: symbol=BTC/USDT last=70824.47 percent=0.22 ping_ms=1272
+[2026-03-12 02:42:24] market_info_fetch_success: symbol=BTC/USDT last=70730.21 percent=0.11 ping_ms=1280
+[2026-03-12 02:42:55] market_info_fetch_success: symbol=BTC/USDT last=70729.42 percent=0.02 ping_ms=1243
+[2026-03-12 02:43:27] market_info_fetch_success: symbol=BTC/USDT last=70741.44 percent=0.04 ping_ms=1272
+[2026-03-12 02:43:58] market_info_fetch_success: symbol=BTC/USDT last=70715.19 percent=0.10 ping_ms=1218
+[2026-03-12 02:44:29] market_info_fetch_success: symbol=BTC/USDT last=70777.16 percent=0.17 ping_ms=1250
+[2026-03-12 02:45:01] market_info_fetch_success: symbol=BTC/USDT last=70818.47 percent=0.23 ping_ms=1269
+[2026-03-12 02:45:32] market_info_fetch_success: symbol=BTC/USDT last=70804.06 percent=0.28 ping_ms=1200
+[2026-03-12 02:46:03] market_info_fetch_success: symbol=BTC/USDT last=70827.24 percent=0.37 ping_ms=1181
+[2026-03-12 02:46:35] market_info_fetch_success: symbol=BTC/USDT last=70835.21 percent=0.34 ping_ms=1263
+[2026-03-12 02:47:06] market_info_fetch_success: symbol=BTC/USDT last=70854.34 percent=0.20 ping_ms=1205
+[2026-03-12 02:47:37] market_info_fetch_success: symbol=BTC/USDT last=70882.44 percent=0.23 ping_ms=1209
+[2026-03-12 02:48:08] market_info_fetch_success: symbol=BTC/USDT last=70846.18 percent=0.13 ping_ms=1292
+[2026-03-12 02:48:40] market_info_fetch_success: symbol=BTC/USDT last=70850.69 percent=0.05 ping_ms=1284
+[2026-03-12 02:49:11] market_info_fetch_success: symbol=BTC/USDT last=70807.51 percent=-0.11 ping_ms=1326
+[2026-03-12 02:49:42] market_info_fetch_success: symbol=BTC/USDT last=70820.21 percent=-0.01 ping_ms=1261
+[2026-03-12 02:50:14] market_info_fetch_success: symbol=BTC/USDT last=70913.34 percent=0.20 ping_ms=1369
+[2026-03-12 02:50:45] market_info_fetch_success: symbol=BTC/USDT last=70917.04 percent=0.12 ping_ms=1225
+[2026-03-12 02:51:16] market_info_fetch_success: symbol=BTC/USDT last=70865.41 percent=0.02 ping_ms=1198
+[2026-03-12 02:51:48] market_info_fetch_success: symbol=BTC/USDT last=70901.16 percent=0.06 ping_ms=1213
+[2026-03-12 02:52:19] market_info_fetch_success: symbol=BTC/USDT last=70956.10 percent=0.15 ping_ms=1291
+[2026-03-12 02:52:50] market_info_fetch_success: symbol=BTC/USDT last=70935.39 percent=0.04 ping_ms=1223
+[2026-03-12 02:53:22] market_info_fetch_success: symbol=BTC/USDT last=70832.33 percent=-0.05 ping_ms=1276
+[2026-03-12 02:53:53] market_info_fetch_success: symbol=BTC/USDT last=70836.05 percent=-0.13 ping_ms=1201
+[2026-03-12 02:54:24] market_info_fetch_success: symbol=BTC/USDT last=70801.01 percent=-0.16 ping_ms=1172
+[2026-03-12 02:54:55] market_info_fetch_success: symbol=BTC/USDT last=70767.20 percent=-0.26 ping_ms=1287
+[2026-03-12 02:55:27] market_info_fetch_success: symbol=BTC/USDT last=70685.13 percent=-0.26 ping_ms=1162
+[2026-03-12 02:55:58] market_info_fetch_success: symbol=BTC/USDT last=70694.30 percent=-0.22 ping_ms=1313
+[2026-03-12 02:56:29] market_info_fetch_success: symbol=BTC/USDT last=70699.60 percent=-0.19 ping_ms=1214
+[2026-03-12 02:57:00] market_info_fetch_success: symbol=BTC/USDT last=70671.72 percent=-0.19 ping_ms=1223
+[2026-03-12 02:57:32] market_info_fetch_success: symbol=BTC/USDT last=70717.86 percent=-0.18 ping_ms=1282
+[2026-03-12 02:58:03] market_info_fetch_success: symbol=BTC/USDT last=70759.66 percent=-0.20 ping_ms=1201
+[2026-03-12 02:58:34] market_info_fetch_success: symbol=BTC/USDT last=70739.95 percent=-0.21 ping_ms=1213
+[2026-03-12 02:59:06] market_info_fetch_success: symbol=BTC/USDT last=70774.14 percent=-0.14 ping_ms=1305
+[2026-03-12 02:59:37] market_info_fetch_success: symbol=BTC/USDT last=70769.23 percent=-0.14 ping_ms=1203
+[2026-03-12 03:00:08] market_info_fetch_success: symbol=BTC/USDT last=70812.00 percent=-0.08 ping_ms=1272
+[2026-03-12 03:00:40] market_info_fetch_success: symbol=BTC/USDT last=70855.69 percent=0.02 ping_ms=1243
+[2026-03-12 03:01:11] market_info_fetch_success: symbol=BTC/USDT last=70786.38 percent=-0.15 ping_ms=1316
+[2026-03-12 03:01:42] market_info_fetch_success: symbol=BTC/USDT last=70844.38 percent=-0.04 ping_ms=1192
+[2026-03-12 03:02:13] market_info_fetch_success: symbol=BTC/USDT last=70774.19 percent=-0.13 ping_ms=1199
+[2026-03-12 03:02:45] market_info_fetch_success: symbol=BTC/USDT last=70808.77 percent=-0.03 ping_ms=1271
+[2026-03-12 03:03:16] market_info_fetch_success: symbol=BTC/USDT last=70816.12 percent=-0.09 ping_ms=1217
+[2026-03-12 03:03:47] market_info_fetch_success: symbol=BTC/USDT last=70856.81 percent=-0.04 ping_ms=1234
+[2026-03-12 03:04:19] market_info_fetch_success: symbol=BTC/USDT last=70853.54 percent=-0.00 ping_ms=1269
+[2026-03-12 03:04:50] market_info_fetch_success: symbol=BTC/USDT last=70867.18 percent=0.00 ping_ms=1308
+[2026-03-12 03:05:21] market_info_fetch_success: symbol=BTC/USDT last=70856.00 percent=0.10 ping_ms=1231
+[2026-03-12 03:05:53] market_info_fetch_success: symbol=BTC/USDT last=70848.64 percent=0.01 ping_ms=1239
+[2026-03-12 03:06:24] market_info_fetch_success: symbol=BTC/USDT last=70819.07 percent=-0.07 ping_ms=1235
+[2026-03-12 03:06:55] market_info_fetch_success: symbol=BTC/USDT last=70830.33 percent=0.06 ping_ms=1290
+[2026-03-12 03:07:26] market_info_fetch_success: symbol=BTC/USDT last=70825.45 percent=0.07 ping_ms=1246
+[2026-03-12 03:07:58] market_info_fetch_success: symbol=BTC/USDT last=70858.00 percent=0.12 ping_ms=1208
+[2026-03-12 03:08:29] market_info_fetch_success: symbol=BTC/USDT last=70783.62 percent=0.03 ping_ms=1267
+[2026-03-12 03:09:00] market_info_fetch_success: symbol=BTC/USDT last=70759.67 percent=0.04 ping_ms=1264
+[2026-03-12 03:09:32] market_info_fetch_success: symbol=BTC/USDT last=70714.07 percent=0.02 ping_ms=1183
+[2026-03-12 03:10:03] market_info_fetch_success: symbol=BTC/USDT last=70722.89 percent=0.02 ping_ms=1278
+[2026-03-12 03:10:34] market_info_fetch_success: symbol=BTC/USDT last=70728.73 percent=0.03 ping_ms=1241
+[2026-03-12 03:11:06] market_info_fetch_success: symbol=BTC/USDT last=70666.43 percent=-0.05 ping_ms=1271
+[2026-03-12 03:11:37] market_info_fetch_success: symbol=BTC/USDT last=70685.47 percent=-0.12 ping_ms=1253
+[2026-03-12 03:12:08] market_info_fetch_success: symbol=BTC/USDT last=70673.94 percent=-0.15 ping_ms=1192
+[2026-03-12 03:12:39] market_info_fetch_success: symbol=BTC/USDT last=70703.42 percent=-0.08 ping_ms=1261
+[2026-03-12 03:13:11] market_info_fetch_success: symbol=BTC/USDT last=70729.57 percent=0.00 ping_ms=1234
+[2026-03-12 03:13:42] market_info_fetch_success: symbol=BTC/USDT last=70741.82 percent=-0.02 ping_ms=1231
+[2026-03-12 03:14:13] market_info_fetch_success: symbol=BTC/USDT last=70740.00 percent=0.29 ping_ms=1317
+[2026-03-12 03:14:45] market_info_fetch_success: symbol=BTC/USDT last=70748.99 percent=0.47 ping_ms=1215
+[2026-03-12 03:15:16] market_info_fetch_success: symbol=BTC/USDT last=70800.91 percent=0.60 ping_ms=1316
+[2026-03-12 03:15:47] market_info_fetch_success: symbol=BTC/USDT last=70765.09 percent=0.57 ping_ms=1300
+[2026-03-12 03:16:19] market_info_fetch_success: symbol=BTC/USDT last=70784.00 percent=0.39 ping_ms=1244
+[2026-03-12 03:16:50] market_info_fetch_success: symbol=BTC/USDT last=70761.63 percent=0.42 ping_ms=1330
+[2026-03-12 03:17:21] market_info_fetch_success: symbol=BTC/USDT last=70709.13 percent=0.29 ping_ms=1280
+[2026-03-12 03:17:53] market_info_fetch_success: symbol=BTC/USDT last=70653.59 percent=0.29 ping_ms=1205
+[2026-03-12 03:18:24] market_info_fetch_success: symbol=BTC/USDT last=70693.04 percent=0.29 ping_ms=1283
+[2026-03-12 03:18:55] market_info_fetch_success: symbol=BTC/USDT last=70725.96 percent=0.59 ping_ms=1174
+[2026-03-12 03:19:26] market_info_fetch_success: symbol=BTC/USDT last=70673.93 percent=0.66 ping_ms=1298
+[2026-03-12 03:19:58] market_info_fetch_success: symbol=BTC/USDT last=70688.58 percent=0.64 ping_ms=1276
+[2026-03-12 03:20:29] market_info_fetch_success: symbol=BTC/USDT last=70818.00 percent=0.81 ping_ms=1236
+[2026-03-12 03:21:00] market_info_fetch_success: symbol=BTC/USDT last=70782.04 percent=0.74 ping_ms=1239
+[2026-03-12 03:21:33] market_info_fetch_success: symbol=BTC/USDT last=70895.31 percent=0.84 ping_ms=2399
+[2026-03-12 03:22:04] market_info_fetch_success: symbol=BTC/USDT last=70848.96 percent=0.98 ping_ms=1273
+[2026-03-12 03:22:35] market_info_fetch_success: symbol=BTC/USDT last=70777.16 percent=0.86 ping_ms=1247
+[2026-03-12 03:23:07] market_info_fetch_success: symbol=BTC/USDT last=70746.05 percent=0.71 ping_ms=1281
+[2026-03-12 03:23:38] market_info_fetch_success: symbol=BTC/USDT last=70766.20 percent=0.65 ping_ms=1321
+[2026-03-12 03:24:09] market_info_fetch_success: symbol=BTC/USDT last=70749.25 percent=0.62 ping_ms=1241
+[2026-03-12 03:24:41] market_info_fetch_success: symbol=BTC/USDT last=70760.67 percent=0.56 ping_ms=1265
+[2026-03-12 03:25:12] market_info_fetch_success: symbol=BTC/USDT last=70784.32 percent=0.65 ping_ms=1239
+[2026-03-12 03:25:44] market_info_fetch_success: symbol=BTC/USDT last=70803.08 percent=0.66 ping_ms=1424
+[2026-03-12 03:26:15] market_info_fetch_success: symbol=BTC/USDT last=70813.60 percent=0.66 ping_ms=1235
+[2026-03-12 03:26:46] market_info_fetch_success: symbol=BTC/USDT last=70821.30 percent=0.56 ping_ms=1236
+[2026-03-12 03:27:17] market_info_fetch_success: symbol=BTC/USDT last=70845.61 percent=0.56 ping_ms=1263
+[2026-03-12 03:27:49] market_info_fetch_success: symbol=BTC/USDT last=70746.93 percent=0.50 ping_ms=1242
+[2026-03-12 03:28:20] market_info_fetch_success: symbol=BTC/USDT last=70778.41 percent=0.52 ping_ms=1255
+[2026-03-12 03:28:51] market_info_fetch_success: symbol=BTC/USDT last=70708.05 percent=0.40 ping_ms=1218
+[2026-03-12 03:29:23] market_info_fetch_success: symbol=BTC/USDT last=70618.03 percent=0.31 ping_ms=1192
+[2026-03-12 03:29:54] market_info_fetch_success: symbol=BTC/USDT last=70703.99 percent=0.54 ping_ms=1237
+[2026-03-12 03:30:25] market_info_fetch_success: symbol=BTC/USDT last=70686.27 percent=0.53 ping_ms=1216
+[2026-03-12 03:30:56] market_info_fetch_success: symbol=BTC/USDT last=70706.40 percent=0.47 ping_ms=1184
+[2026-03-12 03:31:28] market_info_fetch_success: symbol=BTC/USDT last=70714.72 percent=0.40 ping_ms=1264
+[2026-03-12 03:31:59] market_info_fetch_success: symbol=BTC/USDT last=70738.61 percent=0.49 ping_ms=1217
+[2026-03-12 03:32:30] market_info_fetch_success: symbol=BTC/USDT last=70737.59 percent=0.57 ping_ms=1208
+[2026-03-12 03:33:01] market_info_fetch_success: symbol=BTC/USDT last=70662.11 percent=0.40 ping_ms=1159
+[2026-03-12 03:33:33] market_info_fetch_success: symbol=BTC/USDT last=70713.25 percent=0.56 ping_ms=1253
+[2026-03-12 03:34:04] market_info_fetch_success: symbol=BTC/USDT last=70680.00 percent=0.54 ping_ms=1371
+[2026-03-12 03:34:35] market_info_fetch_success: symbol=BTC/USDT last=70707.88 percent=0.52 ping_ms=1244
+[2026-03-12 03:35:07] market_info_fetch_success: symbol=BTC/USDT last=70728.00 percent=0.48 ping_ms=1234
+[2026-03-12 03:35:38] market_info_fetch_success: symbol=BTC/USDT last=70674.86 percent=0.53 ping_ms=1249
+[2026-03-12 03:36:09] market_info_fetch_success: symbol=BTC/USDT last=70690.38 percent=0.66 ping_ms=1288
+[2026-03-12 03:36:41] market_info_fetch_success: symbol=BTC/USDT last=70676.33 percent=0.39 ping_ms=1334
+[2026-03-12 03:37:12] market_info_fetch_success: symbol=BTC/USDT last=70659.96 percent=0.68 ping_ms=1164
+[2026-03-12 03:37:43] market_info_fetch_success: symbol=BTC/USDT last=70671.58 percent=0.66 ping_ms=1253
+[2026-03-12 03:38:14] market_info_fetch_success: symbol=BTC/USDT last=70694.57 percent=0.59 ping_ms=1184
+[2026-03-12 03:38:46] market_info_fetch_success: symbol=BTC/USDT last=70684.89 percent=0.67 ping_ms=1189
+[2026-03-12 03:39:17] market_info_fetch_success: symbol=BTC/USDT last=70619.86 percent=0.62 ping_ms=1225
+[2026-03-12 03:39:48] market_info_fetch_success: symbol=BTC/USDT last=70497.59 percent=0.51 ping_ms=1197
+[2026-03-12 03:40:20] market_info_fetch_success: symbol=BTC/USDT last=70441.91 percent=0.44 ping_ms=1291
+[2026-03-12 03:40:51] market_info_fetch_success: symbol=BTC/USDT last=70520.24 percent=0.59 ping_ms=1227
+[2026-03-12 03:41:22] market_info_fetch_success: symbol=BTC/USDT last=70574.98 percent=0.75 ping_ms=1262
+[2026-03-12 03:41:53] market_info_fetch_success: symbol=BTC/USDT last=70520.23 percent=0.64 ping_ms=1236
+[2026-03-12 03:42:25] market_info_fetch_success: symbol=BTC/USDT last=70542.67 percent=0.72 ping_ms=1267
+[2026-03-12 03:42:56] market_info_fetch_success: symbol=BTC/USDT last=70557.96 percent=0.64 ping_ms=1180
+[2026-03-12 03:43:27] market_info_fetch_success: symbol=BTC/USDT last=70538.05 percent=0.64 ping_ms=1295
+[2026-03-12 03:43:59] market_info_fetch_success: symbol=BTC/USDT last=70449.33 percent=0.61 ping_ms=1208
+[2026-03-12 03:44:30] market_info_fetch_success: symbol=BTC/USDT last=70499.68 percent=0.69 ping_ms=1176
+[2026-03-12 03:45:01] market_info_fetch_success: symbol=BTC/USDT last=70506.81 percent=0.71 ping_ms=1355
+[2026-03-12 03:45:33] market_info_fetch_success: symbol=BTC/USDT last=70467.48 percent=0.55 ping_ms=1331
+[2026-03-12 03:46:04] market_info_fetch_success: symbol=BTC/USDT last=70484.43 percent=0.67 ping_ms=1329
+[2026-03-12 03:46:35] market_info_fetch_success: symbol=BTC/USDT last=70524.11 percent=0.64 ping_ms=1199
+[2026-03-12 03:47:06] market_info_fetch_success: symbol=BTC/USDT last=70538.40 percent=0.63 ping_ms=1217
+[2026-03-12 03:47:38] market_info_fetch_success: symbol=BTC/USDT last=70526.46 percent=0.61 ping_ms=1222
+[2026-03-12 03:48:09] market_info_fetch_success: symbol=BTC/USDT last=70550.66 percent=0.59 ping_ms=1243
+[2026-03-12 03:48:40] market_info_fetch_success: symbol=BTC/USDT last=70532.61 percent=0.49 ping_ms=1259
+[2026-03-12 03:49:12] market_info_fetch_success: symbol=BTC/USDT last=70561.05 percent=0.59 ping_ms=1218
+[2026-03-12 03:49:43] market_info_fetch_success: symbol=BTC/USDT last=70619.86 percent=0.68 ping_ms=1207
+[2026-03-12 03:50:14] market_info_fetch_success: symbol=BTC/USDT last=70626.83 percent=0.62 ping_ms=1321
+[2026-03-12 03:50:46] market_info_fetch_success: symbol=BTC/USDT last=70639.12 percent=0.61 ping_ms=1270
+[2026-03-12 03:51:17] market_info_fetch_success: symbol=BTC/USDT last=70701.51 percent=0.76 ping_ms=1337
+[2026-03-12 03:51:48] market_info_fetch_success: symbol=BTC/USDT last=70743.23 percent=0.84 ping_ms=1227
+[2026-03-12 03:52:19] market_info_fetch_success: symbol=BTC/USDT last=70758.43 percent=0.93 ping_ms=1182
+[2026-03-12 03:52:51] market_info_fetch_success: symbol=BTC/USDT last=70740.44 percent=1.00 ping_ms=1287
+[2026-03-12 03:53:22] market_info_fetch_success: symbol=BTC/USDT last=70670.65 percent=0.87 ping_ms=1157
+[2026-03-12 03:53:53] market_info_fetch_success: symbol=BTC/USDT last=70659.03 percent=0.91 ping_ms=1230
+[2026-03-12 03:54:25] market_info_fetch_success: symbol=BTC/USDT last=70673.41 percent=0.85 ping_ms=1272
+[2026-03-12 03:54:56] market_info_fetch_success: symbol=BTC/USDT last=70706.70 percent=0.90 ping_ms=1378
+[2026-03-12 03:55:27] market_info_fetch_success: symbol=BTC/USDT last=70734.69 percent=1.04 ping_ms=1324
+[2026-03-12 03:55:59] market_info_fetch_success: symbol=BTC/USDT last=70741.04 percent=1.16 ping_ms=1225
+[2026-03-12 03:56:30] market_info_fetch_success: symbol=BTC/USDT last=70657.68 percent=1.02 ping_ms=1194
+[2026-03-12 03:57:01] market_info_fetch_success: symbol=BTC/USDT last=70640.77 percent=1.01 ping_ms=1285
+[2026-03-12 03:57:32] market_info_fetch_success: symbol=BTC/USDT last=70649.13 percent=0.98 ping_ms=1149
+[2026-03-12 03:58:04] market_info_fetch_success: symbol=BTC/USDT last=70632.42 percent=0.97 ping_ms=1240
+[2026-03-12 03:58:35] market_info_fetch_success: symbol=BTC/USDT last=70640.64 percent=0.95 ping_ms=1214
+[2026-03-12 03:59:06] market_info_fetch_success: symbol=BTC/USDT last=70636.92 percent=0.90 ping_ms=1203
+[2026-03-12 03:59:38] market_info_fetch_success: symbol=BTC/USDT last=70607.40 percent=0.85 ping_ms=1231
+[2026-03-12 04:00:09] market_info_fetch_success: symbol=BTC/USDT last=70619.87 percent=0.85 ping_ms=1187
+[2026-03-12 04:00:40] market_info_fetch_success: symbol=BTC/USDT last=70599.99 percent=0.84 ping_ms=1267
+[2026-03-12 04:01:11] market_info_fetch_success: symbol=BTC/USDT last=70622.00 percent=0.83 ping_ms=1338
+[2026-03-12 04:01:43] market_info_fetch_success: symbol=BTC/USDT last=70629.70 percent=0.87 ping_ms=1148
+[2026-03-12 04:02:14] market_info_fetch_success: symbol=BTC/USDT last=70544.52 percent=0.72 ping_ms=1184
+[2026-03-12 04:02:45] market_info_fetch_success: symbol=BTC/USDT last=70556.90 percent=0.68 ping_ms=1293
+[2026-03-12 04:03:16] market_info_fetch_success: symbol=BTC/USDT last=70488.80 percent=0.66 ping_ms=1246
+[2026-03-12 04:03:48] market_info_fetch_success: symbol=BTC/USDT last=70499.99 percent=0.64 ping_ms=1271
+[2026-03-12 04:04:19] market_info_fetch_success: symbol=BTC/USDT last=70570.70 percent=0.71 ping_ms=1215
+[2026-03-12 04:04:50] market_info_fetch_success: symbol=BTC/USDT last=70563.49 percent=0.75 ping_ms=1191
+[2026-03-12 04:05:22] market_info_fetch_success: symbol=BTC/USDT last=70526.47 percent=0.82 ping_ms=1299
+[2026-03-12 04:05:53] market_info_fetch_success: symbol=BTC/USDT last=70493.80 percent=0.76 ping_ms=1169
+[2026-03-12 04:06:24] market_info_fetch_success: symbol=BTC/USDT last=70458.76 percent=0.70 ping_ms=1183
+[2026-03-12 04:06:55] market_info_fetch_success: symbol=BTC/USDT last=70488.84 percent=0.81 ping_ms=1213
+[2026-03-12 04:07:27] market_info_fetch_success: symbol=BTC/USDT last=70553.85 percent=0.89 ping_ms=1212
+[2026-03-12 04:07:58] market_info_fetch_success: symbol=BTC/USDT last=70539.99 percent=0.66 ping_ms=1267
+[2026-03-12 04:08:29] market_info_fetch_success: symbol=BTC/USDT last=70536.50 percent=0.56 ping_ms=1328
+[2026-03-12 04:09:01] market_info_fetch_success: symbol=BTC/USDT last=70490.69 percent=0.51 ping_ms=1241
+[2026-03-12 04:09:32] market_info_fetch_success: symbol=BTC/USDT last=70459.12 percent=0.51 ping_ms=1331
+[2026-03-12 04:10:03] market_info_fetch_success: symbol=BTC/USDT last=70461.68 percent=0.50 ping_ms=1244
+[2026-03-12 04:10:35] market_info_fetch_success: symbol=BTC/USDT last=70499.05 percent=0.60 ping_ms=1265
+[2026-03-12 04:11:06] market_info_fetch_success: symbol=BTC/USDT last=70506.05 percent=0.70 ping_ms=1199
+[2026-03-12 04:11:37] market_info_fetch_success: symbol=BTC/USDT last=70498.75 percent=0.82 ping_ms=1271
+[2026-03-12 04:12:08] market_info_fetch_success: symbol=BTC/USDT last=70478.02 percent=0.75 ping_ms=1287
+[2026-03-12 04:12:40] market_info_fetch_success: symbol=BTC/USDT last=70400.00 percent=0.64 ping_ms=1205
+[2026-03-12 04:13:11] market_info_fetch_success: symbol=BTC/USDT last=70418.18 percent=0.66 ping_ms=1299
+[2026-03-12 04:13:42] market_info_fetch_success: symbol=BTC/USDT last=70410.00 percent=0.65 ping_ms=1220
+[2026-03-12 04:14:14] market_info_fetch_success: symbol=BTC/USDT last=70444.88 percent=0.54 ping_ms=1266
+[2026-03-12 04:14:45] market_info_fetch_success: symbol=BTC/USDT last=70479.42 percent=0.58 ping_ms=1209
+[2026-03-12 04:15:16] market_info_fetch_success: symbol=BTC/USDT last=70449.17 percent=0.52 ping_ms=1281
+[2026-03-12 04:15:48] market_info_fetch_success: symbol=BTC/USDT last=70382.41 percent=0.38 ping_ms=1226
+[2026-03-12 04:16:19] market_info_fetch_success: symbol=BTC/USDT last=70433.07 percent=0.44 ping_ms=1305
+[2026-03-12 04:16:50] market_info_fetch_success: symbol=BTC/USDT last=70427.83 percent=0.36 ping_ms=1242
+[2026-03-12 04:17:21] market_info_fetch_success: symbol=BTC/USDT last=70447.16 percent=0.38 ping_ms=1259
+[2026-03-12 04:17:53] market_info_fetch_success: symbol=BTC/USDT last=70423.09 percent=0.29 ping_ms=1177
+[2026-03-12 04:18:24] market_info_fetch_success: symbol=BTC/USDT last=70464.57 percent=0.35 ping_ms=1293
+[2026-03-12 04:18:55] market_info_fetch_success: symbol=BTC/USDT last=70437.80 percent=0.25 ping_ms=1175
+[2026-03-12 04:19:27] market_info_fetch_success: symbol=BTC/USDT last=70467.48 percent=0.32 ping_ms=1251
+[2026-03-12 04:19:58] market_info_fetch_success: symbol=BTC/USDT last=70490.80 percent=0.36 ping_ms=1237
+[2026-03-12 04:20:29] market_info_fetch_success: symbol=BTC/USDT last=70506.35 percent=0.39 ping_ms=1212
+[2026-03-12 04:21:00] market_info_fetch_success: symbol=BTC/USDT last=70503.61 percent=0.52 ping_ms=1181
+[2026-03-12 04:21:32] market_info_fetch_success: symbol=BTC/USDT last=70486.95 percent=0.67 ping_ms=1218
+[2026-03-12 04:22:03] market_info_fetch_success: symbol=BTC/USDT last=70493.63 percent=0.67 ping_ms=1150
+[2026-03-12 04:22:34] market_info_fetch_success: symbol=BTC/USDT last=70498.99 percent=0.73 ping_ms=1285
+[2026-03-12 04:23:05] market_info_fetch_success: symbol=BTC/USDT last=70489.33 percent=0.61 ping_ms=1135
+[2026-03-12 04:23:37] market_info_fetch_success: symbol=BTC/USDT last=70498.61 percent=0.51 ping_ms=1282
+[2026-03-12 04:24:08] market_info_fetch_success: symbol=BTC/USDT last=70471.48 percent=0.49 ping_ms=1185
+[2026-03-12 04:24:39] market_info_fetch_success: symbol=BTC/USDT last=70506.93 percent=0.52 ping_ms=1181
+[2026-03-12 04:25:10] market_info_fetch_success: symbol=BTC/USDT last=70545.55 percent=0.61 ping_ms=1184
+[2026-03-12 04:25:42] market_info_fetch_success: symbol=BTC/USDT last=70550.96 percent=0.68 ping_ms=1249
+[2026-03-12 04:26:13] market_info_fetch_success: symbol=BTC/USDT last=70556.34 percent=0.86 ping_ms=1198
+[2026-03-12 04:26:44] market_info_fetch_success: symbol=BTC/USDT last=70565.68 percent=0.90 ping_ms=1245
+[2026-03-12 04:27:15] market_info_fetch_success: symbol=BTC/USDT last=70550.53 percent=0.84 ping_ms=1204
+[2026-03-12 04:27:47] market_info_fetch_success: symbol=BTC/USDT last=70540.23 percent=0.79 ping_ms=1200
+[2026-03-12 04:28:18] market_info_fetch_success: symbol=BTC/USDT last=70536.74 percent=0.79 ping_ms=1238
+[2026-03-12 04:28:49] market_info_fetch_success: symbol=BTC/USDT last=70536.74 percent=0.73 ping_ms=1193
+[2026-03-12 04:29:21] market_info_fetch_success: symbol=BTC/USDT last=70520.23 percent=0.68 ping_ms=1392
+[2026-03-12 04:29:52] market_info_fetch_success: symbol=BTC/USDT last=70526.47 percent=0.79 ping_ms=1205
+[2026-03-12 04:30:23] market_info_fetch_success: symbol=BTC/USDT last=70501.90 percent=0.73 ping_ms=1217
+[2026-03-12 04:30:54] market_info_fetch_success: symbol=BTC/USDT last=70526.46 percent=0.82 ping_ms=1286
+[2026-03-12 04:31:26] market_info_fetch_success: symbol=BTC/USDT last=70526.47 percent=0.80 ping_ms=1229
+[2026-03-12 04:31:57] market_info_fetch_success: symbol=BTC/USDT last=70500.69 percent=0.83 ping_ms=1209
+[2026-03-12 04:32:28] market_info_fetch_success: symbol=BTC/USDT last=70540.08 percent=0.91 ping_ms=1231
+[2026-03-12 04:33:00] market_info_fetch_success: symbol=BTC/USDT last=70564.78 percent=0.95 ping_ms=1202
+[2026-03-12 04:33:31] market_info_fetch_success: symbol=BTC/USDT last=70566.60 percent=0.95 ping_ms=1248
+[2026-03-12 04:34:02] market_info_fetch_success: symbol=BTC/USDT last=70604.42 percent=1.05 ping_ms=1214
+[2026-03-12 04:34:34] market_info_fetch_success: symbol=BTC/USDT last=70651.42 percent=1.11 ping_ms=1372
+[2026-03-12 04:35:05] market_info_fetch_success: symbol=BTC/USDT last=70697.11 percent=1.22 ping_ms=1186
+[2026-03-12 04:35:36] market_info_fetch_success: symbol=BTC/USDT last=70672.07 percent=1.22 ping_ms=1230
+[2026-03-12 04:36:07] market_info_fetch_success: symbol=BTC/USDT last=70656.50 percent=1.30 ping_ms=1219
+[2026-03-12 04:36:39] market_info_fetch_success: symbol=BTC/USDT last=70651.51 percent=1.25 ping_ms=1195
+[2026-03-12 04:37:10] market_info_fetch_success: symbol=BTC/USDT last=70691.48 percent=1.16 ping_ms=1359
+[2026-03-12 04:37:41] market_info_fetch_success: symbol=BTC/USDT last=70678.41 percent=1.16 ping_ms=1226
+[2026-03-12 04:38:12] market_info_fetch_success: symbol=BTC/USDT last=70723.56 percent=1.22 ping_ms=1178
+[2026-03-12 04:38:34] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 04:38:34] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 04:38:34] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 04:38:41] market_info_fetch_success: symbol=BTC/USDT last=70725.52 percent=1.19 ping_ms=1215
+[2026-03-12 04:38:51] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 04:38:51] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-12 04:38:55] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-12 04:38:55] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-12 04:38:55] login_click success: api_key=UXFj***6Nx3
+[2026-03-12 04:38:56] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 07:49:55] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 07:49:55] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 07:49:55] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 07:49:59] market_info_fetch_success: symbol=BTC/USDT last=70351.00 percent=0.89 ping_ms=1371
+[2026-03-12 07:50:23] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 07:50:23] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-12 07:50:27] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-12 07:50:27] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-12 07:50:27] login_click success: api_key=UXFj***6Nx3
+[2026-03-12 07:50:28] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 07:58:09] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 07:58:09] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 07:58:09] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 07:58:12] market_info_fetch_success: symbol=BTC/USDT last=70328.84 percent=0.92 ping_ms=1202
+[2026-03-12 07:58:26] subscriber_request_started: api_key=**** tv_nick='fdsa' tg_nick='fdsa' uid='fda' timeout=8
+[2026-03-12 07:58:30] subscriber_request_completed: api_key=**** result=registered
+[2026-03-12 07:58:41] login_click submitted: api_key=**** secret_key_present=True
+[2026-03-12 07:58:41] check_server_permission started: api_key=**** timeout=8
+[2026-03-12 07:58:45] check_server_permission completed: api_key=**** result=success
+[2026-03-12 07:58:45] login_click permission_result: api_key=**** result=success
+[2026-03-12 07:58:45] login_click success: api_key=****
+[2026-03-12 07:58:46] market_info_fetch_success: symbol=BTC/USDT last=70339.76 percent=0.92 ping_ms=1150
+[2026-03-12 07:58:47] trade_page_opened: api_key=**** secret_key_present=True
+[2026-03-12 08:02:09] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 08:02:09] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 08:02:09] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 08:02:12] market_info_fetch_success: symbol=BTC/USDT last=70457.23 percent=0.94 ping_ms=1310
+[2026-03-12 08:04:46] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 08:04:46] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 08:04:46] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 08:04:50] market_info_fetch_success: symbol=BTC/USDT last=70475.71 percent=1.07 ping_ms=2310
+[2026-03-12 08:05:02] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 08:05:02] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-12 08:05:06] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-12 08:05:06] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-12 08:05:06] login_click success: api_key=UXFj***6Nx3
+[2026-03-12 08:05:06] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 11:36:01] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 11:36:01] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 11:36:01] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 11:36:04] market_info_fetch_failed: reason=request_error error=DDoSProtection
+[2026-03-12 11:36:35] market_info_fetch_failed: reason=request_error error=DDoSProtection
+[2026-03-12 11:37:06] market_info_fetch_failed: reason=request_error error=DDoSProtection
+[2026-03-12 11:37:16] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 11:37:16] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-12 11:37:19] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-12 11:37:19] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-12 11:37:19] login_click success: api_key=UXFj***6Nx3
+[2026-03-12 11:37:20] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 11:37:36] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 11:37:36] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 11:37:36] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 11:37:38] market_info_fetch_success: symbol=BTC/USDT last=69434.13 percent=-0.46 ping_ms=1267
+[2026-03-12 11:37:47] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 11:37:47] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-12 11:37:51] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-12 11:37:51] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-12 11:37:51] login_click success: api_key=UXFj***6Nx3
+[2026-03-12 11:37:52] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 13:33:30] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 13:33:30] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 13:33:30] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 13:33:33] market_info_fetch_success: symbol=BTC/USDT last=69449.31 percent=-0.68 ping_ms=1248
+[2026-03-12 13:33:38] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 13:33:38] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-12 13:33:42] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-12 13:33:42] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-12 13:33:42] login_click success: api_key=UXFj***6Nx3
+[2026-03-12 13:33:42] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 14:10:05] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 14:10:05] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 14:10:05] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 14:10:08] market_info_fetch_success: symbol=BTC/USDT last=69438.00 percent=-0.81 ping_ms=1305
+[2026-03-12 14:10:13] guide_button_clicked: kind=lts_guidebook
+[2026-03-12 14:10:13] guide_pdf_opened: kind=lts_guidebook path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\lts_connect_guide.pdf
+[2026-03-12 14:10:39] market_info_fetch_success: symbol=BTC/USDT last=69438.00 percent=-0.83 ping_ms=1261
+[2026-03-12 14:10:53] guide_button_clicked: kind=binance_account_guide
+[2026-03-12 14:10:53] binance_account_guide_window_layout: centered_option_blocks
+[2026-03-12 14:10:53] binance_account_guide_window_opened
+[2026-03-12 14:10:53] binance_account_guide_window_created
+[2026-03-12 14:11:03] binance_account_guide_window_closed
+[2026-03-12 14:11:04] guide_button_clicked: kind=lts_guidebook
+[2026-03-12 14:11:04] guide_pdf_opened: kind=lts_guidebook path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\lts_connect_guide.pdf
+[2026-03-12 14:11:10] market_info_fetch_success: symbol=BTC/USDT last=69474.00 percent=-0.77 ping_ms=1275
+[2026-03-12 14:11:42] market_info_fetch_success: symbol=BTC/USDT last=69454.24 percent=-0.83 ping_ms=1217
+[2026-03-12 14:12:13] market_info_fetch_success: symbol=BTC/USDT last=69449.31 percent=-0.83 ping_ms=1164
+[2026-03-12 14:12:27] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 14:12:27] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-12 14:12:31] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-12 14:12:31] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-12 14:12:31] login_click success: api_key=UXFj***6Nx3
+[2026-03-12 14:12:32] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 14:14:34] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 14:14:34] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 14:14:34] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 14:14:37] market_info_fetch_success: symbol=BTC/USDT last=69380.59 percent=-0.91 ping_ms=1196
+[2026-03-12 14:15:09] market_info_fetch_success: symbol=BTC/USDT last=69343.39 percent=-0.95 ping_ms=1183
+[2026-03-12 14:15:40] market_info_fetch_success: symbol=BTC/USDT last=69382.86 percent=-0.91 ping_ms=1263
+[2026-03-12 14:15:58] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 14:15:58] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-12 14:16:02] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-12 14:16:02] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-12 14:16:02] login_click success: api_key=UXFj***6Nx3
+[2026-03-12 14:16:02] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 14:47:14] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 14:47:14] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 14:47:14] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 14:47:16] market_info_fetch_success: symbol=BTC/USDT last=69465.62 percent=-0.09 ping_ms=1206
+[2026-03-12 14:47:41] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 14:47:41] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-12 14:47:44] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-12 14:47:44] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-12 14:47:44] login_click success: api_key=UXFj***6Nx3
+[2026-03-12 14:47:45] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 15:28:41] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 15:28:41] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 15:28:41] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 15:28:44] market_info_fetch_success: symbol=BTC/USDT last=69519.59 percent=-0.37 ping_ms=1253
+[2026-03-12 15:29:08] guide_button_clicked: kind=binance_account_guide
+[2026-03-12 15:29:08] binance_account_guide_window_layout: centered_option_blocks
+[2026-03-12 15:29:08] binance_account_guide_window_opened
+[2026-03-12 15:29:08] binance_account_guide_window_created
+[2026-03-12 15:29:15] market_info_fetch_success: symbol=BTC/USDT last=69530.00 percent=-0.37 ping_ms=1131
+[2026-03-12 15:29:19] binance_account_guide_window_closed
+[2026-03-12 15:32:57] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 15:32:57] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 15:32:57] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 15:33:00] market_info_fetch_success: symbol=BTC/USDT last=69500.24 percent=-0.59 ping_ms=1424
+[2026-03-12 15:33:16] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 15:33:16] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-12 15:33:20] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-12 15:33:20] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-12 15:33:20] login_click success: api_key=UXFj***6Nx3
+[2026-03-12 15:33:20] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 15:36:53] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-12 15:36:53] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-12 15:36:53] help_button_cluster_shift applied: shift_x=60
+[2026-03-12 15:36:56] market_info_fetch_success: symbol=BTC/USDT last=69492.93 percent=-0.56 ping_ms=1409
+[2026-03-12 15:37:01] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-12 15:37:01] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-12 15:37:05] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-12 15:37:05] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-12 15:37:05] login_click success: api_key=UXFj***6Nx3
+[2026-03-12 15:37:05] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-13 02:06:54] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-13 02:06:54] secondary guide buttons initialized: lts_guidebook, binance_account_guide
+[2026-03-13 02:06:54] help_button_cluster_shift applied: shift_x=60
+[2026-03-13 02:06:58] market_info_fetch_success: symbol=BTC/USDT last=70541.66 percent=-0.49 ping_ms=1310
+[2026-03-13 02:07:29] market_info_fetch_success: symbol=BTC/USDT last=70468.73 percent=-0.63 ping_ms=1249
+[2026-03-13 02:08:01] market_info_fetch_success: symbol=BTC/USDT last=70410.97 percent=-0.63 ping_ms=1483
+[2026-03-13 02:08:32] market_info_fetch_success: symbol=BTC/USDT last=70368.97 percent=-0.67 ping_ms=1267
+[2026-03-13 02:09:03] market_info_fetch_success: symbol=BTC/USDT last=70396.49 percent=-0.62 ping_ms=1311
+[2026-03-13 02:09:35] market_info_fetch_success: symbol=BTC/USDT last=70375.12 percent=-0.70 ping_ms=1270
+[2026-03-13 02:10:06] market_info_fetch_success: symbol=BTC/USDT last=70385.99 percent=-0.64 ping_ms=1356
+[2026-03-13 02:10:37] market_info_fetch_success: symbol=BTC/USDT last=70434.29 percent=-0.64 ping_ms=1378
+[2026-03-13 02:11:09] market_info_fetch_success: symbol=BTC/USDT last=70435.21 percent=-0.65 ping_ms=1324
+[2026-03-13 02:11:40] market_info_fetch_success: symbol=BTC/USDT last=70449.03 percent=-0.69 ping_ms=1234
+[2026-03-13 02:12:12] market_info_fetch_success: symbol=BTC/USDT last=70421.49 percent=-0.73 ping_ms=1496
+[2026-03-13 02:12:43] market_info_fetch_success: symbol=BTC/USDT last=70437.35 percent=-0.60 ping_ms=1312
+[2026-03-13 02:13:14] market_info_fetch_success: symbol=BTC/USDT last=70444.10 percent=-0.62 ping_ms=1272
+[2026-03-13 02:13:46] market_info_fetch_success: symbol=BTC/USDT last=70478.41 percent=-0.67 ping_ms=1358
+[2026-03-13 02:14:17] market_info_fetch_success: symbol=BTC/USDT last=70427.34 percent=-0.59 ping_ms=1233
+[2026-03-13 02:14:48] market_info_fetch_success: symbol=BTC/USDT last=70439.79 percent=-0.61 ping_ms=1359
+[2026-03-13 02:15:07] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-13 02:15:08] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-13 02:15:08] help_button_cluster_shift applied: shift_x=60
+[2026-03-13 02:15:11] market_info_fetch_success: symbol=BTC/USDT last=70411.63 percent=-0.65 ping_ms=1336
+[2026-03-13 02:15:14] guide_button_clicked: kind=product_guidebook
+[2026-03-13 02:15:14] product_guidebook_window_layout: placeholder_container_ready
+[2026-03-13 02:15:14] product_guidebook_window_opened
+[2026-03-13 02:15:14] product_guidebook_window_created
+[2026-03-13 02:15:16] product_guidebook_window_closed
+[2026-03-13 02:15:17] guide_button_clicked: kind=binance_account_guide
+[2026-03-13 02:15:17] binance_account_guide_window_layout: centered_option_blocks
+[2026-03-13 02:15:17] binance_account_guide_window_opened
+[2026-03-13 02:15:17] binance_account_guide_window_created
+[2026-03-13 02:15:18] binance_account_guide_window_closed
+[2026-03-13 02:15:18] guide_button_clicked: kind=product_guidebook
+[2026-03-13 02:15:18] product_guidebook_window_layout: placeholder_container_ready
+[2026-03-13 02:15:18] product_guidebook_window_opened
+[2026-03-13 02:15:18] product_guidebook_window_created
+[2026-03-13 02:15:20] product_guidebook_window_closed
+[2026-03-13 02:15:42] market_info_fetch_success: symbol=BTC/USDT last=70462.53 percent=-0.62 ping_ms=1323
+[2026-03-13 02:16:14] market_info_fetch_success: symbol=BTC/USDT last=70393.66 percent=-0.80 ping_ms=1405
+[2026-03-13 02:16:45] market_info_fetch_success: symbol=BTC/USDT last=70406.35 percent=-0.80 ping_ms=1279
+[2026-03-13 02:17:03] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-13 02:17:03] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-13 02:17:03] help_button_cluster_shift applied: shift_x=60
+[2026-03-13 02:17:06] market_info_fetch_success: symbol=BTC/USDT last=70371.07 percent=-0.84 ping_ms=1322
+[2026-03-13 02:17:07] guide_button_clicked: kind=product_guidebook
+[2026-03-13 02:17:07] product_guidebook_window_layout: placeholder_container_ready size=940x420
+[2026-03-13 02:17:07] product_guidebook_window_opened
+[2026-03-13 02:17:07] product_guidebook_window_created
+[2026-03-13 02:17:11] product_guidebook_window_closed
+[2026-03-13 04:26:08] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-13 04:26:08] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-13 04:26:08] help_button_cluster_shift applied: shift_x=60
+[2026-03-13 04:26:11] market_info_fetch_success: symbol=BTC/USDT last=70142.00 percent=-0.59 ping_ms=1254
+[2026-03-13 04:26:13] guide_button_clicked: kind=binance_account_guide
+[2026-03-13 04:26:14] binance_account_guide_window_layout: centered_option_blocks
+[2026-03-13 04:26:14] binance_account_guide_window_opened
+[2026-03-13 04:26:14] binance_account_guide_window_created
+[2026-03-13 04:26:15] binance_account_guide_window_closed
+[2026-03-13 04:26:15] guide_button_clicked: kind=product_guidebook
+[2026-03-13 04:26:15] product_guidebook_window_layout: placeholder_container_ready size=940x420
+[2026-03-13 04:26:15] product_guidebook_window_opened
+[2026-03-13 04:26:15] product_guidebook_window_created
+[2026-03-13 04:26:18] product_guidebook_window_closed
+[2026-03-13 04:26:43] market_info_fetch_success: symbol=BTC/USDT last=70129.35 percent=-0.62 ping_ms=1186
+[2026-03-13 04:27:14] market_info_fetch_success: symbol=BTC/USDT last=70131.28 percent=-0.59 ping_ms=1557
+[2026-03-13 04:27:46] market_info_fetch_success: symbol=BTC/USDT last=70152.34 percent=-0.55 ping_ms=1197
+[2026-03-13 04:28:17] market_info_fetch_success: symbol=BTC/USDT last=70159.59 percent=-0.55 ping_ms=1210
+[2026-03-13 04:28:48] market_info_fetch_success: symbol=BTC/USDT last=70202.84 percent=-0.47 ping_ms=1425
+[2026-03-13 04:29:20] market_info_fetch_success: symbol=BTC/USDT last=70199.54 percent=-0.46 ping_ms=1429
+[2026-03-13 04:29:51] market_info_fetch_success: symbol=BTC/USDT last=70202.13 percent=-0.46 ping_ms=1292
+[2026-03-13 04:30:23] market_info_fetch_success: symbol=BTC/USDT last=70249.99 percent=-0.36 ping_ms=1326
+[2026-03-13 04:30:54] market_info_fetch_success: symbol=BTC/USDT last=70244.00 percent=-0.40 ping_ms=1279
+[2026-03-13 04:31:25] market_info_fetch_success: symbol=BTC/USDT last=70322.12 percent=-0.29 ping_ms=1321
+[2026-03-13 04:31:57] market_info_fetch_success: symbol=BTC/USDT last=70326.75 percent=-0.25 ping_ms=1266
+[2026-03-13 04:32:28] market_info_fetch_success: symbol=BTC/USDT last=70326.36 percent=-0.30 ping_ms=1386
+[2026-03-13 04:32:59] market_info_fetch_success: symbol=BTC/USDT last=70342.40 percent=-0.32 ping_ms=1266
+[2026-03-13 04:33:31] market_info_fetch_success: symbol=BTC/USDT last=70346.01 percent=-0.31 ping_ms=1239
+[2026-03-13 04:34:02] market_info_fetch_success: symbol=BTC/USDT last=70315.62 percent=-0.41 ping_ms=1311
+[2026-03-13 04:34:33] market_info_fetch_success: symbol=BTC/USDT last=70316.67 percent=-0.46 ping_ms=1330
+[2026-03-13 04:35:05] market_info_fetch_success: symbol=BTC/USDT last=70320.50 percent=-0.53 ping_ms=1437
+[2026-03-13 04:35:36] market_info_fetch_success: symbol=BTC/USDT last=70316.77 percent=-0.50 ping_ms=1389
+[2026-03-13 04:36:08] market_info_fetch_success: symbol=BTC/USDT last=70263.66 percent=-0.56 ping_ms=1311
+[2026-03-13 04:36:39] market_info_fetch_success: symbol=BTC/USDT last=70270.74 percent=-0.54 ping_ms=1356
+[2026-03-13 04:37:11] market_info_fetch_success: symbol=BTC/USDT last=70281.23 percent=-0.58 ping_ms=1259
+[2026-03-13 04:37:42] market_info_fetch_success: symbol=BTC/USDT last=70287.43 percent=-0.55 ping_ms=1221
+[2026-03-13 04:38:13] market_info_fetch_success: symbol=BTC/USDT last=70296.06 percent=-0.60 ping_ms=1322
+[2026-03-13 04:38:45] market_info_fetch_success: symbol=BTC/USDT last=70307.33 percent=-0.59 ping_ms=1300
+[2026-03-13 04:39:16] market_info_fetch_success: symbol=BTC/USDT last=70314.31 percent=-0.52 ping_ms=1395
+[2026-03-13 04:39:48] market_info_fetch_success: symbol=BTC/USDT last=70312.22 percent=-0.50 ping_ms=1452
+[2026-03-13 04:40:19] market_info_fetch_success: symbol=BTC/USDT last=70299.30 percent=-0.48 ping_ms=1417
+[2026-03-13 04:40:50] market_info_fetch_success: symbol=BTC/USDT last=70273.42 percent=-0.55 ping_ms=1359
+[2026-03-13 04:41:22] market_info_fetch_success: symbol=BTC/USDT last=70278.90 percent=-0.50 ping_ms=1360
+[2026-03-13 04:41:53] market_info_fetch_success: symbol=BTC/USDT last=70274.25 percent=-0.49 ping_ms=1305
+[2026-03-13 04:42:25] market_info_fetch_success: symbol=BTC/USDT last=70288.64 percent=-0.49 ping_ms=1390
+[2026-03-13 04:42:56] market_info_fetch_success: symbol=BTC/USDT last=70285.79 percent=-0.50 ping_ms=1258
+[2026-03-13 04:43:28] market_info_fetch_success: symbol=BTC/USDT last=70305.28 percent=-0.46 ping_ms=1444
+[2026-03-13 04:43:59] market_info_fetch_success: symbol=BTC/USDT last=70321.06 percent=-0.44 ping_ms=1340
+[2026-03-13 04:44:30] market_info_fetch_success: symbol=BTC/USDT last=70310.00 percent=-0.48 ping_ms=1316
+[2026-03-13 04:45:02] market_info_fetch_success: symbol=BTC/USDT last=70281.23 percent=-0.55 ping_ms=1457
+[2026-03-13 04:45:33] market_info_fetch_success: symbol=BTC/USDT last=70301.64 percent=-0.51 ping_ms=1300
+[2026-03-13 04:46:05] market_info_fetch_success: symbol=BTC/USDT last=70306.71 percent=-0.47 ping_ms=1333
+[2026-03-13 04:46:36] market_info_fetch_success: symbol=BTC/USDT last=70286.67 percent=-0.52 ping_ms=1419
+[2026-03-13 04:47:07] market_info_fetch_success: symbol=BTC/USDT last=70297.97 percent=-0.52 ping_ms=1327
+[2026-03-13 04:47:39] market_info_fetch_success: symbol=BTC/USDT last=70334.97 percent=-0.48 ping_ms=1361
+[2026-03-13 04:48:10] market_info_fetch_success: symbol=BTC/USDT last=70326.53 percent=-0.49 ping_ms=1261
+[2026-03-13 04:48:42] market_info_fetch_success: symbol=BTC/USDT last=70301.51 percent=-0.49 ping_ms=1254
+[2026-03-13 04:49:13] market_info_fetch_success: symbol=BTC/USDT last=70355.99 percent=-0.40 ping_ms=1367
+[2026-03-13 04:49:44] market_info_fetch_success: symbol=BTC/USDT last=70360.24 percent=-0.41 ping_ms=1488
+[2026-03-13 04:50:16] market_info_fetch_success: symbol=BTC/USDT last=70461.52 percent=-0.26 ping_ms=1412
+[2026-03-13 04:50:47] market_info_fetch_success: symbol=BTC/USDT last=70460.14 percent=-0.32 ping_ms=1265
+[2026-03-13 04:51:19] market_info_fetch_success: symbol=BTC/USDT last=70407.36 percent=-0.41 ping_ms=1326
+[2026-03-13 04:51:50] market_info_fetch_success: symbol=BTC/USDT last=70411.27 percent=-0.44 ping_ms=1379
+[2026-03-13 04:52:22] market_info_fetch_success: symbol=BTC/USDT last=70437.10 percent=-0.36 ping_ms=1343
+[2026-03-13 04:52:53] market_info_fetch_success: symbol=BTC/USDT last=70417.56 percent=-0.40 ping_ms=1414
+[2026-03-13 04:53:24] market_info_fetch_success: symbol=BTC/USDT last=70419.86 percent=-0.38 ping_ms=1352
+[2026-03-13 04:53:56] market_info_fetch_success: symbol=BTC/USDT last=70406.88 percent=-0.41 ping_ms=1364
+[2026-03-13 04:54:27] market_info_fetch_success: symbol=BTC/USDT last=70380.18 percent=-0.45 ping_ms=1377
+[2026-03-13 04:54:59] market_info_fetch_success: symbol=BTC/USDT last=70445.31 percent=-0.35 ping_ms=1306
+[2026-03-13 04:55:30] market_info_fetch_success: symbol=BTC/USDT last=70511.43 percent=-0.17 ping_ms=1274
+[2026-03-13 04:56:02] market_info_fetch_success: symbol=BTC/USDT last=70538.14 percent=-0.13 ping_ms=1462
+[2026-03-13 04:56:33] market_info_fetch_success: symbol=BTC/USDT last=70508.51 percent=-0.13 ping_ms=1325
+[2026-03-13 04:57:04] market_info_fetch_success: symbol=BTC/USDT last=70488.01 percent=-0.12 ping_ms=1330
+[2026-03-13 04:57:36] market_info_fetch_success: symbol=BTC/USDT last=70460.86 percent=-0.17 ping_ms=1342
+[2026-03-13 04:58:07] market_info_fetch_success: symbol=BTC/USDT last=70486.77 percent=-0.19 ping_ms=1408
+[2026-03-13 04:58:39] market_info_fetch_success: symbol=BTC/USDT last=70501.43 percent=-0.19 ping_ms=1304
+[2026-03-13 04:59:10] market_info_fetch_success: symbol=BTC/USDT last=70495.87 percent=-0.13 ping_ms=1288
+[2026-03-13 04:59:41] market_info_fetch_success: symbol=BTC/USDT last=70449.06 percent=-0.26 ping_ms=1399
+[2026-03-13 05:00:13] market_info_fetch_success: symbol=BTC/USDT last=70472.20 percent=-0.22 ping_ms=1364
+[2026-03-13 05:00:44] market_info_fetch_success: symbol=BTC/USDT last=70469.84 percent=-0.22 ping_ms=1244
+[2026-03-13 05:01:16] market_info_fetch_success: symbol=BTC/USDT last=70454.15 percent=-0.09 ping_ms=1456
+[2026-03-13 05:01:47] market_info_fetch_success: symbol=BTC/USDT last=70480.93 percent=-0.07 ping_ms=1278
+[2026-03-13 05:02:18] market_info_fetch_success: symbol=BTC/USDT last=70486.72 percent=-0.07 ping_ms=1280
+[2026-03-13 05:02:50] market_info_fetch_success: symbol=BTC/USDT last=70451.12 percent=-0.12 ping_ms=1280
+[2026-03-13 05:03:21] market_info_fetch_success: symbol=BTC/USDT last=70444.45 percent=-0.08 ping_ms=1346
+[2026-03-13 05:03:52] market_info_fetch_success: symbol=BTC/USDT last=70494.17 percent=0.01 ping_ms=1212
+[2026-03-13 05:04:24] market_info_fetch_success: symbol=BTC/USDT last=70470.09 percent=-0.07 ping_ms=1299
+[2026-03-13 05:04:55] market_info_fetch_success: symbol=BTC/USDT last=70495.77 percent=-0.02 ping_ms=1242
+[2026-03-13 05:05:26] market_info_fetch_success: symbol=BTC/USDT last=70537.58 percent=0.07 ping_ms=1195
+[2026-03-13 05:05:57] market_info_fetch_success: symbol=BTC/USDT last=70543.35 percent=0.04 ping_ms=1195
+[2026-03-13 05:06:29] market_info_fetch_success: symbol=BTC/USDT last=70522.85 percent=0.01 ping_ms=1256
+[2026-03-13 05:07:00] market_info_fetch_success: symbol=BTC/USDT last=70512.45 percent=-0.01 ping_ms=1167
+[2026-03-13 05:07:31] market_info_fetch_success: symbol=BTC/USDT last=70499.53 percent=-0.02 ping_ms=1155
+[2026-03-13 05:08:02] market_info_fetch_success: symbol=BTC/USDT last=70489.92 percent=-0.04 ping_ms=1237
+[2026-03-13 05:08:34] market_info_fetch_success: symbol=BTC/USDT last=70477.56 percent=-0.07 ping_ms=1170
+[2026-03-13 05:09:05] market_info_fetch_success: symbol=BTC/USDT last=70471.73 percent=-0.06 ping_ms=1323
+[2026-03-13 05:09:36] market_info_fetch_success: symbol=BTC/USDT last=70460.21 percent=-0.08 ping_ms=1376
+[2026-03-13 05:10:08] market_info_fetch_success: symbol=BTC/USDT last=70456.94 percent=-0.05 ping_ms=1297
+[2026-03-13 05:10:39] market_info_fetch_success: symbol=BTC/USDT last=70402.33 percent=-0.12 ping_ms=1176
+[2026-03-13 05:11:10] market_info_fetch_success: symbol=BTC/USDT last=70377.53 percent=-0.14 ping_ms=1174
+[2026-03-13 05:11:42] market_info_fetch_success: symbol=BTC/USDT last=70362.12 percent=-0.10 ping_ms=1268
+[2026-03-13 05:12:13] market_info_fetch_success: symbol=BTC/USDT last=70385.99 percent=-0.09 ping_ms=1209
+[2026-03-13 05:12:44] market_info_fetch_success: symbol=BTC/USDT last=70386.01 percent=-0.09 ping_ms=1180
+[2026-03-13 05:13:15] market_info_fetch_success: symbol=BTC/USDT last=70371.05 percent=-0.11 ping_ms=1266
+[2026-03-13 05:13:47] market_info_fetch_success: symbol=BTC/USDT last=70391.35 percent=-0.10 ping_ms=1168
+[2026-03-13 05:14:18] market_info_fetch_success: symbol=BTC/USDT last=70378.19 percent=-0.09 ping_ms=1245
+[2026-03-13 05:14:49] market_info_fetch_success: symbol=BTC/USDT last=70388.08 percent=-0.07 ping_ms=1153
+[2026-03-13 05:15:20] market_info_fetch_success: symbol=BTC/USDT last=70422.26 percent=0.03 ping_ms=1230
+[2026-03-13 05:15:52] market_info_fetch_success: symbol=BTC/USDT last=70414.90 percent=-0.01 ping_ms=1192
+[2026-03-13 05:16:23] market_info_fetch_success: symbol=BTC/USDT last=70373.16 percent=-0.11 ping_ms=1198
+[2026-03-13 05:16:54] market_info_fetch_success: symbol=BTC/USDT last=70383.26 percent=-0.12 ping_ms=1242
+[2026-03-13 05:17:25] market_info_fetch_success: symbol=BTC/USDT last=70400.98 percent=-0.13 ping_ms=1193
+[2026-03-13 05:17:57] market_info_fetch_success: symbol=BTC/USDT last=70380.10 percent=-0.13 ping_ms=1167
+[2026-03-13 05:18:28] market_info_fetch_success: symbol=BTC/USDT last=70303.14 percent=-0.21 ping_ms=1214
+[2026-03-13 05:18:59] market_info_fetch_success: symbol=BTC/USDT last=70295.22 percent=-0.24 ping_ms=1208
+[2026-03-13 05:19:30] market_info_fetch_success: symbol=BTC/USDT last=70330.70 percent=-0.26 ping_ms=1201
+[2026-03-13 05:20:02] market_info_fetch_success: symbol=BTC/USDT last=70300.08 percent=-0.29 ping_ms=1236
+[2026-03-13 05:20:33] market_info_fetch_success: symbol=BTC/USDT last=70275.67 percent=-0.29 ping_ms=1201
+[2026-03-13 05:21:04] market_info_fetch_success: symbol=BTC/USDT last=70288.32 percent=-0.28 ping_ms=1321
+[2026-03-13 05:21:36] market_info_fetch_success: symbol=BTC/USDT last=70288.59 percent=-0.27 ping_ms=1228
+[2026-03-13 05:22:07] market_info_fetch_success: symbol=BTC/USDT last=70309.68 percent=-0.21 ping_ms=1263
+[2026-03-13 05:22:38] market_info_fetch_success: symbol=BTC/USDT last=70345.43 percent=-0.17 ping_ms=1167
+[2026-03-13 05:23:09] market_info_fetch_success: symbol=BTC/USDT last=70346.34 percent=-0.19 ping_ms=1225
+[2026-03-13 05:23:41] market_info_fetch_success: symbol=BTC/USDT last=70369.51 percent=-0.19 ping_ms=1194
+[2026-03-13 05:24:12] market_info_fetch_success: symbol=BTC/USDT last=70369.51 percent=-0.14 ping_ms=1373
+[2026-03-13 05:24:43] market_info_fetch_success: symbol=BTC/USDT last=70357.40 percent=-0.12 ping_ms=1179
+[2026-03-13 05:25:14] market_info_fetch_success: symbol=BTC/USDT last=70386.00 percent=-0.07 ping_ms=1232
+[2026-03-13 05:25:46] market_info_fetch_success: symbol=BTC/USDT last=70381.43 percent=-0.03 ping_ms=1199
+[2026-03-13 05:26:17] market_info_fetch_success: symbol=BTC/USDT last=70382.65 percent=-0.08 ping_ms=1182
+[2026-03-13 05:26:48] market_info_fetch_success: symbol=BTC/USDT last=70343.66 percent=-0.12 ping_ms=1160
+[2026-03-13 05:27:20] market_info_fetch_success: symbol=BTC/USDT last=70315.43 percent=-0.16 ping_ms=1281
+[2026-03-13 05:27:51] market_info_fetch_success: symbol=BTC/USDT last=70330.40 percent=-0.10 ping_ms=1178
+[2026-03-13 05:28:22] market_info_fetch_success: symbol=BTC/USDT last=70332.19 percent=-0.13 ping_ms=1142
+[2026-03-13 05:28:53] market_info_fetch_success: symbol=BTC/USDT last=70322.51 percent=-0.16 ping_ms=1212
+[2026-03-13 05:29:24] market_info_fetch_success: symbol=BTC/USDT last=70322.51 percent=-0.15 ping_ms=1178
+[2026-03-13 05:29:56] market_info_fetch_success: symbol=BTC/USDT last=70313.63 percent=-0.18 ping_ms=1217
+[2026-03-13 05:30:27] market_info_fetch_success: symbol=BTC/USDT last=70263.90 percent=-0.25 ping_ms=1206
+[2026-03-13 05:30:58] market_info_fetch_success: symbol=BTC/USDT last=70239.56 percent=-0.28 ping_ms=1165
+[2026-03-13 05:31:29] market_info_fetch_success: symbol=BTC/USDT last=70245.93 percent=-0.29 ping_ms=1204
+[2026-03-13 05:32:01] market_info_fetch_success: symbol=BTC/USDT last=70231.36 percent=-0.39 ping_ms=1139
+[2026-03-13 05:32:32] market_info_fetch_success: symbol=BTC/USDT last=70216.28 percent=-0.41 ping_ms=1249
+[2026-03-13 05:33:03] market_info_fetch_success: symbol=BTC/USDT last=70233.63 percent=-0.35 ping_ms=1204
+[2026-03-13 05:33:34] market_info_fetch_success: symbol=BTC/USDT last=70224.24 percent=-0.34 ping_ms=1226
+[2026-03-13 05:34:06] market_info_fetch_success: symbol=BTC/USDT last=70227.92 percent=-0.35 ping_ms=1257
+[2026-03-13 05:34:37] market_info_fetch_success: symbol=BTC/USDT last=70224.71 percent=-0.36 ping_ms=1196
+[2026-03-13 05:35:08] market_info_fetch_success: symbol=BTC/USDT last=70232.78 percent=-0.38 ping_ms=1271
+[2026-03-13 05:35:40] market_info_fetch_success: symbol=BTC/USDT last=70238.23 percent=-0.36 ping_ms=1259
+[2026-03-13 05:36:11] market_info_fetch_success: symbol=BTC/USDT last=70238.22 percent=-0.37 ping_ms=1171
+[2026-03-13 05:36:42] market_info_fetch_success: symbol=BTC/USDT last=70238.23 percent=-0.41 ping_ms=1210
+[2026-03-13 05:37:13] market_info_fetch_success: symbol=BTC/USDT last=70233.45 percent=-0.41 ping_ms=1202
+[2026-03-13 05:37:45] market_info_fetch_success: symbol=BTC/USDT last=70208.31 percent=-0.42 ping_ms=1216
+[2026-03-13 05:38:16] market_info_fetch_success: symbol=BTC/USDT last=70198.13 percent=-0.41 ping_ms=1164
+[2026-03-13 05:38:47] market_info_fetch_success: symbol=BTC/USDT last=70200.73 percent=-0.40 ping_ms=1206
+[2026-03-13 05:39:18] market_info_fetch_success: symbol=BTC/USDT last=70191.29 percent=-0.38 ping_ms=1249
+[2026-03-13 05:39:50] market_info_fetch_success: symbol=BTC/USDT last=70212.84 percent=-0.41 ping_ms=1228
+[2026-03-13 05:40:21] market_info_fetch_success: symbol=BTC/USDT last=70207.57 percent=-0.42 ping_ms=1190
+[2026-03-13 05:40:52] market_info_fetch_success: symbol=BTC/USDT last=70203.91 percent=-0.42 ping_ms=1208
+[2026-03-13 05:41:23] market_info_fetch_success: symbol=BTC/USDT last=70187.35 percent=-0.48 ping_ms=1202
+[2026-03-13 05:41:55] market_info_fetch_success: symbol=BTC/USDT last=70174.00 percent=-0.52 ping_ms=1306
+[2026-03-13 05:42:26] market_info_fetch_success: symbol=BTC/USDT last=70153.06 percent=-0.58 ping_ms=1164
+[2026-03-13 05:42:57] market_info_fetch_success: symbol=BTC/USDT last=70138.51 percent=-0.60 ping_ms=1220
+[2026-03-13 05:43:29] market_info_fetch_success: symbol=BTC/USDT last=70147.87 percent=-0.56 ping_ms=1251
+[2026-03-13 05:44:00] market_info_fetch_success: symbol=BTC/USDT last=70142.60 percent=-0.55 ping_ms=1214
+[2026-03-13 05:44:31] market_info_fetch_success: symbol=BTC/USDT last=70146.25 percent=-0.57 ping_ms=1206
+[2026-03-13 05:45:02] market_info_fetch_success: symbol=BTC/USDT last=70128.14 percent=-0.59 ping_ms=1263
+[2026-03-13 05:45:34] market_info_fetch_success: symbol=BTC/USDT last=70165.32 percent=-0.56 ping_ms=1174
+[2026-03-13 05:46:05] market_info_fetch_success: symbol=BTC/USDT last=70150.88 percent=-0.53 ping_ms=1196
+[2026-03-13 05:46:36] market_info_fetch_success: symbol=BTC/USDT last=70169.75 percent=-0.52 ping_ms=1176
+[2026-03-13 05:47:07] market_info_fetch_success: symbol=BTC/USDT last=70198.92 percent=-0.50 ping_ms=1165
+[2026-03-13 05:47:39] market_info_fetch_success: symbol=BTC/USDT last=70224.39 percent=-0.45 ping_ms=1237
+[2026-03-13 05:48:10] market_info_fetch_success: symbol=BTC/USDT last=70220.24 percent=-0.44 ping_ms=1188
+[2026-03-13 05:48:41] market_info_fetch_success: symbol=BTC/USDT last=70224.00 percent=-0.46 ping_ms=1180
+[2026-03-13 05:49:12] market_info_fetch_success: symbol=BTC/USDT last=70228.31 percent=-0.45 ping_ms=1225
+[2026-03-13 05:49:43] market_info_fetch_success: symbol=BTC/USDT last=70224.40 percent=-0.44 ping_ms=1149
+[2026-03-13 05:50:15] market_info_fetch_success: symbol=BTC/USDT last=70231.11 percent=-0.44 ping_ms=1302
+[2026-03-13 05:50:46] market_info_fetch_success: symbol=BTC/USDT last=70230.28 percent=-0.45 ping_ms=1246
+[2026-03-13 05:51:17] market_info_fetch_success: symbol=BTC/USDT last=70230.28 percent=-0.45 ping_ms=1212
+[2026-03-13 05:51:49] market_info_fetch_success: symbol=BTC/USDT last=70230.28 percent=-0.43 ping_ms=1245
+[2026-03-13 05:52:20] market_info_fetch_success: symbol=BTC/USDT last=70222.47 percent=-0.42 ping_ms=1193
+[2026-03-13 05:52:51] market_info_fetch_success: symbol=BTC/USDT last=70224.40 percent=-0.40 ping_ms=1286
+[2026-03-13 05:53:23] market_info_fetch_success: symbol=BTC/USDT last=70231.03 percent=-0.36 ping_ms=1187
+[2026-03-13 05:53:54] market_info_fetch_success: symbol=BTC/USDT last=70209.71 percent=-0.41 ping_ms=1157
+[2026-03-13 05:54:25] market_info_fetch_success: symbol=BTC/USDT last=70137.67 percent=-0.59 ping_ms=1278
+[2026-03-13 05:54:56] market_info_fetch_success: symbol=BTC/USDT last=70150.89 percent=-0.63 ping_ms=1201
+[2026-03-13 05:55:28] market_info_fetch_success: symbol=BTC/USDT last=70186.95 percent=-0.55 ping_ms=1216
+[2026-03-13 05:55:59] market_info_fetch_success: symbol=BTC/USDT last=70177.80 percent=-0.55 ping_ms=1177
+[2026-03-13 05:56:30] market_info_fetch_success: symbol=BTC/USDT last=70187.75 percent=-0.52 ping_ms=1243
+[2026-03-13 05:57:01] market_info_fetch_success: symbol=BTC/USDT last=70177.80 percent=-0.54 ping_ms=1242
+[2026-03-13 05:57:33] market_info_fetch_success: symbol=BTC/USDT last=70172.00 percent=-0.59 ping_ms=1170
+[2026-03-13 05:58:04] market_info_fetch_success: symbol=BTC/USDT last=70184.58 percent=-0.57 ping_ms=1232
+[2026-03-13 05:58:35] market_info_fetch_success: symbol=BTC/USDT last=70182.84 percent=-0.60 ping_ms=1171
+[2026-03-13 05:59:07] market_info_fetch_success: symbol=BTC/USDT last=70170.24 percent=-0.72 ping_ms=1375
+[2026-03-13 05:59:38] market_info_fetch_success: symbol=BTC/USDT last=70174.34 percent=-0.66 ping_ms=1180
+[2026-03-13 06:00:09] market_info_fetch_success: symbol=BTC/USDT last=70200.30 percent=-0.66 ping_ms=1207
+[2026-03-13 06:00:40] market_info_fetch_success: symbol=BTC/USDT last=70210.56 percent=-0.76 ping_ms=1289
+[2026-03-13 06:01:12] market_info_fetch_success: symbol=BTC/USDT last=70219.10 percent=-0.70 ping_ms=1256
+[2026-03-13 06:01:43] market_info_fetch_success: symbol=BTC/USDT last=70267.68 percent=-0.59 ping_ms=1193
+[2026-03-13 06:02:14] market_info_fetch_success: symbol=BTC/USDT last=70274.04 percent=-0.54 ping_ms=1310
+[2026-03-13 06:02:45] market_info_fetch_success: symbol=BTC/USDT last=70289.28 percent=-0.48 ping_ms=1182
+[2026-03-13 06:03:17] market_info_fetch_success: symbol=BTC/USDT last=70286.99 percent=-0.46 ping_ms=1196
+[2026-03-13 06:03:48] market_info_fetch_success: symbol=BTC/USDT last=70272.44 percent=-0.51 ping_ms=1374
+[2026-03-13 06:04:20] market_info_fetch_success: symbol=BTC/USDT last=70307.36 percent=-0.48 ping_ms=1179
+[2026-03-13 06:04:51] market_info_fetch_success: symbol=BTC/USDT last=70309.69 percent=-0.62 ping_ms=1284
+[2026-03-13 06:05:22] market_info_fetch_success: symbol=BTC/USDT last=70309.69 percent=-0.60 ping_ms=1239
+[2026-03-13 06:05:53] market_info_fetch_success: symbol=BTC/USDT last=70310.33 percent=-0.58 ping_ms=1166
+[2026-03-13 06:06:25] market_info_fetch_success: symbol=BTC/USDT last=70323.38 percent=-0.55 ping_ms=1245
+[2026-03-13 06:06:56] market_info_fetch_success: symbol=BTC/USDT last=70308.93 percent=-0.53 ping_ms=1121
+[2026-03-13 06:07:27] market_info_fetch_success: symbol=BTC/USDT last=70285.13 percent=-0.57 ping_ms=1261
+[2026-03-13 06:07:58] market_info_fetch_success: symbol=BTC/USDT last=70278.29 percent=-0.60 ping_ms=1169
+[2026-03-13 06:08:30] market_info_fetch_success: symbol=BTC/USDT last=70278.29 percent=-0.60 ping_ms=1205
+[2026-03-13 06:09:01] market_info_fetch_success: symbol=BTC/USDT last=70270.00 percent=-0.61 ping_ms=1222
+[2026-03-13 06:09:32] market_info_fetch_success: symbol=BTC/USDT last=70305.19 percent=-0.56 ping_ms=1279
+[2026-03-13 06:10:04] market_info_fetch_success: symbol=BTC/USDT last=70334.49 percent=-0.53 ping_ms=1285
+[2026-03-13 06:10:35] market_info_fetch_success: symbol=BTC/USDT last=70342.04 percent=-0.46 ping_ms=1293
+[2026-03-13 06:11:06] market_info_fetch_success: symbol=BTC/USDT last=70334.94 percent=-0.48 ping_ms=1197
+[2026-03-13 06:11:37] market_info_fetch_success: symbol=BTC/USDT last=70395.74 percent=-0.35 ping_ms=1221
+[2026-03-13 06:12:09] market_info_fetch_success: symbol=BTC/USDT last=70399.39 percent=-0.30 ping_ms=1211
+[2026-03-13 06:12:40] market_info_fetch_success: symbol=BTC/USDT last=70416.41 percent=-0.26 ping_ms=1153
+[2026-03-13 06:13:11] market_info_fetch_success: symbol=BTC/USDT last=70463.44 percent=-0.09 ping_ms=1305
+[2026-03-13 06:13:42] market_info_fetch_success: symbol=BTC/USDT last=70429.09 percent=-0.12 ping_ms=1216
+[2026-03-13 06:14:14] market_info_fetch_success: symbol=BTC/USDT last=70409.22 percent=-0.17 ping_ms=1240
+[2026-03-13 06:14:45] market_info_fetch_success: symbol=BTC/USDT last=70386.91 percent=-0.22 ping_ms=1185
+[2026-03-13 06:15:16] market_info_fetch_success: symbol=BTC/USDT last=70386.96 percent=-0.20 ping_ms=1234
+[2026-03-13 06:15:48] market_info_fetch_success: symbol=BTC/USDT last=70360.38 percent=-0.25 ping_ms=1447
+[2026-03-13 06:16:19] market_info_fetch_success: symbol=BTC/USDT last=70353.75 percent=-0.26 ping_ms=1255
+[2026-03-13 06:16:50] market_info_fetch_success: symbol=BTC/USDT last=70390.60 percent=-0.23 ping_ms=1168
+[2026-03-13 06:17:22] market_info_fetch_success: symbol=BTC/USDT last=70365.17 percent=-0.29 ping_ms=1286
+[2026-03-13 06:17:53] market_info_fetch_success: symbol=BTC/USDT last=70352.00 percent=-0.33 ping_ms=1178
+[2026-03-13 06:18:24] market_info_fetch_success: symbol=BTC/USDT last=70336.05 percent=-0.37 ping_ms=1271
+[2026-03-13 06:18:55] market_info_fetch_success: symbol=BTC/USDT last=70322.58 percent=-0.35 ping_ms=1147
+[2026-03-13 06:19:27] market_info_fetch_success: symbol=BTC/USDT last=70349.61 percent=-0.30 ping_ms=1195
+[2026-03-13 06:19:58] market_info_fetch_success: symbol=BTC/USDT last=70322.53 percent=-0.34 ping_ms=1273
+[2026-03-13 06:20:29] market_info_fetch_success: symbol=BTC/USDT last=70319.55 percent=-0.31 ping_ms=1223
+[2026-03-13 06:21:00] market_info_fetch_success: symbol=BTC/USDT last=70300.02 percent=-0.36 ping_ms=1249
+[2026-03-13 06:21:32] market_info_fetch_success: symbol=BTC/USDT last=70294.42 percent=-0.35 ping_ms=1197
+[2026-03-13 06:22:03] market_info_fetch_success: symbol=BTC/USDT last=70309.69 percent=-0.37 ping_ms=1212
+[2026-03-13 06:22:34] market_info_fetch_success: symbol=BTC/USDT last=70309.68 percent=-0.38 ping_ms=1310
+[2026-03-13 06:23:06] market_info_fetch_success: symbol=BTC/USDT last=70292.53 percent=-0.38 ping_ms=1197
+[2026-03-13 06:23:37] market_info_fetch_success: symbol=BTC/USDT last=70291.00 percent=-0.38 ping_ms=1182
+[2026-03-13 06:24:08] market_info_fetch_success: symbol=BTC/USDT last=70291.00 percent=-0.41 ping_ms=1258
+[2026-03-13 06:24:39] market_info_fetch_success: symbol=BTC/USDT last=70309.69 percent=-0.39 ping_ms=1230
+[2026-03-13 06:25:11] market_info_fetch_success: symbol=BTC/USDT last=70299.84 percent=-0.41 ping_ms=1316
+[2026-03-13 06:25:42] market_info_fetch_success: symbol=BTC/USDT last=70275.01 percent=-0.45 ping_ms=1233
+[2026-03-13 06:26:13] market_info_fetch_success: symbol=BTC/USDT last=70270.00 percent=-0.44 ping_ms=1251
+[2026-03-13 06:26:45] market_info_fetch_success: symbol=BTC/USDT last=70269.27 percent=-0.44 ping_ms=1245
+[2026-03-13 06:27:16] market_info_fetch_success: symbol=BTC/USDT last=70277.48 percent=-0.39 ping_ms=1211
+[2026-03-13 06:27:47] market_info_fetch_success: symbol=BTC/USDT last=70290.24 percent=-0.36 ping_ms=1262
+[2026-03-13 06:28:18] market_info_fetch_success: symbol=BTC/USDT last=70291.95 percent=-0.40 ping_ms=1212
+[2026-03-13 06:28:50] market_info_fetch_success: symbol=BTC/USDT last=70291.94 percent=-0.39 ping_ms=1240
+[2026-03-13 06:29:21] market_info_fetch_success: symbol=BTC/USDT last=70281.27 percent=-0.40 ping_ms=1277
+[2026-03-13 06:29:52] market_info_fetch_success: symbol=BTC/USDT last=70289.11 percent=-0.37 ping_ms=1170
+[2026-03-13 06:30:23] market_info_fetch_success: symbol=BTC/USDT last=70283.42 percent=-0.45 ping_ms=1188
+[2026-03-13 06:30:55] market_info_fetch_success: symbol=BTC/USDT last=70248.79 percent=-0.49 ping_ms=1227
+[2026-03-13 06:31:26] market_info_fetch_success: symbol=BTC/USDT last=70248.79 percent=-0.52 ping_ms=1283
+[2026-03-13 06:31:57] market_info_fetch_success: symbol=BTC/USDT last=70233.98 percent=-0.59 ping_ms=1307
+[2026-03-13 06:32:29] market_info_fetch_success: symbol=BTC/USDT last=70224.39 percent=-0.57 ping_ms=1145
+[2026-03-13 06:33:00] market_info_fetch_success: symbol=BTC/USDT last=70205.45 percent=-0.59 ping_ms=1277
+[2026-03-13 06:33:31] market_info_fetch_success: symbol=BTC/USDT last=70212.83 percent=-0.61 ping_ms=1193
+[2026-03-13 06:34:03] market_info_fetch_success: symbol=BTC/USDT last=70212.83 percent=-0.62 ping_ms=1380
+[2026-03-13 06:34:34] market_info_fetch_success: symbol=BTC/USDT last=70224.39 percent=-0.57 ping_ms=1216
+[2026-03-13 06:35:05] market_info_fetch_success: symbol=BTC/USDT last=70224.44 percent=-0.57 ping_ms=1247
+[2026-03-13 06:35:36] market_info_fetch_success: symbol=BTC/USDT last=70224.43 percent=-0.62 ping_ms=1155
+[2026-03-13 06:36:08] market_info_fetch_success: symbol=BTC/USDT last=70253.22 percent=-0.57 ping_ms=1302
+[2026-03-13 06:36:39] market_info_fetch_success: symbol=BTC/USDT last=70254.00 percent=-0.57 ping_ms=1203
+[2026-03-13 06:37:10] market_info_fetch_success: symbol=BTC/USDT last=70249.61 percent=-0.60 ping_ms=1213
+[2026-03-13 06:37:41] market_info_fetch_success: symbol=BTC/USDT last=70233.30 percent=-0.63 ping_ms=1190
+[2026-03-13 06:38:13] market_info_fetch_success: symbol=BTC/USDT last=70227.42 percent=-0.62 ping_ms=1208
+[2026-03-13 06:38:44] market_info_fetch_success: symbol=BTC/USDT last=70218.89 percent=-0.65 ping_ms=1238
+[2026-03-13 06:39:15] market_info_fetch_success: symbol=BTC/USDT last=70202.84 percent=-0.66 ping_ms=1230
+[2026-03-13 06:39:46] market_info_fetch_success: symbol=BTC/USDT last=70200.92 percent=-0.63 ping_ms=1146
+[2026-03-13 06:40:18] market_info_fetch_success: symbol=BTC/USDT last=70222.88 percent=-0.60 ping_ms=1246
+[2026-03-13 06:40:49] market_info_fetch_success: symbol=BTC/USDT last=70225.88 percent=-0.57 ping_ms=1162
+[2026-03-13 06:41:20] market_info_fetch_success: symbol=BTC/USDT last=70244.16 percent=-0.59 ping_ms=1287
+[2026-03-13 06:41:52] market_info_fetch_success: symbol=BTC/USDT last=70204.01 percent=-0.64 ping_ms=1205
+[2026-03-13 06:42:23] market_info_fetch_success: symbol=BTC/USDT last=70245.29 percent=-0.58 ping_ms=1220
+[2026-03-13 06:42:54] market_info_fetch_success: symbol=BTC/USDT last=70267.67 percent=-0.55 ping_ms=1145
+[2026-03-13 06:43:25] market_info_fetch_success: symbol=BTC/USDT last=70212.23 percent=-0.61 ping_ms=1225
+[2026-03-13 06:43:57] market_info_fetch_success: symbol=BTC/USDT last=70246.53 percent=-0.56 ping_ms=1229
+[2026-03-13 06:44:28] market_info_fetch_success: symbol=BTC/USDT last=70272.81 percent=-0.44 ping_ms=1224
+[2026-03-13 06:44:59] market_info_fetch_success: symbol=BTC/USDT last=70277.22 percent=-0.38 ping_ms=1138
+[2026-03-13 06:45:30] market_info_fetch_success: symbol=BTC/USDT last=70267.14 percent=-0.45 ping_ms=1292
+[2026-03-13 06:46:02] market_info_fetch_success: symbol=BTC/USDT last=70267.14 percent=-0.45 ping_ms=1168
+[2026-03-13 06:46:33] market_info_fetch_success: symbol=BTC/USDT last=70294.43 percent=-0.47 ping_ms=1243
+[2026-03-13 06:47:04] market_info_fetch_success: symbol=BTC/USDT last=70300.00 percent=-0.45 ping_ms=1162
+[2026-03-13 06:47:35] market_info_fetch_success: symbol=BTC/USDT last=70278.88 percent=-0.51 ping_ms=1306
+[2026-03-13 06:48:07] market_info_fetch_success: symbol=BTC/USDT last=70275.00 percent=-0.52 ping_ms=1273
+[2026-03-13 06:48:38] market_info_fetch_success: symbol=BTC/USDT last=70263.05 percent=-0.54 ping_ms=1158
+[2026-03-13 06:49:09] market_info_fetch_success: symbol=BTC/USDT last=70270.73 percent=-0.53 ping_ms=1241
+[2026-03-13 06:49:40] market_info_fetch_success: symbol=BTC/USDT last=70299.06 percent=-0.50 ping_ms=1169
+[2026-03-13 06:50:12] market_info_fetch_success: symbol=BTC/USDT last=70326.75 percent=-0.49 ping_ms=1259
+[2026-03-13 06:50:43] market_info_fetch_success: symbol=BTC/USDT last=70321.33 percent=-0.50 ping_ms=1179
+[2026-03-13 06:51:14] market_info_fetch_success: symbol=BTC/USDT last=70312.90 percent=-0.52 ping_ms=1208
+[2026-03-13 06:51:46] market_info_fetch_success: symbol=BTC/USDT last=70305.30 percent=-0.56 ping_ms=1210
+[2026-03-13 06:52:17] market_info_fetch_success: symbol=BTC/USDT last=70289.47 percent=-0.63 ping_ms=1348
+[2026-03-13 06:52:48] market_info_fetch_success: symbol=BTC/USDT last=70247.34 percent=-0.68 ping_ms=1267
+[2026-03-13 06:53:20] market_info_fetch_success: symbol=BTC/USDT last=70251.50 percent=-0.70 ping_ms=1250
+[2026-03-13 06:53:51] market_info_fetch_success: symbol=BTC/USDT last=70271.20 percent=-0.68 ping_ms=1203
+[2026-03-13 06:54:22] market_info_fetch_success: symbol=BTC/USDT last=70289.49 percent=-0.62 ping_ms=1223
+[2026-03-13 06:54:53] market_info_fetch_success: symbol=BTC/USDT last=70327.96 percent=-0.60 ping_ms=1274
+[2026-03-13 06:55:25] market_info_fetch_success: symbol=BTC/USDT last=70311.54 percent=-0.60 ping_ms=1287
+[2026-03-13 06:55:56] market_info_fetch_success: symbol=BTC/USDT last=70303.56 percent=-0.59 ping_ms=1172
+[2026-03-13 06:56:27] market_info_fetch_success: symbol=BTC/USDT last=70336.97 percent=-0.54 ping_ms=1259
+[2026-03-13 06:56:59] market_info_fetch_success: symbol=BTC/USDT last=70347.83 percent=-0.52 ping_ms=1193
+[2026-03-13 06:57:30] market_info_fetch_success: symbol=BTC/USDT last=70315.98 percent=-0.58 ping_ms=1237
+[2026-03-13 06:58:01] market_info_fetch_success: symbol=BTC/USDT last=70322.48 percent=-0.59 ping_ms=1219
+[2026-03-13 06:58:32] market_info_fetch_success: symbol=BTC/USDT last=70326.75 percent=-0.60 ping_ms=1229
+[2026-03-13 06:59:04] market_info_fetch_success: symbol=BTC/USDT last=70351.84 percent=-0.52 ping_ms=1221
+[2026-03-13 06:59:35] market_info_fetch_success: symbol=BTC/USDT last=70320.88 percent=-0.61 ping_ms=1146
+[2026-03-13 07:00:06] market_info_fetch_success: symbol=BTC/USDT last=70305.26 percent=-0.58 ping_ms=1223
+[2026-03-13 07:00:38] market_info_fetch_success: symbol=BTC/USDT last=70267.03 percent=-0.69 ping_ms=1350
+[2026-03-13 07:01:09] market_info_fetch_success: symbol=BTC/USDT last=70272.03 percent=-0.68 ping_ms=1312
+[2026-03-13 07:01:40] market_info_fetch_success: symbol=BTC/USDT last=70294.43 percent=-0.67 ping_ms=1201
+[2026-03-13 07:02:11] market_info_fetch_success: symbol=BTC/USDT last=70272.18 percent=-0.69 ping_ms=1325
+[2026-03-13 07:02:43] market_info_fetch_success: symbol=BTC/USDT last=70239.90 percent=-0.74 ping_ms=1255
+[2026-03-13 07:03:14] market_info_fetch_success: symbol=BTC/USDT last=70262.56 percent=-0.63 ping_ms=1195
+[2026-03-13 07:03:45] market_info_fetch_success: symbol=BTC/USDT last=70260.96 percent=-0.63 ping_ms=1195
+[2026-03-13 07:04:17] market_info_fetch_success: symbol=BTC/USDT last=70248.50 percent=-0.63 ping_ms=1200
+[2026-03-13 07:04:48] market_info_fetch_success: symbol=BTC/USDT last=70243.73 percent=-0.69 ping_ms=1212
+[2026-03-13 07:05:19] market_info_fetch_success: symbol=BTC/USDT last=70245.22 percent=-0.67 ping_ms=1179
+[2026-03-13 07:05:50] market_info_fetch_success: symbol=BTC/USDT last=70269.57 percent=-0.63 ping_ms=1180
+[2026-03-13 07:06:21] market_info_fetch_success: symbol=BTC/USDT last=70220.23 percent=-0.69 ping_ms=1173
+[2026-03-13 07:06:53] market_info_fetch_success: symbol=BTC/USDT last=70230.73 percent=-0.70 ping_ms=1338
+[2026-03-13 07:07:24] market_info_fetch_success: symbol=BTC/USDT last=70266.20 percent=-0.65 ping_ms=1267
+[2026-03-13 07:07:55] market_info_fetch_success: symbol=BTC/USDT last=70246.37 percent=-0.66 ping_ms=1205
+[2026-03-13 07:08:27] market_info_fetch_success: symbol=BTC/USDT last=70255.54 percent=-0.65 ping_ms=1211
+[2026-03-13 07:08:58] market_info_fetch_success: symbol=BTC/USDT last=70246.83 percent=-0.66 ping_ms=1189
+[2026-03-13 07:09:29] market_info_fetch_success: symbol=BTC/USDT last=70206.51 percent=-0.68 ping_ms=1225
+[2026-03-13 07:10:01] market_info_fetch_success: symbol=BTC/USDT last=70206.52 percent=-0.67 ping_ms=1376
+[2026-03-13 07:10:32] market_info_fetch_success: symbol=BTC/USDT last=70177.66 percent=-0.72 ping_ms=1154
+[2026-03-13 07:11:03] market_info_fetch_success: symbol=BTC/USDT last=70181.82 percent=-0.72 ping_ms=1233
+[2026-03-13 07:11:34] market_info_fetch_success: symbol=BTC/USDT last=70211.52 percent=-0.65 ping_ms=1196
+[2026-03-13 07:12:06] market_info_fetch_success: symbol=BTC/USDT last=70224.39 percent=-0.69 ping_ms=1254
+[2026-03-13 07:12:37] market_info_fetch_success: symbol=BTC/USDT last=70235.24 percent=-0.74 ping_ms=1300
+[2026-03-13 07:13:08] market_info_fetch_success: symbol=BTC/USDT last=70234.00 percent=-0.86 ping_ms=1226
+[2026-03-13 07:13:40] market_info_fetch_success: symbol=BTC/USDT last=70239.40 percent=-0.93 ping_ms=1216
+[2026-03-13 07:14:11] market_info_fetch_success: symbol=BTC/USDT last=70222.00 percent=-0.81 ping_ms=1136
+[2026-03-13 07:14:42] market_info_fetch_success: symbol=BTC/USDT last=70209.87 percent=-0.86 ping_ms=1244
+[2026-03-13 07:15:13] market_info_fetch_success: symbol=BTC/USDT last=70203.54 percent=-0.84 ping_ms=1190
+[2026-03-13 07:15:45] market_info_fetch_success: symbol=BTC/USDT last=70190.35 percent=-0.83 ping_ms=1217
+[2026-03-13 07:16:16] market_info_fetch_success: symbol=BTC/USDT last=70150.75 percent=-0.80 ping_ms=1208
+[2026-03-13 07:16:47] market_info_fetch_success: symbol=BTC/USDT last=70119.65 percent=-0.92 ping_ms=1279
+[2026-03-13 07:17:18] market_info_fetch_success: symbol=BTC/USDT last=70128.76 percent=-0.88 ping_ms=1300
+[2026-03-13 07:17:50] market_info_fetch_success: symbol=BTC/USDT last=70151.58 percent=-0.85 ping_ms=1207
+[2026-03-13 07:18:21] market_info_fetch_success: symbol=BTC/USDT last=70150.55 percent=-0.87 ping_ms=1197
+[2026-03-13 07:18:52] market_info_fetch_success: symbol=BTC/USDT last=70151.69 percent=-0.86 ping_ms=1175
+[2026-03-13 07:19:23] market_info_fetch_success: symbol=BTC/USDT last=70153.80 percent=-0.83 ping_ms=1202
+[2026-03-13 07:19:55] market_info_fetch_success: symbol=BTC/USDT last=70160.93 percent=-0.84 ping_ms=1264
+[2026-03-13 07:20:26] market_info_fetch_success: symbol=BTC/USDT last=70129.99 percent=-0.77 ping_ms=1199
+[2026-03-13 07:20:57] market_info_fetch_success: symbol=BTC/USDT last=70135.62 percent=-0.74 ping_ms=1315
+[2026-03-13 07:21:29] market_info_fetch_success: symbol=BTC/USDT last=70148.88 percent=-0.63 ping_ms=1197
+[2026-03-13 07:22:00] market_info_fetch_success: symbol=BTC/USDT last=70156.47 percent=-0.66 ping_ms=1267
+[2026-03-13 07:22:31] market_info_fetch_success: symbol=BTC/USDT last=70160.48 percent=-0.67 ping_ms=1215
+[2026-03-13 07:23:02] market_info_fetch_success: symbol=BTC/USDT last=70160.01 percent=-0.66 ping_ms=1222
+[2026-03-13 07:23:34] market_info_fetch_success: symbol=BTC/USDT last=70186.15 percent=-0.61 ping_ms=1207
+[2026-03-13 07:24:05] market_info_fetch_success: symbol=BTC/USDT last=70204.36 percent=-0.58 ping_ms=1197
+[2026-03-13 07:24:36] market_info_fetch_success: symbol=BTC/USDT last=70185.30 percent=-0.58 ping_ms=1237
+[2026-03-13 07:25:08] market_info_fetch_success: symbol=BTC/USDT last=70199.60 percent=-0.53 ping_ms=1236
+[2026-03-13 07:25:39] market_info_fetch_success: symbol=BTC/USDT last=70255.56 percent=-0.47 ping_ms=1250
+[2026-03-13 07:26:10] market_info_fetch_success: symbol=BTC/USDT last=70234.37 percent=-0.53 ping_ms=1199
+[2026-03-13 07:26:41] market_info_fetch_success: symbol=BTC/USDT last=70250.06 percent=-0.49 ping_ms=1248
+[2026-03-13 07:27:13] market_info_fetch_success: symbol=BTC/USDT last=70216.74 percent=-0.54 ping_ms=1152
+[2026-03-13 07:27:44] market_info_fetch_success: symbol=BTC/USDT last=70208.03 percent=-0.56 ping_ms=1185
+[2026-03-13 07:28:15] market_info_fetch_success: symbol=BTC/USDT last=70188.85 percent=-0.54 ping_ms=1248
+[2026-03-13 07:28:46] market_info_fetch_success: symbol=BTC/USDT last=70180.80 percent=-0.47 ping_ms=1309
+[2026-03-13 07:29:18] market_info_fetch_success: symbol=BTC/USDT last=70180.81 percent=-0.50 ping_ms=1419
+[2026-03-13 07:29:49] market_info_fetch_success: symbol=BTC/USDT last=70173.29 percent=-0.44 ping_ms=1159
+[2026-03-13 07:30:20] market_info_fetch_success: symbol=BTC/USDT last=70152.43 percent=-0.52 ping_ms=1167
+[2026-03-13 07:30:52] market_info_fetch_success: symbol=BTC/USDT last=70179.38 percent=-0.43 ping_ms=1223
+[2026-03-13 07:31:23] market_info_fetch_success: symbol=BTC/USDT last=70171.57 percent=-0.44 ping_ms=1259
+[2026-03-13 07:31:54] market_info_fetch_success: symbol=BTC/USDT last=70151.05 percent=-0.43 ping_ms=1213
+[2026-03-13 07:32:25] market_info_fetch_success: symbol=BTC/USDT last=70171.82 percent=-0.40 ping_ms=1199
+[2026-03-13 07:32:57] market_info_fetch_success: symbol=BTC/USDT last=70178.97 percent=-0.37 ping_ms=1229
+[2026-03-13 07:33:28] market_info_fetch_success: symbol=BTC/USDT last=70209.99 percent=-0.36 ping_ms=1291
+[2026-03-13 07:33:59] market_info_fetch_success: symbol=BTC/USDT last=70193.60 percent=-0.34 ping_ms=1162
+[2026-03-13 07:34:31] market_info_fetch_success: symbol=BTC/USDT last=70159.11 percent=-0.34 ping_ms=1370
+[2026-03-13 07:35:02] market_info_fetch_success: symbol=BTC/USDT last=70097.11 percent=-0.41 ping_ms=1259
+[2026-03-13 07:35:33] market_info_fetch_success: symbol=BTC/USDT last=70104.70 percent=-0.33 ping_ms=1375
+[2026-03-13 07:36:05] market_info_fetch_success: symbol=BTC/USDT last=70137.18 percent=-0.29 ping_ms=1274
+[2026-03-13 07:36:36] market_info_fetch_success: symbol=BTC/USDT last=70110.74 percent=-0.34 ping_ms=1214
+[2026-03-13 07:37:07] market_info_fetch_success: symbol=BTC/USDT last=70100.01 percent=-0.29 ping_ms=1158
+[2026-03-13 07:37:38] market_info_fetch_success: symbol=BTC/USDT last=70125.19 percent=-0.33 ping_ms=1237
+[2026-03-13 07:38:10] market_info_fetch_success: symbol=BTC/USDT last=70138.25 percent=-0.27 ping_ms=1189
+[2026-03-13 07:38:41] market_info_fetch_success: symbol=BTC/USDT last=70132.01 percent=-0.28 ping_ms=1238
+[2026-03-13 07:39:12] market_info_fetch_success: symbol=BTC/USDT last=70107.70 percent=-0.28 ping_ms=1333
+[2026-03-13 07:39:44] market_info_fetch_success: symbol=BTC/USDT last=70116.36 percent=-0.35 ping_ms=1208
+[2026-03-13 07:40:15] market_info_fetch_success: symbol=BTC/USDT last=70071.16 percent=-0.37 ping_ms=1335
+[2026-03-13 07:40:46] market_info_fetch_success: symbol=BTC/USDT last=70069.90 percent=-0.39 ping_ms=1158
+[2026-03-13 07:41:18] market_info_fetch_success: symbol=BTC/USDT last=70066.45 percent=-0.43 ping_ms=1294
+[2026-03-13 07:41:49] market_info_fetch_success: symbol=BTC/USDT last=70042.11 percent=-0.45 ping_ms=1175
+[2026-03-13 07:42:20] market_info_fetch_success: symbol=BTC/USDT last=70085.69 percent=-0.39 ping_ms=1192
+[2026-03-13 07:42:51] market_info_fetch_success: symbol=BTC/USDT last=70102.15 percent=-0.35 ping_ms=1292
+[2026-03-13 07:43:23] market_info_fetch_success: symbol=BTC/USDT last=70111.28 percent=-0.35 ping_ms=1158
+[2026-03-13 07:43:54] market_info_fetch_success: symbol=BTC/USDT last=70099.70 percent=-0.42 ping_ms=1258
+[2026-03-13 07:44:25] market_info_fetch_success: symbol=BTC/USDT last=70097.22 percent=-0.45 ping_ms=1141
+[2026-03-13 07:44:56] market_info_fetch_success: symbol=BTC/USDT last=70056.19 percent=-0.43 ping_ms=1262
+[2026-03-13 07:45:28] market_info_fetch_success: symbol=BTC/USDT last=70077.89 percent=-0.43 ping_ms=1190
+[2026-03-13 07:45:59] market_info_fetch_success: symbol=BTC/USDT last=70099.98 percent=-0.45 ping_ms=1161
+[2026-03-13 07:46:30] market_info_fetch_success: symbol=BTC/USDT last=70099.98 percent=-0.40 ping_ms=1223
+[2026-03-13 07:47:01] market_info_fetch_success: symbol=BTC/USDT last=70106.94 percent=-0.38 ping_ms=1204
+[2026-03-13 07:47:33] market_info_fetch_success: symbol=BTC/USDT last=70092.90 percent=-0.48 ping_ms=1170
+[2026-03-13 07:48:04] market_info_fetch_success: symbol=BTC/USDT last=70085.72 percent=-0.57 ping_ms=1254
+[2026-03-13 07:48:35] market_info_fetch_success: symbol=BTC/USDT last=70115.68 percent=-0.52 ping_ms=1185
+[2026-03-13 07:49:06] market_info_fetch_success: symbol=BTC/USDT last=70106.41 percent=-0.53 ping_ms=1290
+[2026-03-13 07:49:38] market_info_fetch_success: symbol=BTC/USDT last=70063.73 percent=-0.52 ping_ms=1184
+[2026-03-13 07:50:09] market_info_fetch_success: symbol=BTC/USDT last=70048.44 percent=-0.48 ping_ms=1244
+[2026-03-13 07:50:40] market_info_fetch_success: symbol=BTC/USDT last=70060.21 percent=-0.55 ping_ms=1199
+[2026-03-13 07:51:11] market_info_fetch_success: symbol=BTC/USDT last=70082.73 percent=-0.50 ping_ms=1165
+[2026-03-13 07:51:43] market_info_fetch_success: symbol=BTC/USDT last=70066.46 percent=-0.55 ping_ms=1338
+[2026-03-13 07:52:14] market_info_fetch_success: symbol=BTC/USDT last=70019.71 percent=-0.59 ping_ms=1232
+[2026-03-13 07:52:45] market_info_fetch_success: symbol=BTC/USDT last=70034.18 percent=-0.53 ping_ms=1272
+[2026-03-13 07:53:17] market_info_fetch_success: symbol=BTC/USDT last=70028.71 percent=-0.53 ping_ms=1222
+[2026-03-13 07:53:48] market_info_fetch_success: symbol=BTC/USDT last=70028.35 percent=-0.52 ping_ms=1232
+[2026-03-13 07:54:19] market_info_fetch_success: symbol=BTC/USDT last=70026.60 percent=-0.45 ping_ms=1172
+[2026-03-13 07:54:50] market_info_fetch_success: symbol=BTC/USDT last=70013.18 percent=-0.46 ping_ms=1204
+[2026-03-13 07:55:22] market_info_fetch_success: symbol=BTC/USDT last=70101.24 percent=-0.32 ping_ms=1192
+[2026-03-13 07:55:53] market_info_fetch_success: symbol=BTC/USDT last=70096.36 percent=-0.29 ping_ms=1201
+[2026-03-13 07:56:24] market_info_fetch_success: symbol=BTC/USDT last=70129.45 percent=-0.17 ping_ms=1304
+[2026-03-13 07:56:56] market_info_fetch_success: symbol=BTC/USDT last=70127.58 percent=-0.23 ping_ms=1235
+[2026-03-13 07:57:27] market_info_fetch_success: symbol=BTC/USDT last=70116.65 percent=-0.29 ping_ms=1306
+[2026-03-13 07:57:58] market_info_fetch_success: symbol=BTC/USDT last=70116.65 percent=-0.33 ping_ms=1326
+[2026-03-13 07:58:30] market_info_fetch_success: symbol=BTC/USDT last=70122.04 percent=-0.31 ping_ms=1327
+[2026-03-13 07:59:01] market_info_fetch_success: symbol=BTC/USDT last=70117.10 percent=-0.33 ping_ms=1225
+[2026-03-13 07:59:32] market_info_fetch_success: symbol=BTC/USDT last=70129.45 percent=-0.31 ping_ms=1202
+[2026-03-13 08:00:04] market_info_fetch_success: symbol=BTC/USDT last=70197.10 percent=-0.34 ping_ms=1637
+[2026-03-13 08:00:35] market_info_fetch_success: symbol=BTC/USDT last=70226.05 percent=-0.33 ping_ms=1192
+[2026-03-13 08:01:06] market_info_fetch_success: symbol=BTC/USDT last=70192.45 percent=-0.37 ping_ms=1217
+[2026-03-13 08:01:38] market_info_fetch_success: symbol=BTC/USDT last=70255.96 percent=-0.26 ping_ms=1233
+[2026-03-13 08:02:09] market_info_fetch_success: symbol=BTC/USDT last=70220.12 percent=-0.33 ping_ms=1234
+[2026-03-13 08:02:40] market_info_fetch_success: symbol=BTC/USDT last=70217.81 percent=-0.38 ping_ms=1287
+[2026-03-13 08:03:12] market_info_fetch_success: symbol=BTC/USDT last=70233.43 percent=-0.32 ping_ms=1206
+[2026-03-13 08:03:43] market_info_fetch_success: symbol=BTC/USDT last=70288.00 percent=-0.25 ping_ms=1252
+[2026-03-13 08:04:14] market_info_fetch_success: symbol=BTC/USDT last=70349.04 percent=-0.18 ping_ms=1268
+[2026-03-13 08:04:45] market_info_fetch_success: symbol=BTC/USDT last=70356.24 percent=-0.17 ping_ms=1191
+[2026-03-13 08:05:17] market_info_fetch_success: symbol=BTC/USDT last=70426.99 percent=-0.03 ping_ms=1226
+[2026-03-13 08:05:48] market_info_fetch_success: symbol=BTC/USDT last=70400.02 percent=-0.09 ping_ms=1214
+[2026-03-13 08:06:19] market_info_fetch_success: symbol=BTC/USDT last=70342.72 percent=-0.19 ping_ms=1191
+[2026-03-13 08:06:51] market_info_fetch_success: symbol=BTC/USDT last=70376.42 percent=-0.16 ping_ms=1312
+[2026-03-13 08:07:22] market_info_fetch_success: symbol=BTC/USDT last=70425.18 percent=-0.07 ping_ms=1184
+[2026-03-13 08:07:53] market_info_fetch_success: symbol=BTC/USDT last=70444.51 percent=-0.05 ping_ms=1527
+[2026-03-13 11:12:18] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-13 11:12:18] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-13 11:12:18] help_button_cluster_shift applied: shift_x=60
+[2026-03-13 11:12:22] market_info_fetch_success: symbol=BTC/USDT last=71606.41 percent=2.55 ping_ms=1223
+[2026-03-13 11:12:23] guide_button_clicked: kind=product_guidebook
+[2026-03-13 11:12:23] product_guidebook_window_layout: placeholder_container_ready size=940x420
+[2026-03-13 11:12:23] product_guidebook_window_opened
+[2026-03-13 11:12:23] product_guidebook_window_created
+[2026-03-13 11:12:24] product_guidebook_window_closed
+[2026-03-13 11:12:26] guide_button_clicked: kind=product_guidebook
+[2026-03-13 11:12:27] product_guidebook_window_layout: placeholder_container_ready size=940x420
+[2026-03-13 11:12:27] product_guidebook_window_opened
+[2026-03-13 11:12:27] product_guidebook_window_created
+[2026-03-13 11:12:28] product_guidebook_window_closed
+[2026-03-13 11:12:28] guide_button_clicked: kind=binance_account_guide
+[2026-03-13 11:12:28] binance_account_guide_window_layout: centered_option_blocks
+[2026-03-13 11:12:28] binance_account_guide_window_opened
+[2026-03-13 11:12:28] binance_account_guide_window_created
+[2026-03-13 11:12:32] binance_account_guide_window_closed
+[2026-03-13 11:12:32] guide_button_clicked: kind=product_guidebook
+[2026-03-13 11:12:32] product_guidebook_window_layout: placeholder_container_ready size=940x420
+[2026-03-13 11:12:32] product_guidebook_window_opened
+[2026-03-13 11:12:32] product_guidebook_window_created
+[2026-03-13 11:12:36] product_guidebook_window_closed
+[2026-03-13 11:12:53] market_info_fetch_success: symbol=BTC/USDT last=71597.03 percent=2.58 ping_ms=1225
+[2026-03-13 11:13:22] guide_button_clicked: kind=product_guidebook
+[2026-03-13 11:13:22] product_guidebook_window_layout: placeholder_container_ready size=940x420
+[2026-03-13 11:13:22] product_guidebook_window_opened
+[2026-03-13 11:13:22] product_guidebook_window_created
+[2026-03-13 11:13:24] market_info_fetch_success: symbol=BTC/USDT last=71582.81 percent=2.61 ping_ms=1258
+[2026-03-13 11:13:24] product_guidebook_window_closed
+[2026-03-13 11:13:55] market_info_fetch_success: symbol=BTC/USDT last=71586.30 percent=2.53 ping_ms=1173
+[2026-03-13 11:14:27] market_info_fetch_success: symbol=BTC/USDT last=71588.75 percent=2.56 ping_ms=1235
+[2026-03-13 11:14:58] market_info_fetch_success: symbol=BTC/USDT last=71541.01 percent=2.52 ping_ms=1220
+[2026-03-13 11:15:29] market_info_fetch_success: symbol=BTC/USDT last=71609.12 percent=2.57 ping_ms=1473
+[2026-03-13 11:16:01] market_info_fetch_success: symbol=BTC/USDT last=71584.54 percent=2.52 ping_ms=1412
+[2026-03-13 11:16:33] market_info_fetch_success: symbol=BTC/USDT last=71548.36 percent=2.51 ping_ms=1575
+[2026-03-13 11:17:31] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-13 11:17:31] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-13 11:17:31] help_button_cluster_shift applied: shift_x=60
+[2026-03-13 11:17:34] market_info_fetch_success: symbol=BTC/USDT last=71444.74 percent=2.37 ping_ms=1240
+[2026-03-13 11:17:47] guide_button_clicked: kind=product_guidebook
+[2026-03-13 11:17:47] product_guidebook_window_layout: lts_connect_guide_section_ready size=940x420
+[2026-03-13 11:17:47] product_guidebook_window_opened
+[2026-03-13 11:17:47] product_guidebook_window_created
+[2026-03-13 11:17:51] product_guidebook_option_clicked: option=lts_connect_guide
+[2026-03-13 11:17:51] product_guidebook_pdf_opened: option=lts_connect_guide path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\lts_connect_guide.pdf
+[2026-03-13 11:18:05] market_info_fetch_success: symbol=BTC/USDT last=71485.55 percent=2.56 ping_ms=1197
+[2026-03-13 11:18:37] market_info_fetch_success: symbol=BTC/USDT last=71519.91 percent=2.61 ping_ms=1288
+[2026-03-13 11:19:08] market_info_fetch_success: symbol=BTC/USDT last=71522.15 percent=2.63 ping_ms=1268
+[2026-03-13 11:19:40] market_info_fetch_success: symbol=BTC/USDT last=71490.16 percent=2.63 ping_ms=1595
+[2026-03-13 11:20:11] market_info_fetch_success: symbol=BTC/USDT last=71599.99 percent=2.92 ping_ms=1317
+[2026-03-13 11:20:43] market_info_fetch_success: symbol=BTC/USDT last=71535.91 percent=2.85 ping_ms=1325
+[2026-03-13 11:21:09] product_guidebook_window_closed
+[2026-03-13 11:22:25] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-13 11:22:25] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-13 11:22:25] help_button_cluster_shift applied: shift_x=60
+[2026-03-13 11:22:28] market_info_fetch_success: symbol=BTC/USDT last=71491.52 percent=2.81 ping_ms=1237
+[2026-03-13 11:22:47] guide_button_clicked: kind=product_guidebook
+[2026-03-13 11:22:47] product_guidebook_window_layout: grid=3x2 slot_size=250x130 populated_slots=1
+[2026-03-13 11:22:47] product_guidebook_window_opened
+[2026-03-13 11:22:47] product_guidebook_window_created
+[2026-03-13 11:22:59] market_info_fetch_success: symbol=BTC/USDT last=71475.77 percent=2.76 ping_ms=1220
+[2026-03-13 11:23:31] market_info_fetch_success: symbol=BTC/USDT last=71478.18 percent=2.75 ping_ms=1517
+[2026-03-13 11:24:02] market_info_fetch_success: symbol=BTC/USDT last=71484.77 percent=2.73 ping_ms=1261
+[2026-03-13 11:24:34] market_info_fetch_success: symbol=BTC/USDT last=71475.53 percent=2.74 ping_ms=1268
+[2026-03-13 11:24:47] product_guidebook_window_closed
+[2026-03-13 11:24:54] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-13 11:24:54] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-13 11:24:54] help_button_cluster_shift applied: shift_x=60
+[2026-03-13 11:24:57] market_info_fetch_success: symbol=BTC/USDT last=71467.78 percent=2.75 ping_ms=1275
+[2026-03-13 11:25:02] guide_button_clicked: kind=product_guidebook
+[2026-03-13 11:25:03] product_guidebook_window_layout: grid=3x2 slot_size=250x130 item_width=20 populated_slots=1
+[2026-03-13 11:25:03] product_guidebook_window_opened
+[2026-03-13 11:25:03] product_guidebook_window_created
+[2026-03-13 11:25:29] market_info_fetch_success: symbol=BTC/USDT last=71478.00 percent=2.77 ping_ms=1254
+[2026-03-13 11:26:00] market_info_fetch_success: symbol=BTC/USDT last=71480.67 percent=2.69 ping_ms=1333
+[2026-03-13 11:26:31] market_info_fetch_success: symbol=BTC/USDT last=71483.80 percent=2.67 ping_ms=1240
+[2026-03-13 11:27:03] market_info_fetch_success: symbol=BTC/USDT last=71477.01 percent=2.64 ping_ms=1308
+[2026-03-13 11:27:34] market_info_fetch_success: symbol=BTC/USDT last=71478.48 percent=2.62 ping_ms=1199
+[2026-03-13 11:28:05] market_info_fetch_success: symbol=BTC/USDT last=71481.23 percent=2.62 ping_ms=1311
+[2026-03-13 11:28:37] market_info_fetch_success: symbol=BTC/USDT last=71469.09 percent=2.64 ping_ms=1313
+[2026-03-13 11:29:08] market_info_fetch_success: symbol=BTC/USDT last=71467.58 percent=2.64 ping_ms=1197
+[2026-03-13 11:29:29] product_guidebook_window_closed
+[2026-03-13 11:29:38] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-13 11:29:38] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-13 11:29:38] help_button_cluster_shift applied: shift_x=60
+[2026-03-13 11:29:41] market_info_fetch_success: symbol=BTC/USDT last=71457.68 percent=2.64 ping_ms=1378
+[2026-03-13 11:29:56] guide_button_clicked: kind=product_guidebook
+[2026-03-13 11:29:56] product_guidebook_window_layout: grid=3x2 slot_size=250x130 item_width=20 populated_slots=2
+[2026-03-13 11:29:56] product_guidebook_window_opened
+[2026-03-13 11:29:56] product_guidebook_window_created
+[2026-03-13 11:29:58] product_guidebook_option_clicked: option=lts_explain_guide
+[2026-03-13 11:29:58] product_guidebook_pdf_opened: option=lts_explain_guide path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\lts_explain.pdf
+[2026-03-13 11:30:12] market_info_fetch_success: symbol=BTC/USDT last=71459.30 percent=2.65 ping_ms=1380
+[2026-03-13 11:30:44] market_info_fetch_success: symbol=BTC/USDT last=71466.73 percent=2.69 ping_ms=1406
+[2026-03-13 11:31:15] market_info_fetch_success: symbol=BTC/USDT last=71467.74 percent=2.69 ping_ms=1267
+[2026-03-13 11:31:47] market_info_fetch_success: symbol=BTC/USDT last=71419.35 percent=2.60 ping_ms=1398
+[2026-03-13 11:32:18] market_info_fetch_success: symbol=BTC/USDT last=71408.94 percent=2.68 ping_ms=1288
+[2026-03-13 11:32:49] market_info_fetch_success: symbol=BTC/USDT last=71391.44 percent=2.68 ping_ms=1154
+[2026-03-13 11:33:20] market_info_fetch_success: symbol=BTC/USDT last=71361.73 percent=2.65 ping_ms=1262
+[2026-03-13 11:33:52] market_info_fetch_success: symbol=BTC/USDT last=71384.45 percent=2.70 ping_ms=1496
+[2026-03-13 11:34:23] market_info_fetch_success: symbol=BTC/USDT last=71356.55 percent=2.57 ping_ms=1261
+[2026-03-13 11:34:43] product_guidebook_window_closed
+[2026-03-13 11:34:50] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-13 11:34:50] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-13 11:34:50] help_button_cluster_shift applied: shift_x=60
+[2026-03-13 11:34:52] market_info_fetch_success: symbol=BTC/USDT last=71355.09 percent=2.50 ping_ms=1229
+[2026-03-13 11:34:54] guide_button_clicked: kind=product_guidebook
+[2026-03-13 11:34:54] product_guidebook_window_layout: grid=3x2 slot_size=250x130 item_width=20 populated_slots=5
+[2026-03-13 11:34:54] product_guidebook_window_opened
+[2026-03-13 11:34:54] product_guidebook_window_created
+[2026-03-13 11:34:54] guide_button_clicked: kind=product_guidebook
+[2026-03-13 11:34:54] product_guidebook_window_focus_existing
+[2026-03-13 11:34:57] product_guidebook_option_clicked: option=long_strategy_guide
+[2026-03-13 11:34:57] product_guidebook_pdf_opened: option=long_strategy_guide path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\long.pdf
+[2026-03-13 11:35:24] market_info_fetch_success: symbol=BTC/USDT last=71354.78 percent=2.52 ping_ms=1263
+[2026-03-13 11:35:55] market_info_fetch_success: symbol=BTC/USDT last=71365.26 percent=2.67 ping_ms=1384
+[2026-03-13 11:35:58] product_guidebook_window_closed
+[2026-03-13 11:36:04] guide_button_clicked: kind=product_guidebook
+[2026-03-13 11:36:04] product_guidebook_window_layout: grid=3x2 slot_size=250x130 item_width=20 populated_slots=5
+[2026-03-13 11:36:04] product_guidebook_window_opened
+[2026-03-13 11:36:04] product_guidebook_window_created
+[2026-03-13 11:36:05] product_guidebook_window_closed
+[2026-03-13 11:36:06] guide_button_clicked: kind=binance_account_guide
+[2026-03-13 11:36:06] binance_account_guide_window_layout: centered_option_blocks
+[2026-03-13 11:36:06] binance_account_guide_window_opened
+[2026-03-13 11:36:06] binance_account_guide_window_created
+[2026-03-13 11:36:08] binance_account_guide_window_closed
+[2026-03-13 11:36:10] guide_button_clicked: kind=product_guidebook
+[2026-03-13 11:36:10] product_guidebook_window_layout: grid=3x2 slot_size=250x130 item_width=20 populated_slots=5
+[2026-03-13 11:36:10] product_guidebook_window_opened
+[2026-03-13 11:36:10] product_guidebook_window_created
+[2026-03-13 11:36:14] product_guidebook_window_closed
+[2026-03-13 11:36:17] guide_button_clicked: kind=product_guidebook
+[2026-03-13 11:36:17] product_guidebook_window_layout: grid=3x2 slot_size=250x130 item_width=20 populated_slots=5
+[2026-03-13 11:36:17] product_guidebook_window_opened
+[2026-03-13 11:36:17] product_guidebook_window_created
+[2026-03-13 11:36:19] product_guidebook_option_clicked: option=indicator_guide
+[2026-03-13 11:36:19] product_guidebook_pdf_opened: option=indicator_guide path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\indicator.pdf
+[2026-03-13 11:36:26] market_info_fetch_success: symbol=BTC/USDT last=71342.00 percent=2.65 ping_ms=1245
+[2026-03-13 11:36:58] market_info_fetch_success: symbol=BTC/USDT last=71330.23 percent=2.67 ping_ms=1181
+[2026-03-13 11:37:18] product_guidebook_window_closed
+[2026-03-13 11:37:25] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-13 11:37:25] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-13 11:37:25] help_button_cluster_shift applied: shift_x=60
+[2026-03-13 11:37:27] market_info_fetch_success: symbol=BTC/USDT last=71295.62 percent=2.71 ping_ms=1316
+[2026-03-13 11:37:29] guide_button_clicked: kind=product_guidebook
+[2026-03-13 11:37:29] product_guidebook_window_layout: grid=3x2 slot_size=250x130 item_width=20 populated_slots=6
+[2026-03-13 11:37:29] product_guidebook_window_opened
+[2026-03-13 11:37:29] product_guidebook_window_created
+[2026-03-13 11:37:34] product_guidebook_option_clicked: option=dca_strategy_guide_placeholder
+[2026-03-13 11:37:35] product_guidebook_placeholder_shown: option=dca_strategy_guide_placeholder
+[2026-03-13 11:37:40] product_guidebook_window_closed
+[2026-03-13 11:37:59] market_info_fetch_success: symbol=BTC/USDT last=71346.76 percent=2.78 ping_ms=1204
+[2026-03-13 11:37:59] guide_button_clicked: kind=product_guidebook
+[2026-03-13 11:37:59] product_guidebook_window_layout: grid=3x2 slot_size=250x130 item_width=20 populated_slots=6
+[2026-03-13 11:37:59] product_guidebook_window_opened
+[2026-03-13 11:37:59] product_guidebook_window_created
+[2026-03-13 11:38:30] market_info_fetch_success: symbol=BTC/USDT last=71412.85 percent=2.87 ping_ms=1311
+[2026-03-13 11:38:58] product_guidebook_window_closed
+[2026-03-13 11:39:01] market_info_fetch_success: symbol=BTC/USDT last=71290.77 percent=2.70 ping_ms=1286
+[2026-03-13 11:39:07] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-13 11:39:07] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-13 11:39:11] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-13 11:39:11] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-13 11:39:11] login_click success: api_key=UXFj***6Nx3
+[2026-03-13 11:39:12] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-13 12:39:12] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-13 12:39:12] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-13 12:39:12] help_button_cluster_shift applied: shift_x=60
+[2026-03-13 12:39:15] market_info_fetch_success: symbol=BTC/USDT last=71030.66 percent=2.09 ping_ms=1306
+[2026-03-13 12:39:20] guide_button_clicked: kind=product_guidebook
+[2026-03-13 12:39:20] product_guidebook_window_layout: grid=3x2 slot_size=250x130 item_width=20 populated_slots=6
+[2026-03-13 12:39:20] product_guidebook_window_opened
+[2026-03-13 12:39:20] product_guidebook_window_created
+[2026-03-13 12:39:22] product_guidebook_window_closed
+[2026-03-13 12:39:27] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-13 12:39:27] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-13 12:39:31] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-13 12:39:31] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-13 12:39:31] login_click success: api_key=UXFj***6Nx3
+[2026-03-13 12:39:31] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-13 12:50:04] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-13 12:50:04] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-13 12:50:04] help_button_cluster_shift applied: shift_x=60
+[2026-03-13 12:50:07] market_info_fetch_success: symbol=BTC/USDT last=71168.66 percent=2.54 ping_ms=1291
+[2026-03-13 12:50:13] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-13 12:50:13] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-13 12:50:17] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-13 12:50:17] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-13 12:50:17] login_click success: api_key=UXFj***6Nx3
+[2026-03-13 12:50:18] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-13 12:54:09] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-13 12:54:09] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-13 12:54:09] help_button_cluster_shift applied: shift_x=60
+[2026-03-13 12:54:12] market_info_fetch_success: symbol=BTC/USDT last=71352.28 percent=2.80 ping_ms=1265
+[2026-03-13 12:54:30] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-13 12:54:30] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-13 12:54:34] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-13 12:54:34] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-13 12:54:34] login_click success: api_key=UXFj***6Nx3
+[2026-03-13 12:54:34] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True

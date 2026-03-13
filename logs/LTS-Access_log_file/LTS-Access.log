@@ -1,0 +1,11 @@
+[2026-03-11 12:30:23] status_panel_refreshed: mode=local_preview
+[2026-03-11 12:30:23] open_button_state_updated: enabled=False
+[2026-03-11 12:30:23] login_page_initialized: current_version=3.0.1 latest_version=3.0.1
+[2026-03-11 12:30:26] help_dialog_opened: title=배경 전환
+[2026-03-11 12:30:51] exit_requested_from_login
+[2026-03-11 12:40:56] status_panel_refreshed: mode=ui_only_offline
+[2026-03-11 12:40:56] open_button_state_updated: enabled=False
+[2026-03-11 12:40:57] login_page_initialized: current_version=3.0.1 latest_version=3.0.1
+[2026-03-11 12:41:05] open_button_state_updated: enabled=False
+[2026-03-11 12:41:06] open_button_state_updated: enabled=True
+[2026-03-11 12:41:06] open_dashboard_accepted: access_key_present=True secret_token_present=True

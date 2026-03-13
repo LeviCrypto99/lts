@@ -4,18 +4,15 @@ import sys
 import threading
 import tkinter as tk
 import queue
-from tkinter import messagebox
-from typing import Callable, Optional
-
-POSITION_EXIT_WARNING = "현재 보유중인 포지션이 있습니다. 프로그램을 종료하시기 전 포지션을 완전히 종료해주세요"
+from typing import Optional
 
 
 class ExitManager:
     def __init__(self, root: tk.Tk, app_name: str = "LeviaAutoTradeSystem") -> None:
         self.root = root
         self.app_name = app_name
-        self._position_checker: Optional[Callable[[], bool]] = None
         self._closed = False
+        self._position_checker = None
         self._tray: Optional[_TrayIcon] = None
         self._tray_queue: "queue.Queue[str]" = queue.Queue()
         self._tray_poll_job: Optional[str] = None
@@ -30,9 +27,6 @@ class ExitManager:
             self._tray.start()
             self._start_tray_poll()
 
-    def set_position_checker(self, checker: Optional[Callable[[], bool]]) -> None:
-        self._position_checker = checker
-
     def hide_to_tray(self) -> None:
         if self._closed:
             return
@@ -46,18 +40,11 @@ class ExitManager:
     def request_exit(self) -> None:
         self._call_ui_deferred(self._handle_exit_request)
 
+    def set_position_checker(self, checker) -> None:
+        self._position_checker = checker
+
     def _handle_exit_request(self) -> None:
         if self._closed:
-            return
-        has_positions = False
-        if self._position_checker is not None:
-            try:
-                has_positions = bool(self._position_checker())
-            except Exception:
-                has_positions = False
-        if has_positions:
-            self._restore_window()
-            messagebox.showwarning("종료 안내", POSITION_EXIT_WARNING, parent=self.root)
             return
         self._shutdown()
 

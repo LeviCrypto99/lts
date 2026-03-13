@@ -1,14 +1,11 @@
-import json
 import os
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tkinter import font as tkfont, messagebox
-from typing import Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 import tkinter as tk
 import requests
@@ -132,6 +129,15 @@ SUB_HELP_RIGHT_TEXT_POS = (618, 570 - SUB_TITLEBAR_OFFSET)
 
 BINANCE_GUIDE_WINDOW_WIDTH = 940
 BINANCE_GUIDE_WINDOW_HEIGHT = 210
+PRODUCT_GUIDE_WINDOW_WIDTH = 940
+PRODUCT_GUIDE_WINDOW_HEIGHT = 420
+PRODUCT_GUIDE_GRID_COLUMNS = 3
+PRODUCT_GUIDE_GRID_ROWS = 2
+PRODUCT_GUIDE_SLOT_WIDTH = 250
+PRODUCT_GUIDE_SLOT_HEIGHT = 130
+PRODUCT_GUIDE_SLOT_COLUMN_GAP = 24
+PRODUCT_GUIDE_SLOT_ROW_GAP = 28
+PRODUCT_GUIDE_ITEM_WIDTH = 20
 
 
 def _log_login(message: str) -> None:
@@ -160,6 +166,7 @@ def check_server_permission(api_key: str) -> str:
         "check_server_permission started: "
         f"api_key={masked_key} timeout={SUBSCRIBER_REQUEST_TIMEOUT_SEC}"
     )
+
     try:
         response = requests.post(
             SUBSCRIBER_WEBHOOK_URL,
@@ -191,6 +198,7 @@ def check_server_permission(api_key: str) -> str:
             f"api_key={masked_key} type={type(result).__name__}"
         )
         return "error"
+
     normalized = result.strip().lower()
     _log_login(
         "check_server_permission completed: "
@@ -198,9 +206,10 @@ def check_server_permission(api_key: str) -> str:
     )
     if normalized in {"success", "banned", "pending", "fail"}:
         return normalized
+
     _log_login(
         "check_server_permission unexpected result value: "
-        f"api_key={masked_key} raw={result}"
+        f"api_key={masked_key} raw={result!r}"
     )
     return "error"
 
@@ -959,20 +968,57 @@ class SubscriberRequestWindow(tk.Toplevel):
         self.focus_force()
 
     def _send_subscriber_request(self, api_key: str, tv_nick: str, tg_nick: str, uid: str) -> bool:
-        payload = {"api_key": api_key, "tv_nick": tv_nick, "tg_nick": tg_nick, "uid": uid}
-        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        request = urllib.request.Request(
-            SUBSCRIBER_WEBHOOK_URL,
-            data=data,
-            headers={"Content-Type": "application/json; charset=utf-8"},
-            method="POST",
+        payload = {
+            "api_key": str(api_key or "").strip(),
+            "tv_nick": str(tv_nick or "").strip(),
+            "tg_nick": str(tg_nick or "").strip(),
+            "uid": str(uid or "").strip(),
+        }
+        _log_login(
+            "subscriber_request_started: "
+            f"api_key={_mask_api_key(payload['api_key'])} "
+            f"tv_nick={payload['tv_nick']!r} tg_nick={payload['tg_nick']!r} uid={payload['uid']!r} "
+            f"timeout={SUBSCRIBER_REQUEST_TIMEOUT_SEC}"
         )
         try:
-            with urllib.request.urlopen(request, timeout=SUBSCRIBER_REQUEST_TIMEOUT_SEC) as response:
-                status = getattr(response, "status", None) or response.getcode()
-                return 200 <= status < 300
-        except (urllib.error.HTTPError, urllib.error.URLError, ValueError):
+            response = requests.post(
+                SUBSCRIBER_WEBHOOK_URL,
+                json=payload,
+                timeout=SUBSCRIBER_REQUEST_TIMEOUT_SEC,
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            _log_login(
+                "subscriber_request_failed: "
+                f"api_key={_mask_api_key(payload['api_key'])} "
+                f"error={exc.__class__.__name__} status={status}"
+            )
             return False
+
+        try:
+            data = response.json()
+        except ValueError as exc:
+            _log_login(
+                "subscriber_request_invalid_json: "
+                f"api_key={_mask_api_key(payload['api_key'])} error={exc.__class__.__name__}"
+            )
+            return False
+
+        result = data.get("result")
+        normalized = result.strip().lower() if isinstance(result, str) else ""
+        _log_login(
+            "subscriber_request_completed: "
+            f"api_key={_mask_api_key(payload['api_key'])} result={normalized or '<invalid>'}"
+        )
+        if normalized == "registered":
+            return True
+
+        _log_login(
+            "subscriber_request_unexpected_result: "
+            f"api_key={_mask_api_key(payload['api_key'])} raw={result!r}"
+        )
+        return False
 
 
 
@@ -1152,6 +1198,185 @@ class BinanceAccountGuideWindow(tk.Toplevel):
             subprocess.Popen(["xdg-open", str(path)])
 
 
+class ProductGuidebookWindow(tk.Toplevel):
+    def __init__(self, master: tk.Widget, background_enabled: bool = True) -> None:
+        super().__init__(master)
+        parent = master.winfo_toplevel()
+        self._background_enabled = background_enabled
+        self.title("상품구성 및 가이드북")
+        self.resizable(False, False)
+        self.transient(parent)
+        self._parent = parent
+        self._parent_focus_bind_id = parent.bind("<FocusIn>", self._on_parent_focus, add="+")
+        self.bind("<FocusIn>", self._on_self_focus)
+        self._center_over_parent(parent)
+        self._fonts = {
+            "section": tkfont.Font(self, family=FONT_FAMILY, size=12, weight="bold"),
+            "button": tkfont.Font(self, family=FONT_FAMILY, size=11, weight="bold"),
+        }
+        self._build_ui()
+        self.set_background_enabled(background_enabled)
+        _log_login("product_guidebook_window_opened")
+
+    def destroy(self) -> None:
+        try:
+            if getattr(self, "_parent", None) is not None and getattr(self, "_parent_focus_bind_id", None):
+                try:
+                    self._parent.unbind("<FocusIn>", self._parent_focus_bind_id)
+                except tk.TclError:
+                    pass
+        finally:
+            super().destroy()
+
+    def _on_parent_focus(self, _event: Optional[tk.Event] = None) -> None:
+        if self.winfo_exists():
+            self.lift()
+
+    def _on_self_focus(self, _event: Optional[tk.Event] = None) -> None:
+        if self.winfo_exists():
+            self.lift()
+
+    def _center_over_parent(self, parent: tk.Tk) -> None:
+        parent.update_idletasks()
+        try:
+            base_x = parent.winfo_x()
+            base_y = parent.winfo_y()
+            base_w = parent.winfo_width()
+            base_h = parent.winfo_height()
+            x = base_x + max(0, (base_w - PRODUCT_GUIDE_WINDOW_WIDTH) // 2)
+            y = base_y + max(0, (base_h - PRODUCT_GUIDE_WINDOW_HEIGHT) // 2)
+        except tk.TclError:
+            x = 0
+            y = 0
+        self.geometry(f"{PRODUCT_GUIDE_WINDOW_WIDTH}x{PRODUCT_GUIDE_WINDOW_HEIGHT}+{x}+{y}")
+
+    def _build_ui(self) -> None:
+        self._container = tk.Frame(self, bd=0, highlightthickness=0)
+        self._container.pack(fill="both", expand=True, padx=18, pady=16)
+
+        self._grid_frame = tk.Frame(self._container, bd=0, highlightthickness=0)
+        self._grid_frame.pack(expand=True)
+
+        self._guide_slot_frames = []
+        for row in range(PRODUCT_GUIDE_GRID_ROWS):
+            for column in range(PRODUCT_GUIDE_GRID_COLUMNS):
+                slot_frame = tk.Frame(
+                    self._grid_frame,
+                    width=PRODUCT_GUIDE_SLOT_WIDTH,
+                    height=PRODUCT_GUIDE_SLOT_HEIGHT,
+                    bd=0,
+                    highlightthickness=0,
+                )
+                slot_frame.grid(
+                    row=row,
+                    column=column,
+                    padx=PRODUCT_GUIDE_SLOT_COLUMN_GAP // 2,
+                    pady=PRODUCT_GUIDE_SLOT_ROW_GAP // 2,
+                )
+                slot_frame.grid_propagate(False)
+                self._guide_slot_frames.append(slot_frame)
+
+        self._guide_labels = []
+        self._create_guide_slot(0, "📡LTS 연결 가이드북", self._open_lts_connect_guide)
+        self._create_guide_slot(1, "📚LTS 가이드 문서", self._open_lts_explain_guide)
+        self._create_guide_slot(2, "🐳고래지표 설명 가이드북", self._open_indicator_guide)
+        self._create_guide_slot(3, "📈롱포지션 전략 가이드북", self._open_long_strategy_guide)
+        self._create_guide_slot(4, "📉숏포지션 전략 가이드북", self._open_short_strategy_guide)
+        self._create_guide_slot(5, "🔄DCA 전략지표 가이드문서", self._open_dca_strategy_guide_placeholder)
+
+        _log_login(
+            "product_guidebook_window_layout: "
+            f"grid={PRODUCT_GUIDE_GRID_COLUMNS}x{PRODUCT_GUIDE_GRID_ROWS} "
+            f"slot_size={PRODUCT_GUIDE_SLOT_WIDTH}x{PRODUCT_GUIDE_SLOT_HEIGHT} "
+            f"item_width={PRODUCT_GUIDE_ITEM_WIDTH} populated_slots=6"
+        )
+
+    def set_background_enabled(self, enabled: bool) -> None:
+        self._background_enabled = enabled
+        bg_color = BACKGROUND_OFF_COLOR
+        self.configure(bg=bg_color)
+        self._container.configure(bg=bg_color)
+        self._grid_frame.configure(bg=bg_color)
+        for slot_frame in self._guide_slot_frames:
+            slot_frame.configure(bg=bg_color)
+        for label in self._guide_labels:
+            label.configure(bg=bg_color)
+
+    def _create_guide_slot(self, slot_index: int, title: str, command: Callable[[], None]) -> None:
+        label = tk.Label(
+            self._guide_slot_frames[slot_index],
+            text=title,
+            font=self._fonts["section"],
+            fg=UI_TEXT_COLOR,
+            anchor="center",
+            justify="center",
+            width=PRODUCT_GUIDE_ITEM_WIDTH,
+        )
+        label.pack(anchor="center", pady=(26, 10))
+        self._guide_labels.append(label)
+
+        button = tk.Button(
+            self._guide_slot_frames[slot_index],
+            text=title,
+            font=self._fonts["button"],
+            bg=BUTTON_BG,
+            fg=BUTTON_FG,
+            activebackground="#1a1a1a",
+            activeforeground=BUTTON_FG,
+            bd=0,
+            relief="flat",
+            highlightthickness=0,
+            cursor="hand2",
+            width=PRODUCT_GUIDE_ITEM_WIDTH,
+            command=command,
+        )
+        button.pack(anchor="center", ipady=9, ipadx=12)
+
+    def _open_lts_connect_guide(self) -> None:
+        self._open_guide_pdf(option="lts_connect_guide", filename="lts_connect_guide.pdf")
+
+    def _open_lts_explain_guide(self) -> None:
+        self._open_guide_pdf(option="lts_explain_guide", filename="lts_explain.pdf")
+
+    def _open_indicator_guide(self) -> None:
+        self._open_guide_pdf(option="indicator_guide", filename="indicator.pdf")
+
+    def _open_long_strategy_guide(self) -> None:
+        self._open_guide_pdf(option="long_strategy_guide", filename="long.pdf")
+
+    def _open_short_strategy_guide(self) -> None:
+        self._open_guide_pdf(option="short_strategy_guide", filename="short.pdf")
+
+    def _open_dca_strategy_guide_placeholder(self) -> None:
+        _log_login("product_guidebook_option_clicked: option=dca_strategy_guide_placeholder")
+        messagebox.showinfo("준비 중", "DCA 전략지표 가이드문서는 준비 중입니다.", parent=self)
+        _log_login("product_guidebook_placeholder_shown: option=dca_strategy_guide_placeholder")
+
+    def _open_guide_pdf(self, option: str, filename: str) -> None:
+        _log_login(f"product_guidebook_option_clicked: option={option}")
+        base_dir = Path(__file__).resolve().parent
+        pdf_path = base_dir / "image" / "login_page" / filename
+        if not pdf_path.exists():
+            _log_login(f"product_guidebook_pdf_missing: option={option} path={pdf_path}")
+            messagebox.showerror("파일 없음", f"PDF 파일을 찾을 수 없습니다:\n{pdf_path}", parent=self)
+            return
+        try:
+            self._open_file(pdf_path)
+            _log_login(f"product_guidebook_pdf_opened: option={option} path={pdf_path}")
+        except Exception as exc:
+            _log_login(f"product_guidebook_pdf_open_failed: option={option} path={pdf_path} error={exc}")
+            messagebox.showerror("열기 실패", f"PDF를 열 수 없습니다:\n{exc}", parent=self)
+
+    @staticmethod
+    def _open_file(path: Path) -> None:
+        if sys.platform.startswith("win"):
+            os.startfile(path)  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(path)])
+        else:
+            subprocess.Popen(["xdg-open", str(path)])
+
+
 class LoginPage(tk.Frame):
     def __init__(self, master: tk.Widget, current_version: str = "", latest_version: str = "") -> None:
         super().__init__(master, bg=CANVAS_BG)
@@ -1164,6 +1389,7 @@ class LoginPage(tk.Frame):
         self._required_var = tk.BooleanVar(value=False)
         self._required2_var = tk.BooleanVar(value=False)
         self._subscriber_window: Optional[SubscriberRequestWindow] = None
+        self._product_guidebook_window: Optional[ProductGuidebookWindow] = None
         self._binance_account_guide_window: Optional[BinanceAccountGuideWindow] = None
         self._background_enabled = True
         self._bg_toggle_original = self._load_background_toggle_icon()
@@ -1279,7 +1505,7 @@ class LoginPage(tk.Frame):
         self.help_title3_id = self.canvas.create_text(
             0,
             0,
-            text="📚자동매매 연결에 대한 가이드가 필요하신가요?",
+            text="📝상품구성 및 가이드북 리스트",
             fill=UI_TEXT_COLOR,
             font=self.fonts["help"],
             anchor="nw",
@@ -1386,10 +1612,10 @@ class LoginPage(tk.Frame):
         )
         self.help_button3 = RoundedButton(
             self.canvas,
-            text="📚LTS 가이드북",
+            text="📝상품구성 및 가이드북",
             font=self.fonts["help_button"],
             radius=12,
-            command=self._open_lts_guidebook,
+            command=self._open_product_guidebook,
         )
         self.help_button4 = RoundedButton(
             self.canvas,
@@ -1402,7 +1628,7 @@ class LoginPage(tk.Frame):
         self.help_button2.set_state("normal")
         self.help_button3.set_state("normal")
         self.help_button4.set_state("normal")
-        _log_login("secondary guide buttons initialized: lts_guidebook, binance_account_guide")
+        _log_login("secondary guide buttons initialized: product_guidebook, binance_account_guide")
         _log_login(f"help_button_cluster_shift applied: shift_x={HELP_BUTTON_CLUSTER_SHIFT_X}")
         self._apply_background_mode()
 
@@ -1461,20 +1687,28 @@ class LoginPage(tk.Frame):
         finally:
             self._subscriber_window = None
 
-    def _open_lts_guidebook(self) -> None:
-        _log_login("guide_button_clicked: kind=lts_guidebook")
-        base_dir = Path(__file__).resolve().parent
-        pdf_path = base_dir / "image" / "login_page" / "lts_connect_guide.pdf"
-        if not pdf_path.exists():
-            _log_login(f"guide_pdf_missing: kind=lts_guidebook path={pdf_path}")
-            messagebox.showerror("파일 없음", f"PDF 파일을 찾을 수 없습니다:\n{pdf_path}")
+    def _open_product_guidebook(self) -> None:
+        _log_login("guide_button_clicked: kind=product_guidebook")
+        if self._product_guidebook_window is not None and self._product_guidebook_window.winfo_exists():
+            _log_login("product_guidebook_window_focus_existing")
+            self._product_guidebook_window.lift()
+            self._product_guidebook_window.focus_force()
+            return
+        self._product_guidebook_window = ProductGuidebookWindow(
+            self.root,
+            background_enabled=self._background_enabled,
+        )
+        self._product_guidebook_window.protocol("WM_DELETE_WINDOW", self._close_product_guidebook)
+        _log_login("product_guidebook_window_created")
+
+    def _close_product_guidebook(self) -> None:
+        if self._product_guidebook_window is None:
             return
         try:
-            self._open_file(pdf_path)
-            _log_login(f"guide_pdf_opened: kind=lts_guidebook path={pdf_path}")
-        except Exception as exc:
-            _log_login(f"guide_pdf_open_failed: kind=lts_guidebook path={pdf_path} error={exc}")
-            messagebox.showerror("열기 실패", f"PDF를 열 수 없습니다:\n{exc}")
+            self._product_guidebook_window.destroy()
+        finally:
+            self._product_guidebook_window = None
+            _log_login("product_guidebook_window_closed")
 
     def _open_binance_account_guide(self) -> None:
         _log_login("guide_button_clicked: kind=binance_account_guide")
@@ -1513,6 +1747,8 @@ class LoginPage(tk.Frame):
         self._layout()
         if self._subscriber_window is not None and self._subscriber_window.winfo_exists():
             self._subscriber_window.set_background_enabled(self._background_enabled)
+        if self._product_guidebook_window is not None and self._product_guidebook_window.winfo_exists():
+            self._product_guidebook_window.set_background_enabled(self._background_enabled)
         if (
             self._binance_account_guide_window is not None
             and self._binance_account_guide_window.winfo_exists()
@@ -1596,6 +1832,10 @@ class LoginPage(tk.Frame):
         )
 
     def _open_trade_page(self, api_key: str, secret_key: str) -> None:
+        _log_login(
+            "trade_page_opened: "
+            f"api_key={_mask_api_key(api_key)} secret_key_present={bool(secret_key)}"
+        )
         self.destroy()
         trade_page = TradePage(self.root, api_key=api_key, secret_key=secret_key)
         trade_page.pack(fill="both", expand=True)
@@ -1656,27 +1896,42 @@ class LoginPage(tk.Frame):
     def _fetch_market_info(self) -> dict:
         try:
             import ccxt  # type: ignore
-        except Exception:
+        except Exception as exc:
+            _log_login(
+                "market_info_fetch_failed: "
+                f"reason=ccxt_unavailable error={exc.__class__.__name__}"
+            )
             return {"online": False}
 
         try:
             exchange = ccxt.binance({"enableRateLimit": True})
-            start = time.perf_counter()
+            started_at = time.perf_counter()
             ticker = exchange.fetch_ticker("BTC/USDT")
-            ping_ms = int((time.perf_counter() - start) * 1000)
+            ping_ms = int((time.perf_counter() - started_at) * 1000)
             last = ticker.get("last") or ticker.get("close")
             percent = ticker.get("percentage")
             if percent is None:
                 open_price = ticker.get("open")
-                if open_price:
-                    percent = (last - open_price) / open_price * 100
+                if open_price and last:
+                    percent = (float(last) - float(open_price)) / float(open_price) * 100
+
+            last_value = float(last) if last is not None else 0.0
+            percent_text = "--" if percent is None else f"{float(percent):.2f}"
+            _log_login(
+                "market_info_fetch_success: "
+                f"symbol=BTC/USDT last={last_value:.2f} percent={percent_text} ping_ms={ping_ms}"
+            )
             return {
                 "online": True,
                 "ping_ms": ping_ms,
-                "last": last,
-                "percent": percent,
+                "last": last_value,
+                "percent": None if percent is None else float(percent),
             }
-        except Exception:
+        except Exception as exc:
+            _log_login(
+                "market_info_fetch_failed: "
+                f"reason=request_error error={exc.__class__.__name__}"
+            )
             return {"online": False}
 
     def _refresh_market_info(self) -> None:
