@@ -9642,3 +9642,181 @@
 [2026-03-13 12:57:03] Trade state changed: state=stop display=중단됨
 [2026-03-13 12:57:05] Exit requested from trade page.
 [2026-03-13 12:57:05] Entry relay bot stopped: reason=widget_destroy
+[2026-03-13 21:16:14] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-13 21:16:14] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10
+[2026-03-13 21:16:14] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-13 21:16:14] Wallet balance sheet sync scheduled: balance=209.15 pending=True
+[2026-03-13 21:16:14] Wallet balance sheet sync started: balance=209.15 timeout=8
+[2026-03-13 21:16:18] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-13 21:19:53] Strategy guide button clicked: option=short_strategy_guide
+[2026-03-13 21:19:53] Strategy guide pdf opened: option=short_strategy_guide path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\short.pdf
+[2026-03-13 21:22:47] Strategy guide button clicked: option=short_strategy_guide
+[2026-03-13 21:22:47] Strategy guide pdf opened: option=short_strategy_guide path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\short.pdf
+[2026-03-13 21:25:29] Strategy guide button clicked: option=short_strategy_guide
+[2026-03-13 21:25:29] Strategy guide pdf opened: option=short_strategy_guide path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\short.pdf
+[2026-03-13 21:51:00] Exit requested from trade page.
+[2026-03-13 21:51:00] Entry relay bot stopped: reason=widget_destroy
+[2026-03-13 22:08:26] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-13 22:08:27] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10
+[2026-03-13 22:08:27] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-13 22:08:27] Wallet balance sheet sync scheduled: balance=209.15 pending=True
+[2026-03-13 22:08:27] Wallet balance sheet sync started: balance=209.15 timeout=8
+[2026-03-13 22:08:31] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-13 22:08:47] Exit requested from trade page.
+[2026-03-13 22:08:47] Entry relay bot stopped: reason=widget_destroy
+[2026-03-14 14:27:54] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-14 14:27:54] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10
+[2026-03-14 14:27:54] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-14 14:27:54] Wallet balance sheet sync scheduled: balance=208.22 pending=True
+[2026-03-14 14:27:54] Wallet balance sheet sync started: balance=208.22 timeout=8
+[2026-03-14 14:27:57] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-14 14:27:58] Exit requested from trade page.
+[2026-03-14 14:27:58] Entry relay bot stopped: reason=widget_destroy
+[2026-03-14 15:10:54] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-14 15:10:54] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10
+[2026-03-14 15:10:54] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-14 15:10:54] Wallet balance sheet sync scheduled: balance=207.77 pending=True
+[2026-03-14 15:10:54] Wallet balance sheet sync started: balance=207.77 timeout=8
+[2026-03-14 15:10:57] Filter changed: leverage=2배
+[2026-03-14 15:10:57] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-14 15:10:57] Filter settings saved: leverage=2배
+[2026-03-14 15:10:59] Auto-trade start confirmation opened: trade_state=stop wallet=207.77 USDT
+[2026-03-14 15:11:00] Signal relay start-sync done: baseline_offset=0 synced_offset=1771576812752 latest_event_id=1771576812752
+[2026-03-14 15:11:00] Entry relay bot started: signal_offset=1771576812752 cached_wallet_balance=207.76856344
+[2026-03-14 15:11:00] Entry relay loop entered.
+[2026-03-14 15:11:00] Auto-trade start confirmed by user.
+[2026-03-14 15:11:00] Trade state changed: state=start display=실행중
+[2026-03-14 15:11:10] Signal relay poll success: accepted=1 previous_offset=1771576812752 synced_offset=1771576812753
+[2026-03-14 15:11:11] Pre-order leverage set ok: symbol=ETHUSDT target_leverage=2 error_code=0
+[2026-03-14 15:11:11] Gateway create endpoint selected: path=/fapi/v1/algoOrder symbol=ETHUSDT type=TAKE_PROFIT
+[2026-03-14 15:11:11] Trigger entry order submit success: symbol=ETHUSDT type=TAKE_PROFIT client_order_id=LTS-E1-ETHUSD-1773468671140
+[2026-03-14 15:11:11] Entry order submitted: symbol=ETHUSDT message_id=352 target_price=2088.44 budget_usdt=186.9917 leverage=2
+[2026-03-14 15:11:11] Entry relay kept running after submit: reason=entry_filtering_and_risk_cancel_support
+[2026-03-14 15:11:56] Signal relay poll success: accepted=1 previous_offset=1771576812753 synced_offset=1771576812754
+[2026-03-14 15:11:56] Risk signal cancel summary: symbol=ETHUSDT message_id=98 attempted=1 success=1
+[2026-03-14 15:28:49] Exit requested from trade page.
+[2026-03-14 15:28:49] Entry relay loop exited.
+[2026-03-14 15:28:49] Entry relay bot stopped: reason=widget_destroy
+[2026-03-14 15:31:26] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-14 15:31:26] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10
+[2026-03-14 15:31:26] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-14 15:31:27] Wallet balance sheet sync scheduled: balance=207.77 pending=True
+[2026-03-14 15:31:27] Wallet balance sheet sync started: balance=207.77 timeout=8
+[2026-03-14 15:31:29] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-14 15:31:29] Strategy guide button clicked: option=dca_strategy_guide
+[2026-03-14 15:31:29] Strategy guide pdf opened: option=dca_strategy_guide path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\dca.pdf
+[2026-03-14 15:35:05] Exit requested from trade page.
+[2026-03-14 15:35:05] Entry relay bot stopped: reason=widget_destroy
+[2026-03-14 15:35:23] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-14 15:35:23] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10 wallet_vertical_shift=78 wallet_vertical_shift_ratio=0.30
+[2026-03-14 15:35:23] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-14 15:35:24] Wallet balance sheet sync scheduled: balance=207.77 pending=True
+[2026-03-14 15:35:24] Wallet balance sheet sync started: balance=207.77 timeout=8
+[2026-03-14 15:35:27] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-14 15:40:51] Exit requested from trade page.
+[2026-03-14 15:40:51] Entry relay bot stopped: reason=widget_destroy
+[2026-03-14 15:41:15] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-14 15:41:15] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides channel_info_panel=title_only wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10 channel_info_top_gap=24 wallet_vertical_shift=78 wallet_vertical_shift_ratio=0.30
+[2026-03-14 15:41:15] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-14 15:41:16] Wallet balance sheet sync scheduled: balance=207.77 pending=True
+[2026-03-14 15:41:16] Wallet balance sheet sync started: balance=207.77 timeout=8
+[2026-03-14 15:41:19] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-14 15:41:50] Background mode toggled: enabled=False
+[2026-03-15 06:54:17] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-15 06:54:17] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides channel_info_panel=title_only wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10 channel_info_top_gap=24 wallet_vertical_shift=78 wallet_vertical_shift_ratio=0.30
+[2026-03-15 06:54:17] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-15 06:54:17] Wallet balance sheet sync scheduled: balance=207.77 pending=True
+[2026-03-15 06:54:17] Wallet balance sheet sync started: balance=207.77 timeout=8
+[2026-03-15 06:54:20] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-15 06:54:21] Strategy guide button clicked: option=long_strategy_guide
+[2026-03-15 06:54:21] Strategy guide pdf opened: option=long_strategy_guide path=C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\long.pdf
+[2026-03-15 11:58:35] Exit requested from trade page.
+[2026-03-15 11:58:35] Entry relay bot stopped: reason=widget_destroy
+[2026-03-15 11:59:54] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-15 11:59:54] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides channel_info_panel=telegram_channels channel_info_item_count=3 wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10 channel_info_top_gap=24 wallet_vertical_shift=78 wallet_vertical_shift_ratio=0.30
+[2026-03-15 11:59:54] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-15 11:59:54] Wallet balance sheet sync scheduled: balance=207.77 pending=True
+[2026-03-15 11:59:54] Wallet balance sheet sync started: balance=207.77 timeout=8
+[2026-03-15 11:59:58] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-15 12:00:03] Channel info button clicked: option=long_position_alert_channel url=https://t.me/+G7Y1QvJ6zHBiMWVl
+[2026-03-15 12:00:03] Channel info url opened: option=long_position_alert_channel url=https://t.me/+G7Y1QvJ6zHBiMWVl
+[2026-03-15 12:00:08] Channel info button clicked: option=short_position_alert_channel url=https://t.me/+ZNJ1Mf5AgwxjZmI9
+[2026-03-15 12:00:08] Channel info url opened: option=short_position_alert_channel url=https://t.me/+ZNJ1Mf5AgwxjZmI9
+[2026-03-15 12:00:11] Channel info button clicked: option=short_position_risk_management_channel url=https://t.me/+ZNJ1Mf5AgwxjZmI9
+[2026-03-15 12:00:11] Channel info url opened: option=short_position_risk_management_channel url=https://t.me/+ZNJ1Mf5AgwxjZmI9
+[2026-03-15 12:00:19] Channel info button clicked: option=short_position_risk_management_channel url=https://t.me/+ZNJ1Mf5AgwxjZmI9
+[2026-03-15 12:00:19] Channel info url opened: option=short_position_risk_management_channel url=https://t.me/+ZNJ1Mf5AgwxjZmI9
+[2026-03-15 12:06:54] Exit requested from trade page.
+[2026-03-15 12:06:54] Entry relay bot stopped: reason=widget_destroy
+[2026-03-15 12:07:13] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-15 12:07:13] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides channel_info_panel=telegram_channels channel_info_item_count=3 channel_info_layout=top2_bottom1 wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10 channel_info_top_gap=24 wallet_vertical_shift=78 wallet_vertical_shift_ratio=0.30
+[2026-03-15 12:07:13] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-15 12:07:13] Wallet balance sheet sync scheduled: balance=207.77 pending=True
+[2026-03-15 12:07:13] Wallet balance sheet sync started: balance=207.77 timeout=8
+[2026-03-15 12:07:17] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-15 12:07:17] Channel info button clicked: option=long_position_alert_channel url=https://t.me/+G7Y1QvJ6zHBiMWVl
+[2026-03-15 12:07:17] Channel info url opened: option=long_position_alert_channel url=https://t.me/+G7Y1QvJ6zHBiMWVl
+[2026-03-15 12:10:50] Exit requested from trade page.
+[2026-03-15 12:10:50] Entry relay bot stopped: reason=widget_destroy
+[2026-03-15 12:11:10] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-15 12:11:10] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides channel_info_panel=telegram_channels channel_info_item_count=4 channel_info_layout=2x2 wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10 channel_info_top_gap=24 wallet_vertical_shift=78 wallet_vertical_shift_ratio=0.30
+[2026-03-15 12:11:10] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-15 12:11:10] Wallet balance sheet sync scheduled: balance=207.77 pending=True
+[2026-03-15 12:11:10] Wallet balance sheet sync started: balance=207.77 timeout=8
+[2026-03-15 12:11:12] Channel info button clicked: option=levia_official_notice_channel url=https://t.me/+7q67SFWYCTU1MzJl
+[2026-03-15 12:11:12] Channel info url opened: option=levia_official_notice_channel url=https://t.me/+7q67SFWYCTU1MzJl
+[2026-03-15 12:11:13] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-15 12:17:11] Exit requested from trade page.
+[2026-03-15 12:17:11] Entry relay bot stopped: reason=widget_destroy
+[2026-03-15 12:17:27] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-15 12:17:28] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides manager_connection_panel=contacts manager_connection_item_count=2 channel_info_panel=telegram_channels channel_info_item_count=4 channel_info_layout=2x2 wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10 manager_connection_top_gap=14 manager_connection_height=96 channel_info_top_gap=16 wallet_vertical_shift=123 wallet_vertical_shift_ratio=0.47
+[2026-03-15 12:17:28] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-15 12:17:28] Wallet balance sheet sync scheduled: balance=207.77 pending=True
+[2026-03-15 12:17:28] Wallet balance sheet sync started: balance=207.77 timeout=8
+[2026-03-15 12:17:31] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-15 13:26:53] Exit requested from trade page.
+[2026-03-15 13:26:53] Entry relay bot stopped: reason=widget_destroy
+[2026-03-15 13:27:10] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-15 13:27:10] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides manager_connection_panel=contacts manager_connection_item_count=2 channel_info_panel=telegram_channels channel_info_item_count=4 channel_info_layout=2x2 wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10 manager_connection_top_gap=8 manager_connection_height=110 channel_info_top_gap=16 wallet_vertical_shift=136 wallet_vertical_shift_ratio=0.52
+[2026-03-15 13:27:10] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-15 13:27:10] Wallet balance sheet sync scheduled: balance=207.77 pending=True
+[2026-03-15 13:27:10] Wallet balance sheet sync started: balance=207.77 timeout=8
+[2026-03-15 13:27:13] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-15 13:36:26] Exit requested from trade page.
+[2026-03-15 13:36:26] Entry relay bot stopped: reason=widget_destroy
+[2026-03-15 13:36:43] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-15 13:36:43] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides manager_connection_panel=contacts manager_connection_item_count=2 channel_info_panel=telegram_channels channel_info_item_count=4 channel_info_layout=2x2 wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10 manager_connection_top_gap=8 manager_connection_height=110 channel_info_top_gap=16 wallet_vertical_shift=136 wallet_vertical_shift_ratio=0.52
+[2026-03-15 13:36:43] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-15 13:36:43] Wallet balance sheet sync scheduled: balance=207.77 pending=True
+[2026-03-15 13:36:43] Wallet balance sheet sync started: balance=207.77 timeout=8
+[2026-03-15 13:36:45] Manager connection button clicked: option=manager_contact_a url=https://t.me/crypto_LEVI9
+[2026-03-15 13:36:45] Manager connection url opened: option=manager_contact_a url=https://t.me/crypto_LEVI9
+[2026-03-15 13:36:46] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-15 13:36:48] Manager connection button clicked: option=manager_contact_b url=https://t.me/LEVI_kimbob
+[2026-03-15 13:36:48] Manager connection url opened: option=manager_contact_b url=https://t.me/LEVI_kimbob
+[2026-03-15 13:38:43] Exit requested from trade page.
+[2026-03-15 13:38:43] Entry relay bot stopped: reason=widget_destroy
+[2026-03-15 13:39:06] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-15 13:39:06] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides manager_connection_panel=contacts manager_connection_item_count=2 channel_info_panel=telegram_channels channel_info_item_count=4 channel_info_layout=2x2 wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10 manager_connection_top_gap=8 manager_connection_height=110 channel_info_top_gap=16 channel_info_title_offset_y=-4 wallet_vertical_shift=136 wallet_vertical_shift_ratio=0.52
+[2026-03-15 13:39:06] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-15 13:39:06] Wallet balance sheet sync scheduled: balance=207.77 pending=True
+[2026-03-15 13:39:06] Wallet balance sheet sync started: balance=207.77 timeout=8
+[2026-03-15 13:39:09] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-15 13:40:29] Exit requested from trade page.
+[2026-03-15 13:40:29] Entry relay bot stopped: reason=widget_destroy
+[2026-03-15 13:41:06] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-15 13:41:06] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides manager_connection_panel=contacts manager_connection_item_count=2 channel_info_panel=telegram_channels channel_info_item_count=4 channel_info_layout=2x2 wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10 manager_connection_top_gap=8 manager_connection_height=110 channel_info_top_gap=16 channel_info_title_height=28 wallet_vertical_shift=136 wallet_vertical_shift_ratio=0.52
+[2026-03-15 13:41:06] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-15 13:41:07] Wallet balance sheet sync scheduled: balance=207.77 pending=True
+[2026-03-15 13:41:07] Wallet balance sheet sync started: balance=207.77 timeout=8
+[2026-03-15 13:41:09] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-15 13:41:11] Exit requested from trade page.
+[2026-03-15 13:41:11] Entry relay bot stopped: reason=widget_destroy
+[2026-03-15 15:50:09] Entry relay bot initialized: api_key=UXFj...6Nx3 relay_base_url=https://port-0-lts-signal-relay-mjtr1yoo788d348e.sel3.cloudtype.app relay_client_id=api-ff7d6b6102c3 relay_token_set=False entry_channel_id=-1003782821900 risk_channel_id=-1003761851285
+[2026-03-15 15:50:09] Trade page initialized: entry_backend=single_symbol_first_entry api_key_present=True secret_key_present=True trade_state=stop trade_state_label=중단됨 strategy_panel=strategy_guides manager_connection_panel=contacts manager_connection_item_count=2 channel_info_panel=telegram_channels channel_info_item_count=4 channel_info_layout=2x2 wallet_text_layout=centered_above_buttons wallet_text_center_offset_y=10 manager_connection_top_gap=8 manager_connection_height=110 channel_info_top_gap=16 channel_info_title_height=28 wallet_vertical_shift=136 wallet_vertical_shift_ratio=0.52
+[2026-03-15 15:50:09] Wallet balance refresh requested: reason=trade_page_initial_load
+[2026-03-15 15:50:10] Wallet balance sheet sync scheduled: balance=207.77 pending=True
+[2026-03-15 15:50:10] Wallet balance sheet sync started: balance=207.77 timeout=8
+[2026-03-15 15:50:12] Wallet balance sheet sync completed: success=True response={'result': 'updated'}
+[2026-03-15 15:50:13] Exit requested from trade page.
+[2026-03-15 15:50:13] Entry relay bot stopped: reason=widget_destroy

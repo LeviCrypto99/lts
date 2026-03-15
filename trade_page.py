@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 import tkinter as tk
+import webbrowser
 from pathlib import Path
 from tkinter import font as tkfont, messagebox, ttk
 from typing import Dict, Optional, Tuple
@@ -49,7 +50,6 @@ FPS = 60
 
 SAVE_SETTINGS_FILL = "#00b050"
 SAVE_SETTINGS_DISABLED_FILL = "#5f5f5f"
-RESET_SETTINGS_FILL = "#7a7a7a"
 START_FILL = "#00b050"
 STOP_FILL = "#ff0000"
 BUTTON_TEXT_COLOR = "#ffffff"
@@ -66,12 +66,101 @@ WALLET_WARNING_TEXT = "API를 재확인하십시오"
 
 CHART_RECT = (49, 112, 770, 446)
 TABLE_RECT = (47, 466, 765, 753)
-WALLET_RECT = (819, 263, 1292, 590)
+WALLET_BASE_RECT = (819, 263, 1292, 590)
+START_BUTTON_BASE_RECT = (872, 503, 1042, 555)
+STOP_BUTTON_BASE_RECT = (1090, 503, 1260, 555)
+WALLET_VERTICAL_SHIFT_RATIO = 0.52
+WALLET_VERTICAL_SHIFT = int(WALLET_BASE_RECT[1] * WALLET_VERTICAL_SHIFT_RATIO)
+WALLET_RECT = (
+    WALLET_BASE_RECT[0],
+    WALLET_BASE_RECT[1] - WALLET_VERTICAL_SHIFT,
+    WALLET_BASE_RECT[2],
+    WALLET_BASE_RECT[3] - WALLET_VERTICAL_SHIFT,
+)
+MANAGER_CONNECTION_TOP_GAP = 8
+MANAGER_CONNECTION_HEIGHT = 110
+MANAGER_CONNECTION_RECT = (
+    WALLET_RECT[0],
+    WALLET_RECT[3] + MANAGER_CONNECTION_TOP_GAP,
+    WALLET_RECT[2],
+    WALLET_RECT[3] + MANAGER_CONNECTION_TOP_GAP + MANAGER_CONNECTION_HEIGHT,
+)
+MANAGER_CONNECTION_TITLE = "관리자 연결"
+MANAGER_CONNECTION_BUTTON_RECTS = {
+    "manager_contact_a": (848, 526, 1052, 558),
+    "manager_contact_b": (1060, 526, 1264, 558),
+}
+MANAGER_CONNECTION_ITEMS = (
+    (
+        "manager_contact_a",
+        "관리자 연락처 A",
+        "manager_contact_a",
+        "https://t.me/crypto_LEVI9",
+    ),
+    (
+        "manager_contact_b",
+        "관리자 연락처 B",
+        "manager_contact_b",
+        "https://t.me/LEVI_kimbob",
+    ),
+)
+CHANNEL_INFO_TOP_GAP = 16
+CHANNEL_INFO_RECT = (
+    WALLET_RECT[0],
+    MANAGER_CONNECTION_RECT[3] + CHANNEL_INFO_TOP_GAP,
+    WALLET_RECT[2],
+    TABLE_RECT[3],
+)
+CHANNEL_INFO_TITLE = "채널정보"
+CHANNEL_INFO_TITLE_HEIGHT = 28
+CHANNEL_INFO_BUTTON_RECTS = {
+    "channel_long_alert": (848, 644, 1052, 676),
+    "channel_short_alert": (1060, 644, 1264, 676),
+    "channel_short_risk": (848, 707, 1052, 739),
+    "channel_official_notice": (1060, 707, 1264, 739),
+}
+CHANNEL_INFO_ITEMS = (
+    (
+        "channel_long_alert",
+        "📈롱포지션 알림채널",
+        "long_position_alert_channel",
+        "https://t.me/+G7Y1QvJ6zHBiMWVl",
+    ),
+    (
+        "channel_short_alert",
+        "📉숏포지션 알림채널",
+        "short_position_alert_channel",
+        "https://t.me/+ZNJ1Mf5AgwxjZmI9",
+    ),
+    (
+        "channel_short_risk",
+        "💥숏포지션 리스크관리 채널",
+        "short_position_risk_management_channel",
+        "https://t.me/+GZhGHaQBVmhkMmRl",
+    ),
+    (
+        "channel_official_notice",
+        "🔈LEVIA 공식 공지채널",
+        "levia_official_notice_channel",
+        "https://t.me/+7q67SFWYCTU1MzJl",
+    ),
+)
+SECTION_TITLE_HEIGHT = 34
 
 WALLET_SETTINGS_LINE_GAP = 12
 WALLET_TEXT_CENTER_OFFSET_Y = 10
-START_BUTTON_RECT = (872, 503, 1042, 555)
-STOP_BUTTON_RECT = (1090, 503, 1260, 555)
+START_BUTTON_RECT = (
+    START_BUTTON_BASE_RECT[0],
+    START_BUTTON_BASE_RECT[1] - WALLET_VERTICAL_SHIFT,
+    START_BUTTON_BASE_RECT[2],
+    START_BUTTON_BASE_RECT[3] - WALLET_VERTICAL_SHIFT,
+)
+STOP_BUTTON_RECT = (
+    STOP_BUTTON_BASE_RECT[0],
+    STOP_BUTTON_BASE_RECT[1] - WALLET_VERTICAL_SHIFT,
+    STOP_BUTTON_BASE_RECT[2],
+    STOP_BUTTON_BASE_RECT[3] - WALLET_VERTICAL_SHIFT,
+)
 
 FILTER_LABEL_FILL = "#ffffff"
 FILTER_LABEL_OUTLINE = "#000000"
@@ -81,9 +170,6 @@ COMBOBOX_PADDING_Y = 2
 
 TABLE_REF_WIDTH = 849
 TABLE_REF_HEIGHT = 348
-TABLE_TITLE_TOP = 17 / TABLE_REF_HEIGHT
-TABLE_TITLE_BOTTOM = 58 / TABLE_REF_HEIGHT
-TABLE_TITLE_TEXT_Y = 39.5 / TABLE_REF_HEIGHT
 TABLE_HEADER_TOP = 60 / TABLE_REF_HEIGHT
 TABLE_HEADER_TEXT_Y = 76 / TABLE_REF_HEIGHT
 TABLE_HEADER_LINE_Y = 88 / TABLE_REF_HEIGHT
@@ -113,19 +199,11 @@ STRATEGY_GUIDE_ITEMS = (
     ("guide_dca", "🔄DCA 전략지표 가이드문서"),
 )
 
-MDD_LABEL_RECT = (90, 156, 390, 188)
-MDD_DROPDOWN_RECT = (90, 196, 390, 228)
-TP_LABEL_RECT = (430, 156, 730, 188)
-TP_DROPDOWN_RECT = (430, 196, 730, 228)
 LEVERAGE_LABEL_RECT = (260, 262, 560, 294)
 LEVERAGE_DROPDOWN_RECT = (260, 302, 560, 334)
 SAVE_SETTINGS_BUTTON_RECT = (305, 368, 515, 404)
-RESET_SETTINGS_BUTTON_RECT = (420, 352, 630, 388)
 
-DEFAULT_MDD = "15%"
-DEFAULT_TP_RATIO = "5%"
 DEFAULT_LEVERAGE = "1배"
-TP_RATIO_OPTIONS = ["0.5%", "3%", "5%"]
 LEVERAGE_OPTIONS = ["2배", "1배"]
 TRADE_STATE_LABELS = {
     "start": "실행중",
@@ -234,28 +312,43 @@ class TradePage(tk.Frame):
             "start": False,
             "stop": False,
             "filter_save": False,
-            "filter_reset": False,
             "guide_long": False,
             "guide_short": False,
             "guide_dca": False,
+            "manager_contact_a": False,
+            "manager_contact_b": False,
+            "channel_long_alert": False,
+            "channel_short_alert": False,
+            "channel_short_risk": False,
+            "channel_official_notice": False,
         }
         self._button_lift: Dict[str, float] = {
             "start": 0.0,
             "stop": 0.0,
             "filter_save": 0.0,
-            "filter_reset": 0.0,
             "guide_long": 0.0,
             "guide_short": 0.0,
             "guide_dca": 0.0,
+            "manager_contact_a": 0.0,
+            "manager_contact_b": 0.0,
+            "channel_long_alert": 0.0,
+            "channel_short_alert": 0.0,
+            "channel_short_risk": 0.0,
+            "channel_official_notice": 0.0,
         }
         self._button_anim_jobs: Dict[str, Optional[str]] = {
             "start": None,
             "stop": None,
             "filter_save": None,
-            "filter_reset": None,
             "guide_long": None,
             "guide_short": None,
             "guide_dca": None,
+            "manager_contact_a": None,
+            "manager_contact_b": None,
+            "channel_long_alert": None,
+            "channel_short_alert": None,
+            "channel_short_risk": None,
+            "channel_official_notice": None,
         }
 
         self._trade_state = "stop"
@@ -274,7 +367,6 @@ class TradePage(tk.Frame):
             secret_key=self._secret_key,
             leverage_getter=self._selected_leverage_label,
             snapshot_callback=self._schedule_entry_snapshot_update,
-            auto_stop_callback=self._schedule_entry_auto_stop,
         )
 
         self._base_fonts = {
@@ -299,37 +391,20 @@ class TradePage(tk.Frame):
         self.exit_item = self.canvas.create_image(0, 0, anchor="ne", tags=("exit_app",))
 
         self._style = ttk.Style(self)
-        self.mdd_dropdown = ttk.Combobox(self.canvas, values=["15%"], state="readonly", justify="center")
-        self.tp_ratio_dropdown = ttk.Combobox(
-            self.canvas,
-            values=TP_RATIO_OPTIONS,
-            state="readonly",
-            justify="center",
-        )
         self.leverage_dropdown = ttk.Combobox(
             self.canvas,
             values=LEVERAGE_OPTIONS,
             state="readonly",
             justify="center",
         )
-        self.mdd_dropdown_window = self.canvas.create_window(0, 0, window=self.mdd_dropdown, anchor="nw")
-        self.tp_ratio_dropdown_window = self.canvas.create_window(0, 0, window=self.tp_ratio_dropdown, anchor="nw")
         self.leverage_dropdown_window = self.canvas.create_window(0, 0, window=self.leverage_dropdown, anchor="nw")
 
-        self.mdd_dropdown.set(DEFAULT_MDD)
-        self.tp_ratio_dropdown.set(DEFAULT_TP_RATIO)
         self.leverage_dropdown.set(DEFAULT_LEVERAGE)
         self._saved_filter_settings = self._default_filter_settings()
 
         self._configure_combobox_style("TradeFilter.TCombobox", COMBOBOX_PADDING_Y)
-        self.mdd_dropdown.configure(style="TradeFilter.TCombobox")
-        self.tp_ratio_dropdown.configure(style="TradeFilter.TCombobox")
         self.leverage_dropdown.configure(style="TradeFilter.TCombobox")
-        self._bind_combobox_focus(self.mdd_dropdown)
-        self._bind_combobox_focus(self.tp_ratio_dropdown)
         self._bind_combobox_focus(self.leverage_dropdown)
-        self.mdd_dropdown.bind("<<ComboboxSelected>>", self._on_filter_change, add="+")
-        self.tp_ratio_dropdown.bind("<<ComboboxSelected>>", self._on_filter_change, add="+")
         self.leverage_dropdown.bind("<<ComboboxSelected>>", self._on_filter_change, add="+")
 
         self.canvas.tag_bind("bg_toggle", "<Button-1>", self._toggle_background)
@@ -353,8 +428,17 @@ class TradePage(tk.Frame):
             f"secret_key_present={self._secret_key_present} "
             f"trade_state={self._trade_state} trade_state_label={self._trade_state_display_text()} "
             "strategy_panel=strategy_guides "
+            f"manager_connection_panel=contacts manager_connection_item_count={len(MANAGER_CONNECTION_ITEMS)} "
+            f"channel_info_panel=telegram_channels channel_info_item_count={len(CHANNEL_INFO_ITEMS)} "
+            "channel_info_layout=2x2 "
             "wallet_text_layout=centered_above_buttons "
-            f"wallet_text_center_offset_y={WALLET_TEXT_CENTER_OFFSET_Y}"
+            f"wallet_text_center_offset_y={WALLET_TEXT_CENTER_OFFSET_Y} "
+            f"manager_connection_top_gap={MANAGER_CONNECTION_TOP_GAP} "
+            f"manager_connection_height={MANAGER_CONNECTION_HEIGHT} "
+            f"channel_info_top_gap={CHANNEL_INFO_TOP_GAP} "
+            f"channel_info_title_height={CHANNEL_INFO_TITLE_HEIGHT} "
+            f"wallet_vertical_shift={WALLET_VERTICAL_SHIFT} "
+            f"wallet_vertical_shift_ratio={WALLET_VERTICAL_SHIFT_RATIO:.2f}"
         )
         if self._api_key and self._secret_key:
             self._start_initial_snapshot_fetch()
@@ -399,12 +483,6 @@ class TradePage(tk.Frame):
             enabled=lambda: self._save_enabled,
         )
         self._bind_tag(
-            "filter_reset",
-            self._handle_filter_reset,
-            on_enter=lambda _event: self._set_button_hover("filter_reset", True),
-            on_leave=lambda _event: self._set_button_hover("filter_reset", False),
-        )
-        self._bind_tag(
             "guide_long",
             self._handle_long_strategy_guide,
             on_enter=lambda _event: self._set_button_hover("guide_long", True),
@@ -422,6 +500,17 @@ class TradePage(tk.Frame):
             on_enter=lambda _event: self._set_button_hover("guide_dca", True),
             on_leave=lambda _event: self._set_button_hover("guide_dca", False),
         )
+        self._bind_external_link_items(MANAGER_CONNECTION_ITEMS, self._handle_manager_connection_link)
+        self._bind_external_link_items(CHANNEL_INFO_ITEMS, self._handle_channel_info_link)
+
+    def _bind_external_link_items(self, items, handler) -> None:
+        for tag, _label, option, url in items:
+            self._bind_tag(
+                tag,
+                lambda _event, option=option, url=url, click_handler=handler: click_handler(option=option, url=url),
+                on_enter=lambda _event, button_tag=tag: self._set_button_hover(button_tag, True),
+                on_leave=lambda _event, button_tag=tag: self._set_button_hover(button_tag, False),
+            )
 
     def _bind_tag(self, tag: str, handler, on_enter=None, on_leave=None, enabled=None) -> None:
         def is_enabled() -> bool:
@@ -563,7 +652,7 @@ class TradePage(tk.Frame):
     def _refresh_filter_controls_lock(self) -> None:
         locked = self._settings_locked()
         desired_state = "disabled" if locked else "readonly"
-        for combobox in (self.mdd_dropdown, self.tp_ratio_dropdown, self.leverage_dropdown):
+        for combobox in (self.leverage_dropdown,):
             if str(combobox.cget("state")) != desired_state:
                 combobox.configure(state=desired_state)
 
@@ -571,13 +660,9 @@ class TradePage(tk.Frame):
             return
 
         self.canvas.focus_set()
-        self.mdd_dropdown.selection_clear()
-        self.tp_ratio_dropdown.selection_clear()
         self.leverage_dropdown.selection_clear()
         self._button_hover["filter_save"] = False
         self._button_lift["filter_save"] = 0.0
-        self._button_hover["filter_reset"] = False
-        self._button_lift["filter_reset"] = 0.0
 
     def _update_filter_save_state(self) -> None:
         current = self._current_filter_settings()
@@ -622,22 +707,6 @@ class TradePage(tk.Frame):
             f"leverage={self._saved_filter_settings['leverage']}"
         )
         self._show_info_message("설정 저장", "레버리지 설정이 저장되었습니다.")
-        self._update_filter_save_state()
-
-    def _handle_filter_reset(self, _event=None) -> None:
-        if self._settings_locked():
-            _log_trade(
-                "Filter reset blocked: "
-                f"reason=auto_trade_running trade_state={self._trade_state}"
-            )
-            self._show_info_message("자동매매 안내", "자동매매 실행중에는 설정을 변경할 수 없습니다.")
-            return
-        defaults = self._default_filter_settings()
-        self.leverage_dropdown.set(defaults["leverage"])
-        _log_trade(
-            "Filter settings reset: "
-            f"leverage={defaults['leverage']}"
-        )
         self._update_filter_save_state()
 
     def _set_trade_state(self, value: str) -> None:
@@ -827,16 +896,6 @@ class TradePage(tk.Frame):
                 else:
                     self._sheet_balance_sync_pending = True
 
-    def _schedule_entry_auto_stop(self, reason: str) -> None:
-        try:
-            self.after(0, lambda stop_reason=str(reason or ""): self._apply_entry_auto_stop(stop_reason))
-        except tk.TclError:
-            pass
-
-    def _apply_entry_auto_stop(self, reason: str) -> None:
-        _log_trade(f"Auto-trade stopped by backend: reason={reason or '-'}")
-        self._set_trade_state("stop")
-
     def destroy(self) -> None:
         try:
             self._entry_bot.stop("widget_destroy")
@@ -870,8 +929,6 @@ class TradePage(tk.Frame):
 
     def _clear_combo_focus(self, _event: tk.Event) -> None:
         self.canvas.focus_set()
-        self.mdd_dropdown.selection_clear()
-        self.tp_ratio_dropdown.selection_clear()
         self.leverage_dropdown.selection_clear()
 
     def _on_resize(self, _event: tk.Event) -> None:
@@ -881,7 +938,7 @@ class TradePage(tk.Frame):
         for name, (base_size, weight) in self._base_fonts.items():
             self.fonts[name].configure(size=max(8, int(base_size * scale)), weight=weight)
         text_height = self.fonts["dropdown"].metrics("linespace")
-        filter_height = (MDD_DROPDOWN_RECT[3] - MDD_DROPDOWN_RECT[1]) * scale
+        filter_height = (LEVERAGE_DROPDOWN_RECT[3] - LEVERAGE_DROPDOWN_RECT[1]) * scale
         padding_y = max(0, int((filter_height - text_height) / 2))
         self._configure_combobox_style("TradeFilter.TCombobox", padding_y)
 
@@ -982,6 +1039,8 @@ class TradePage(tk.Frame):
         self._draw_chart(scale, pad_x, content_pad_y)
         self._draw_strategy_guides_panel(scale, pad_x, content_pad_y)
         self._draw_wallet(scale, pad_x, content_pad_y)
+        self._draw_manager_connection_panel(scale, pad_x, content_pad_y)
+        self._draw_channel_info_panel(scale, pad_x, content_pad_y)
 
         self.canvas.coords(
             self.bg_toggle_item,
@@ -1055,8 +1114,6 @@ class TradePage(tk.Frame):
         max_y = max(rect[3] for rect in control_rects)
         offset_y = ((CHART_RECT[1] + CHART_RECT[3]) / 2) - ((min_y + max_y) / 2)
 
-        self._set_window_visibility(self.mdd_dropdown_window, False)
-        self._set_window_visibility(self.tp_ratio_dropdown_window, False)
         self._set_window_visibility(self.leverage_dropdown_window, True)
 
         self._draw_filter_label(offset_rect(LEVERAGE_LABEL_RECT, offset_y), "레버리지", scale, pad_x, pad_y)
@@ -1083,47 +1140,13 @@ class TradePage(tk.Frame):
         )
 
     def _draw_strategy_guides_panel(self, scale: float, pad_x: float, pad_y: float) -> None:
-        x1, y1, x2, y2 = self._scale_rect(TABLE_RECT, scale, pad_x, pad_y)
-        panel = self._panel_image("table", int(x2 - x1), int(y2 - y1), scale)
-        self.canvas.create_image(x1, y1, image=panel, anchor="nw", tags="ui")
-
-        height = y2 - y1
-
-        def ry(ratio: float) -> float:
-            return y1 + height * (ratio - TABLE_TITLE_TOP)
-
-        radius = max(6, int(PANEL_RADIUS * scale))
-        border = max(1, int(2 * scale))
-        title_top = ry(TABLE_TITLE_TOP)
-        title_bottom = ry(TABLE_TITLE_BOTTOM)
-
-        self.canvas.create_polygon(
-            _round_rect_points(x1, title_top, x2, title_bottom, radius),
-            fill=TABLE_TITLE_FILL,
-            outline=TABLE_TITLE_BORDER,
-            width=border,
-            smooth=True,
-            splinesteps=36,
-            tags="ui",
-        )
-        if title_bottom - title_top > radius:
-            self.canvas.create_rectangle(
-                x1,
-                title_top + radius,
-                x2,
-                title_bottom,
-                fill=TABLE_TITLE_FILL,
-                outline="",
-                tags="ui",
-            )
-        self.canvas.create_text(
-            (x1 + x2) / 2,
-            ry(TABLE_TITLE_TEXT_Y),
-            text=STRATEGY_GUIDE_TITLE,
-            font=self.fonts["table_title"],
-            fill="#000000",
-            anchor="center",
-            tags="ui",
+        self._draw_titled_panel(
+            panel_key="table",
+            rect=TABLE_RECT,
+            title=STRATEGY_GUIDE_TITLE,
+            scale=scale,
+            pad_x=pad_x,
+            pad_y=pad_y,
         )
         for tag, label in STRATEGY_GUIDE_ITEMS:
             rect = STRATEGY_GUIDE_BUTTON_RECTS[tag]
@@ -1150,6 +1173,126 @@ class TradePage(tk.Frame):
                 pad_y=pad_y,
                 font_name="table_header",
             )
+
+    def _draw_manager_connection_panel(self, scale: float, pad_x: float, pad_y: float) -> None:
+        self._draw_titled_panel(
+            panel_key="manager_connection",
+            rect=MANAGER_CONNECTION_RECT,
+            title=MANAGER_CONNECTION_TITLE,
+            scale=scale,
+            pad_x=pad_x,
+            pad_y=pad_y,
+        )
+        self._draw_link_button_items(
+            MANAGER_CONNECTION_ITEMS,
+            MANAGER_CONNECTION_BUTTON_RECTS,
+            scale,
+            pad_x,
+            pad_y,
+        )
+
+    def _draw_channel_info_panel(self, scale: float, pad_x: float, pad_y: float) -> None:
+        self._draw_titled_panel(
+            panel_key="channel_info",
+            rect=CHANNEL_INFO_RECT,
+            title=CHANNEL_INFO_TITLE,
+            title_height=CHANNEL_INFO_TITLE_HEIGHT,
+            scale=scale,
+            pad_x=pad_x,
+            pad_y=pad_y,
+        )
+        self._draw_link_button_items(
+            CHANNEL_INFO_ITEMS,
+            CHANNEL_INFO_BUTTON_RECTS,
+            scale,
+            pad_x,
+            pad_y,
+        )
+
+    def _draw_link_button_items(
+        self,
+        items,
+        button_rects: Dict[str, Tuple[int, int, int, int]],
+        scale: float,
+        pad_x: float,
+        pad_y: float,
+    ) -> None:
+        for tag, label, _option, _url in items:
+            rect = button_rects[tag]
+            bx1, by1, bx2, _ = self._scale_rect(rect, scale, pad_x, pad_y)
+            self.canvas.create_text(
+                (bx1 + bx2) / 2,
+                by1 - (16 * scale),
+                text=label,
+                font=self.fonts["table_header"],
+                fill=UI_TEXT_COLOR,
+                anchor="center",
+                tags="ui",
+            )
+            self._draw_rounded_button(
+                rect,
+                label,
+                "#000000",
+                tag,
+                active=False,
+                hover=self._button_hover.get(tag, False),
+                lift=self._button_lift.get(tag, 0.0),
+                scale=scale,
+                pad_x=pad_x,
+                pad_y=pad_y,
+                font_name="table_header",
+            )
+
+    def _draw_titled_panel(
+        self,
+        *,
+        panel_key: str,
+        rect: Tuple[int, int, int, int],
+        title: str,
+        title_height: Optional[float] = None,
+        scale: float,
+        pad_x: float,
+        pad_y: float,
+    ) -> Tuple[float, float, float, float]:
+        x1, y1, x2, y2 = self._scale_rect(rect, scale, pad_x, pad_y)
+        panel = self._panel_image(panel_key, int(x2 - x1), int(y2 - y1), scale)
+        self.canvas.create_image(x1, y1, image=panel, anchor="nw", tags="ui")
+
+        radius = max(6, int(PANEL_RADIUS * scale))
+        border = max(1, int(2 * scale))
+        title_top = y1
+        effective_title_height = SECTION_TITLE_HEIGHT if title_height is None else title_height
+        title_bottom = min(y2, y1 + effective_title_height * scale)
+
+        self.canvas.create_polygon(
+            _round_rect_points(x1, title_top, x2, title_bottom, radius),
+            fill=TABLE_TITLE_FILL,
+            outline=TABLE_TITLE_BORDER,
+            width=border,
+            smooth=True,
+            splinesteps=36,
+            tags="ui",
+        )
+        if title_bottom - title_top > radius:
+            self.canvas.create_rectangle(
+                x1,
+                title_top + radius,
+                x2,
+                title_bottom,
+                fill=TABLE_TITLE_FILL,
+                outline="",
+                tags="ui",
+            )
+        self.canvas.create_text(
+            (x1 + x2) / 2,
+            (title_top + title_bottom) / 2,
+            text=title,
+            font=self.fonts["table_title"],
+            fill="#000000",
+            anchor="center",
+            tags="ui",
+        )
+        return x1, y1, x2, y2
 
     def _draw_wallet(self, scale: float, pad_x: float, pad_y: float) -> None:
         x1, y1, x2, y2 = self._scale_rect(WALLET_RECT, scale, pad_x, pad_y)
@@ -1319,9 +1462,32 @@ class TradePage(tk.Frame):
         self._open_strategy_guide_pdf(option="short_strategy_guide", filename="short.pdf")
 
     def _handle_dca_strategy_guide(self, _event=None) -> None:
-        _log_trade("Strategy guide button clicked: option=dca_strategy_guide_placeholder")
-        self._show_info_message("준비 중", "DCA 전략지표 가이드문서는 준비 중입니다.")
-        _log_trade("Strategy guide placeholder shown: option=dca_strategy_guide_placeholder")
+        self._open_strategy_guide_pdf(option="dca_strategy_guide", filename="dca.pdf")
+
+    def _handle_manager_connection_link(self, *, option: str, url: str) -> None:
+        self._open_external_link(
+            log_prefix="Manager connection",
+            option=option,
+            url=url,
+            error_prefix="관리자 링크를 열 수 없습니다",
+        )
+
+    def _handle_channel_info_link(self, *, option: str, url: str) -> None:
+        self._open_external_link(
+            log_prefix="Channel info",
+            option=option,
+            url=url,
+            error_prefix="채널 링크를 열 수 없습니다",
+        )
+
+    def _open_external_link(self, *, log_prefix: str, option: str, url: str, error_prefix: str) -> None:
+        _log_trade(f"{log_prefix} button clicked: option={option} url={url}")
+        try:
+            self._open_url(url)
+            _log_trade(f"{log_prefix} url opened: option={option} url={url}")
+        except Exception as exc:
+            _log_trade(f"{log_prefix} url open failed: option={option} url={url} error={exc!r}")
+            messagebox.showerror("열기 실패", f"{error_prefix}:\n{exc}", parent=self)
 
     def _open_strategy_guide_pdf(self, *, option: str, filename: str) -> None:
         _log_trade(f"Strategy guide button clicked: option={option}")
@@ -1346,3 +1512,11 @@ class TradePage(tk.Frame):
             subprocess.Popen(["open", str(path)])
         else:
             subprocess.Popen(["xdg-open", str(path)])
+
+    @staticmethod
+    def _open_url(url: str) -> None:
+        if sys.platform.startswith("win"):
+            os.startfile(url)  # type: ignore[attr-defined]
+            return
+        if not webbrowser.open_new_tab(url):
+            raise RuntimeError("기본 브라우저를 실행하지 못했습니다.")

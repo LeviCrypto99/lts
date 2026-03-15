@@ -12,7 +12,6 @@ class ExitManager:
         self.root = root
         self.app_name = app_name
         self._closed = False
-        self._position_checker = None
         self._tray: Optional[_TrayIcon] = None
         self._tray_queue: "queue.Queue[str]" = queue.Queue()
         self._tray_poll_job: Optional[str] = None
@@ -39,9 +38,6 @@ class ExitManager:
 
     def request_exit(self) -> None:
         self._call_ui_deferred(self._handle_exit_request)
-
-    def set_position_checker(self, checker) -> None:
-        self._position_checker = checker
 
     def _handle_exit_request(self) -> None:
         if self._closed:

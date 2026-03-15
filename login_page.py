@@ -1282,7 +1282,7 @@ class ProductGuidebookWindow(tk.Toplevel):
         self._create_guide_slot(2, "🐳고래지표 설명 가이드북", self._open_indicator_guide)
         self._create_guide_slot(3, "📈롱포지션 전략 가이드북", self._open_long_strategy_guide)
         self._create_guide_slot(4, "📉숏포지션 전략 가이드북", self._open_short_strategy_guide)
-        self._create_guide_slot(5, "🔄DCA 전략지표 가이드문서", self._open_dca_strategy_guide_placeholder)
+        self._create_guide_slot(5, "🔄DCA 전략지표 가이드문서", self._open_dca_strategy_guide)
 
         _log_login(
             "product_guidebook_window_layout: "
@@ -1347,10 +1347,8 @@ class ProductGuidebookWindow(tk.Toplevel):
     def _open_short_strategy_guide(self) -> None:
         self._open_guide_pdf(option="short_strategy_guide", filename="short.pdf")
 
-    def _open_dca_strategy_guide_placeholder(self) -> None:
-        _log_login("product_guidebook_option_clicked: option=dca_strategy_guide_placeholder")
-        messagebox.showinfo("준비 중", "DCA 전략지표 가이드문서는 준비 중입니다.", parent=self)
-        _log_login("product_guidebook_placeholder_shown: option=dca_strategy_guide_placeholder")
+    def _open_dca_strategy_guide(self) -> None:
+        self._open_guide_pdf(option="dca_strategy_guide", filename="dca.pdf")
 
     def _open_guide_pdf(self, option: str, filename: str) -> None:
         _log_login(f"product_guidebook_option_clicked: option={option}")
@@ -1399,10 +1397,6 @@ class LoginPage(tk.Frame):
         self._exit_icon_original = self._load_exit_icon()
         self._exit_icon_photo: Optional[ImageTk.PhotoImage] = None
         self._last_exit_icon_size: Optional[int] = None
-
-        exit_manager = getattr(self.root, "_exit_manager", None)
-        if exit_manager is not None:
-            exit_manager.set_position_checker(None)
 
         self._base_fonts = {
             "title": (16, "bold"),

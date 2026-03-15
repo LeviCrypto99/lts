@@ -38,11 +38,8 @@ SIGNAL_RELAY_POLL_LIMIT = 100
 POLL_INTERVAL_SEC = 1.0
 BALANCE_REFRESH_INTERVAL_SEC = 15.0
 SNAPSHOT_REFRESH_INTERVAL_SEC = 5.0
-PENDING_ENTRY_MONITOR_INTERVAL_SEC = 10.0
-ENTRY_SUBMIT_GUARD_SEC = 3.0
 SIGNED_QUERY_RATE_LIMIT_BACKOFF_SEC = 15.0
 SIGNED_QUERY_RATE_LIMIT_BACKOFF_LOG_THROTTLE_SEC = 10.0
-ENTRY_MODE_STOP_AFTER_SUBMIT = False
 
 FUTURES_ORDER_PATH = "/fapi/v1/order"
 FUTURES_OPEN_ORDERS_PATH = "/fapi/v1/openOrders"
@@ -553,13 +550,11 @@ class EntryRelayBot:
         secret_key: str,
         leverage_getter: Callable[[], object],
         snapshot_callback: Optional[Callable[[AccountSnapshot], None]] = None,
-        auto_stop_callback: Optional[Callable[[str], None]] = None,
     ) -> None:
         self._api_key = str(api_key or "").strip()
         self._secret_key = str(secret_key or "").strip()
         self._leverage_getter = leverage_getter
         self._snapshot_callback = snapshot_callback
-        self._auto_stop_callback = auto_stop_callback
 
         self._state_lock = threading.Lock()
         self._server_time_lock = threading.Lock()
@@ -602,10 +597,7 @@ class EntryRelayBot:
         self._exchange_info_cache_at = 0.0
         self._last_balance_refresh_at = 0.0
         self._last_snapshot_refresh_at = 0.0
-        self._last_pending_entry_monitor_at = 0.0
         self._snapshot = AccountSnapshot()
-        self._awaiting_entry_fill = False
-        self._entry_submit_guard_until = 0.0
         self._signed_query_backoff_until = 0.0
         self._signed_query_backoff_last_log_at = 0.0
 
@@ -628,9 +620,6 @@ class EntryRelayBot:
                 open_orders=[dict(item) for item in self._snapshot.open_orders],
             )
 
-    def refresh_snapshot_once(self) -> AccountSnapshot:
-        return self._refresh_account_snapshot(force_balance=True, force_orders=True)
-
     def refresh_wallet_balance_once(self) -> AccountSnapshot:
         _log_entry("Wallet balance refresh requested: reason=trade_page_initial_load")
         return self._refresh_account_snapshot(force_balance=True, force_orders=False)
@@ -648,17 +637,13 @@ class EntryRelayBot:
 
         self._signal_offset = self._sync_signal_relay_offset_for_fresh_start()
         snapshot = self.latest_snapshot()
-        with self._state_lock:
-            self._awaiting_entry_fill = False
-            self._entry_submit_guard_until = 0.0
-            self._last_pending_entry_monitor_at = 0.0
 
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._run_loop, name="EntryRelayBot", daemon=True)
         self._thread.start()
         _log_entry(
             "Entry relay bot started: "
-            f"signal_offset={self._signal_offset} entry_mode_stop_after_submit={ENTRY_MODE_STOP_AFTER_SUBMIT} "
+            f"signal_offset={self._signal_offset} "
             f"cached_wallet_balance={snapshot.wallet_balance if snapshot.wallet_balance is not None else '-'}"
         )
         return True, "-"
@@ -683,57 +668,6 @@ class EntryRelayBot:
             _log_entry(f"Entry relay loop crashed: error={exc!r}")
         finally:
             _log_entry("Entry relay loop exited.")
-
-    def _should_auto_stop_after_fill(self, snapshot: AccountSnapshot) -> bool:
-        with self._state_lock:
-            awaiting_entry_fill = bool(self._awaiting_entry_fill)
-            guard_until = float(self._entry_submit_guard_until)
-        if awaiting_entry_fill and snapshot.positions:
-            _log_entry(
-                "Entry relay auto-stop triggered: "
-                f"reason=entry_fill_detected position_count={len(snapshot.positions)}"
-            )
-            self._stop_event.set()
-            if callable(self._auto_stop_callback):
-                try:
-                    self._auto_stop_callback("entry_filled")
-                except Exception as exc:
-                    _log_entry(f"Entry relay auto-stop callback failed: error={exc!r}")
-            return True
-
-        pending_symbols = self._entry_order_symbols(snapshot.open_orders)
-        if not pending_symbols and not snapshot.positions:
-            if awaiting_entry_fill and time.time() < guard_until:
-                return False
-            with self._state_lock:
-                if self._awaiting_entry_fill:
-                    self._awaiting_entry_fill = False
-                    self._entry_submit_guard_until = 0.0
-                    self._last_pending_entry_monitor_at = 0.0
-                    _log_entry("Entry relay pending-entry latch cleared: reason=no_open_entry_orders_and_no_position")
-        return False
-
-    def _should_refresh_pending_entry_snapshot(self) -> bool:
-        with self._state_lock:
-            awaiting_entry_fill = bool(self._awaiting_entry_fill)
-            last_refresh_at = float(self._last_pending_entry_monitor_at)
-        if not awaiting_entry_fill:
-            return False
-        now = time.time()
-        if last_refresh_at <= 0:
-            with self._state_lock:
-                self._last_pending_entry_monitor_at = now
-            _log_entry(
-                "Pending entry monitor armed: "
-                f"interval_sec={PENDING_ENTRY_MONITOR_INTERVAL_SEC:.1f}"
-            )
-            return False
-        if now - last_refresh_at < PENDING_ENTRY_MONITOR_INTERVAL_SEC:
-            return False
-        with self._state_lock:
-            self._last_pending_entry_monitor_at = now
-        _log_entry("Pending entry monitor refresh triggered.")
-        return True
 
     def _process_relay_events(self, snapshot: AccountSnapshot) -> None:
         events = self._poll_signal_relay_updates()
@@ -904,32 +838,15 @@ class EntryRelayBot:
         if not success:
             return snapshot
 
-        with self._state_lock:
-            self._awaiting_entry_fill = True
-            self._entry_submit_guard_until = time.time() + ENTRY_SUBMIT_GUARD_SEC
-            self._last_pending_entry_monitor_at = time.time()
         _log_entry(
             "Entry order submitted: "
             f"symbol={symbol} message_id={message_id} target_price={target_price} "
-            f"budget_usdt={budget_usdt:.4f} leverage={target_leverage} "
-            f"entry_mode_stop_after_submit={ENTRY_MODE_STOP_AFTER_SUBMIT}"
+            f"budget_usdt={budget_usdt:.4f} leverage={target_leverage}"
         )
-        if ENTRY_MODE_STOP_AFTER_SUBMIT:
-            with self._state_lock:
-                self._awaiting_entry_fill = False
-                self._entry_submit_guard_until = 0.0
-                self._last_pending_entry_monitor_at = 0.0
-            self._stop_event.set()
-            if callable(self._auto_stop_callback):
-                try:
-                    self._auto_stop_callback("entry_order_submitted")
-                except Exception as exc:
-                    _log_entry(f"Entry relay auto-stop callback failed: error={exc!r}")
-        else:
-            _log_entry(
-                "Entry relay kept running after submit: "
-                "reason=risk_signal_cancel_support"
-            )
+        _log_entry(
+            "Entry relay kept running after submit: "
+            "reason=entry_filtering_and_risk_cancel_support"
+        )
         return self.latest_snapshot()
 
     def _handle_risk_signal(
@@ -988,12 +905,7 @@ class EntryRelayBot:
             "Risk signal cancel summary: "
             f"symbol={symbol} message_id={message_id} attempted={cancel_attempts} success={cancel_success}"
         )
-        refreshed = self._refresh_account_snapshot(force_balance=False, force_orders=True)
-        if not self._entry_order_symbols(refreshed.open_orders):
-            with self._state_lock:
-                self._awaiting_entry_fill = False
-                self._last_pending_entry_monitor_at = 0.0
-        return refreshed
+        return self._refresh_account_snapshot(force_balance=False, force_orders=True)
 
     def _selected_leverage_value(self) -> int:
         raw = self._leverage_getter()
