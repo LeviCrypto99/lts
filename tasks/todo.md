@@ -1,3 +1,37 @@
+## Task - ExitManager Stale Caller Fix
+- [x] `set_position_checker` 삭제 이후 남아 있던 호출 위치 확인
+- [x] 로그인 페이지의 stale caller 제거로 런타임 예외 복구
+- [x] 구문 검증과 Review 기록
+
+## Review - ExitManager Stale Caller Fix
+- `ExitManager.set_position_checker()`는 삭제됐는데 `login_page.py` 초기화 코드에 `exit_manager.set_position_checker(None)` 호출이 남아 있어서, 로그인 페이지 진입 시 `AttributeError`가 발생했음.
+- 호출 위치는 `login_page.py` 한 곳뿐이었고, 실제 기능적으로도 더 이상 필요한 초기화가 아니므로 `ExitManager`에 no-op API를 되살리는 대신 stale caller 자체를 제거함.
+- 검증: `python3 -m py_compile main.py login_page.py trade_page.py exit.py entry_bot.py` 통과. 이름 검색 기준으로 `set_position_checker` 참조는 더 이상 남아 있지 않음.
+
+## Task - Dead Trading Residue Cleanup
+- [x] 자동 STOP/체결감시 잔재와 MDD/TP UI 잔재 범위를 확정
+- [x] 엔트리 1회, 미체결 리관 취소, 포지션/미체결 주문 존재 시 신규 진입 무시 경로를 유지한 채 잔재 제거
+- [x] 삭제 후 핵심 경로 재검토와 구문 검증, Review 기록
+
+## Review - Dead Trading Residue Cleanup
+- `entry_bot.py`에서 죽은 체결감시/자동 STOP 잔재를 제거함. 구체적으로 `ENTRY_MODE_STOP_AFTER_SUBMIT`, `auto_stop_callback`, `refresh_snapshot_once()`, `_should_auto_stop_after_fill()`, `_should_refresh_pending_entry_snapshot()`, 그리고 이 함수들만 위해 남아 있던 대기 상태값들을 삭제함.
+- `trade_page.py`에서는 더 이상 쓰이지 않던 MDD/TP 드롭다운과 관련 상수, reset 버튼 잔재, backend auto-stop 콜백 연결을 제거하고 레버리지 단일 설정 UI만 남김.
+- `exit.py`에서는 실제 연결이 없던 `set_position_checker()`와 관련 상태를 제거함.
+- 삭제 후에도 핵심 진입 차단 경로는 그대로 유지됨. `entry_bot.py`의 엔트리 경로는 여전히 `snapshot.positions`가 있으면 `reason=position_exists`, `snapshot.open_orders`에 엔트리 주문이 있으면 `reason=open_entry_order_exists`로 신규 진입을 무시함. 리관 경로도 여전히 `reason=no_open_entry_orders`, `reason=position_exists`, `Risk signal cancel summary` 흐름으로 미체결 주문만 취소함.
+- 검증: `python3 -m py_compile entry_bot.py trade_page.py exit.py` 통과. 이름 검색 기준으로 `mdd_dropdown`, `tp_ratio_dropdown`, `ENTRY_MODE_STOP_AFTER_SUBMIT`, `refresh_snapshot_once`, `set_position_checker` 등 삭제 대상 참조는 모두 제거된 것을 확인함.
+
+## Task - Entry-Only Flow Audit
+- [x] 엔트리 주문 후 체결 감시/다음 페이즈/자동 종료 경로가 실제 루프에서 실행되는지 확인
+- [x] 트레이드 페이지와 종료 매니저에서 포지션 기반 후속 거래 연결이 남아 있는지 확인
+- [x] 남아 있는 죽은 코드와 실제 활성 경로를 Review에 정리
+
+## Review - Entry-Only Flow Audit
+- 현재 활성 실행 경로 기준으로는 `EntryRelayBot._run_loop()`가 신호 relay poll 후 `_handle_entry_signal()`과 `_handle_risk_signal()`만 호출하고 있으며, 주문 체결 후 다음 단계로 넘어가는 호출은 없음.
+- 엔트리 주문 성공 후에는 숏 진입 주문 1회 제출만 수행하고, 이후 봇은 리스크 관리 신호 취소 지원을 위해 계속 살아 있지만 체결 감시용 `_should_auto_stop_after_fill()`와 `_should_refresh_pending_entry_snapshot()`는 현재 루프 어디에서도 호출되지 않아 죽은 코드 상태임.
+- 리스크 관리 신호 경로는 `_handle_risk_signal()`에서 미체결 엔트리 주문만 조회해 취소하며, 이미 포지션이 생긴 경우에는 `reason=position_exists`로 무시하므로 체결 이후 추가 주문/청산/다음 페이즈 로직으로 이어지지 않음.
+- `trade_page.py`에서는 `auto_stop_callback` 연결과 `_schedule_entry_auto_stop()` 함수는 남아 있지만, 현재 설정(`ENTRY_MODE_STOP_AFTER_SUBMIT = False`)과 비호출 상태인 체결 감시 헬퍼 때문에 실질적으로 작동하지 않음. `exit.py`도 거래 종료 로직이 아니라 트레이 아이콘/앱 종료 관리자임.
+- 남은 흔적은 거래 버그라기보다 정리되지 않은 죽은 코드에 가까움. 실제 실동작상 중요한 경로는 `엔트리 신호 -> 주문 1회 제출`, `리관 신호 -> 미체결 주문 취소`, `수동 STOP -> 봇 중지` 정도로 좁혀져 있음.
+
 ## Task - Version 4.0.0 Update Build
 - [x] 최신 커밋 기준으로 자동업데이트 관련 로직 파일 변경 여부 확인
 - [x] 버전을 4.0.0으로 올리고 업데이트 메타데이터 경로를 새 런처 파일명 기준으로 조정
@@ -150,6 +184,38 @@
 - `LoginPage`에서 새 창 인스턴스를 재사용하도록 참조와 닫기 처리, 배경 토글 연동을 추가함.
 - 검증: `python3 -m py_compile login_page.py` 통과. 실제 Tkinter 수동 클릭 확인은 이번 턴에서 실행하지 않음.
 
+## Task - DCA Guide PDF Link
+- [x] 로그인 페이지와 메인 페이지의 DCA 버튼 연결 지점 확인
+- [x] 두 화면의 DCA 버튼이 `image/login_page/dca.pdf`를 열도록 수정하고 로그 반영
+- [x] 구문 검증 후 Review 기록
+
+## Review - DCA Guide PDF Link
+- `login_page.py`의 상품구성 및 가이드북 창에서 `🔄DCA 전략지표 가이드문서` 슬롯이 더 이상 placeholder 안내창을 띄우지 않고, 공통 `_open_guide_pdf()` 경로를 통해 `image/login_page/dca.pdf`를 열도록 연결함.
+- `trade_page.py`의 메인 화면 DCA 버튼도 기존 롱/숏 버튼과 같은 `_open_strategy_guide_pdf()` 경로를 사용해 `dca.pdf`를 열도록 맞췄고, 클릭/파일 없음/열기 성공/실패 로그 형식도 동일하게 유지함.
+- 검증: `python3 -m py_compile login_page.py trade_page.py` 통과. 실제 GUI 클릭 확인은 이번 턴에서 실행하지 않음.
+
+## Task - Wallet Container Vertical Raise
+- [x] 지갑잔고 컨테이너와 내부 요소의 현재 세로 배치 좌표 확인
+- [x] 컨테이너와 내부 요소를 현재 기준 약 30% 위로 올리도록 공통 오프셋 적용 및 로그 반영
+- [x] 구문 검증 후 Review 기록
+
+## Review - Wallet Container Vertical Raise
+- `trade_page.py`에서 기존 지갑 컨테이너와 `START`/`STOP` 버튼의 원본 좌표를 `*_BASE_RECT` 상수로 분리한 뒤, 지갑 컨테이너 시작 높이(`263`)의 약 30%인 `78px`를 공통 `WALLET_VERTICAL_SHIFT`로 계산해 전체 지갑 블록을 위로 이동시킴.
+- 내부 텍스트 배치는 기존처럼 컨테이너 상단과 버튼 상단 사이를 기준으로 계산되므로, 컨테이너와 버튼을 같이 올린 것만으로 지갑잔고/레버리지/현재 구동상태 텍스트도 함께 위로 이동함.
+- 초기화 로그에 `wallet_vertical_shift`와 `wallet_vertical_shift_ratio`를 추가해 현재 배치 오프셋이 로그로 남도록 조정함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 GUI 수동 확인은 이번 턴에서 실행하지 않음.
+
+## Task - Channel Info Container
+- [x] 지갑잔고 아래 새 컨테이너 위치와 제목 바 스타일 확인
+- [x] 지갑잔고 아래에 `채널정보` 제목의 새 컨테이너 추가 및 로그 반영
+- [x] 구문 검증 후 Review 기록
+
+## Review - Channel Info Container
+- `trade_page.py`에 `CHANNEL_INFO_TOP_GAP = 24`를 두고, 지갑잔고 컨테이너 하단에서 24px 아래부터 시작해 좌우 폭은 지갑잔고와 맞추고 하단은 기존 좌측 패널 하단선(`TABLE_RECT[3]`)에 맞춘 `채널정보` 패널을 추가함.
+- 제목 바는 기존 `전략 가이드북` 패널과 같은 색상/테두리/폰트를 쓰도록 `_draw_titled_panel()` 공통 헬퍼로 묶었고, 이 헬퍼를 `전략 가이드북`과 새 `채널정보` 컨테이너에 같이 적용함.
+- 초기화 로그에 `channel_info_panel=title_only`와 `channel_info_top_gap=24`를 추가해 새 컨테이너 배치 상태가 로그로 남도록 조정함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 GUI 수동 확인은 이번 턴에서 실행하지 않음.
+
 # todo
 
 ## Task
@@ -192,3 +258,105 @@
 - `plotshape()` 텍스트는 입력값 기반 동적 문자열을 받을 수 없어, 차트 표시는 `label.new()` 기반 이모티콘 출력으로 변경하고 `max_labels_count=500`을 명시함.
 - 로그 코드는 유지하되 `ENABLE_LOGS = false` 상수로 숨겼고, 디버그용 `plot()`은 `editable=false`로 조정해 추가 설정 노출을 줄임.
 - 검증: `rg -n "input\\.|input\\(" /mnt/c/Users/dudfh/Downloads/swing_pine.txt` 결과 입력 정의가 `표시 이모티콘` 1개만 남은 것을 확인함. Pine 컴파일러는 현재 환경에 없어 TradingView 편집기에서의 최종 로드는 이번 턴에서 직접 실행하지 못함.
+
+## Task - Channel Info Items
+- [x] `trade_page.py`의 `채널정보` 패널 내부 배치와 기존 `전략 가이드북` 버튼 구조 확인
+- [x] `채널정보` 패널에 요청한 3개 채널 라벨/버튼과 URL 연결, 관련 로그 추가
+- [x] 변경 사항 검토 및 검증 결과 기록
+
+## Review - Channel Info Items
+- `trade_page.py`의 `채널정보` 패널에 세로 3단 구조의 채널 항목을 추가했고, 각 항목은 제목 텍스트와 동일 문구의 버튼으로 구성함. 항목은 `📈롱포지션 알림채널`, `📉숏포지션 알림채널`, `💥숏포지션 리스크관리 채널` 순서로 배치함.
+- 각 버튼은 전달받은 텔레그램 URL로 연결되도록 공통 `_handle_channel_info_link()`와 `_open_url()` 경로를 추가했고, 클릭/오픈 성공/오픈 실패 로그가 모두 남도록 조정함.
+- 초기화 로그도 `channel_info_panel=telegram_channels`와 `channel_info_item_count=3`으로 갱신해 현재 패널 상태가 로그에 기록되도록 맞춤.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 GUI 클릭 동작은 이번 턴에서 직접 실행하지 않음.
+
+## Task - Channel Info Layout Correction
+- [x] `채널정보` 항목을 가로 기준으로 재배치할 수 있는 좌표 구조 재조정
+- [x] 세 번째 리스크관리 채널 URL을 새 주소로 교체하고 로그 메타데이터 반영
+- [x] 구문 검증 후 Review 기록
+
+## Review - Channel Info Layout Correction
+- `trade_page.py`의 `채널정보` 버튼 좌표를 세로 3단에서 가로 기준 배치로 조정했고, 패널 폭에 맞춰 상단 2개(`📈롱포지션 알림채널`, `📉숏포지션 알림채널`)와 하단 중앙 1개(`💥숏포지션 리스크관리 채널`) 구조로 재배치함.
+- 채널 라벨과 버튼 글꼴은 `table_header` 기준으로 맞춰 좁은 폭에서도 문구가 더 안정적으로 들어가게 조정했고, 초기화 로그에 `channel_info_layout=top2_bottom1`를 추가해 현재 레이아웃 구성이 기록되도록 함.
+- 세 번째 `💥숏포지션 리스크관리 채널` 링크는 `https://t.me/+GZhGHaQBVmhkMmRl`로 교체함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 GUI 클릭/배치 확인은 이번 턴에서 직접 실행하지 않음.
+
+## Task - Channel Info Official Notice Button
+- [x] 하단 행 기준으로 리스크관리 채널 위치를 왼쪽으로 보정하고 새 공지채널 슬롯 확보
+- [x] `🔈LEVIA 공식 공지채널` 버튼과 링크 추가, 로그 메타데이터 갱신
+- [x] 구문 검증 후 Review 기록
+
+## Review - Channel Info Official Notice Button
+- `trade_page.py`의 `채널정보` 영역을 2열 2행 기준으로 재정렬했고, 하단 행에서 `💥숏포지션 리스크관리 채널`을 좌측 슬롯으로 이동시킨 뒤 우측 슬롯에 `🔈LEVIA 공식 공지채널`을 추가함.
+- 새 공지채널은 기존 채널 버튼들과 동일한 공통 데이터 구조(`CHANNEL_INFO_ITEMS`)와 클릭 핸들러를 사용해 `https://t.me/+7q67SFWYCTU1MzJl`로 연결되도록 구성함.
+- 초기화 로그는 `channel_info_item_count=4`, `channel_info_layout=2x2` 기준으로 남도록 갱신함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 GUI 클릭/배치 확인은 이번 턴에서 직접 실행하지 않음.
+
+## Task - Manager Connection Panel
+- [x] 지갑잔고 컨테이너와 내부 요소를 위로 재배치하고 우측 패널 세로 스택 좌표 재구성
+- [x] `관리자 연결` 컨테이너와 `관리자 연락처 A/B` 버튼, 링크, 로그 추가
+- [x] `채널정보` 컨테이너 위치/버튼 좌표를 새 구조에 맞게 조정하고 구문 검증 후 Review 기록
+
+## Review - Manager Connection Panel
+- `trade_page.py`에서 지갑잔고 블록의 세로 이동 비율을 `0.47`로 높여 컨테이너와 내부 텍스트, `START`/`STOP` 버튼이 모두 함께 위로 이동하도록 조정함.
+- 우측 패널을 `지갑잔고 -> 관리자 연결 -> 채널정보` 3단 스택으로 재구성했고, `관리자 연결` 패널은 지갑잔고 바로 아래에 별도 제목 바와 함께 추가함.
+- `관리자 연결` 패널에는 `관리자 연락처 A`, `관리자 연락처 B` 항목을 2열로 배치했고, 각 버튼은 `https://t.me/crypto_LEVI9`, `https://t.me/LEVI_kimbob`로 연결되도록 공통 외부 링크 오픈 경로와 로그를 추가함.
+- 기존 `채널정보` 패널은 새 관리자 패널 아래로 내려가도록 시작 좌표와 버튼 좌표를 다시 맞췄고, 초기화 로그에 `manager_connection_panel=contacts`, `manager_connection_item_count=2`, `manager_connection_top_gap=14`, `manager_connection_height=96`를 추가함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 GUI 클릭/배치 확인은 이번 턴에서 직접 실행하지 않음.
+
+## Task - Wallet Manager Vertical Tuning
+- [x] 지갑잔고와 관리자 연결 패널을 추가 상향 이동하도록 좌표 미세 조정
+- [x] 관리자 연결 제목 바와 내부 요소가 겹치지 않도록 내부 여백/버튼 위치 보정
+- [x] 구문 검증 후 Review 기록
+
+## Review - Wallet Manager Vertical Tuning
+- `trade_page.py`에서 지갑잔고 블록의 세로 이동 비율을 `0.52`로 다시 올려 컨테이너, 내부 텍스트, `START`/`STOP` 버튼 전체가 이전보다 조금 더 위로 이동하도록 조정함.
+- `관리자 연결` 패널은 지갑잔고 바로 아래 간격을 `14`에서 `8`로 줄여 함께 더 위로 올렸고, 패널 높이는 `96`에서 `110`으로 늘려 내부 여백을 확보함.
+- `관리자 연락처 A/B` 버튼은 `y=548~580`으로 내려 배치해 제목 바(`관리자 연결`)와 라벨/버튼이 시각적으로 겹치지 않도록 보정함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 GUI 배치 확인은 이번 턴에서 직접 실행하지 않음.
+
+## Task - Manager Panel Inner Alignment Fix
+- [x] 관리자 연결 패널 내부 라벨/버튼이 컨테이너 하단 밖으로 벗어나는 좌표 문제 수정
+- [x] 제목 바와 겹치지 않으면서 패널 내부 상단 쪽으로 함께 올리도록 보정
+- [x] 구문 검증 후 Review 기록
+
+## Review - Manager Panel Inner Alignment Fix
+- `trade_page.py`의 `관리자 연락처 A/B` 버튼 좌표를 `y=548~580`에서 `y=526~558`로 올려 패널 하단 밖으로 튀어나오던 상태를 바로잡음.
+- 라벨은 기존 공통 오프셋(`button_y1 - 16`)을 그대로 쓰므로 버튼과 함께 같이 올라가며, 제목 바 아래 여백은 유지한 채 관리자 패널 내부 상단 쪽으로 정렬되도록 맞춤.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 GUI 배치 확인은 이번 턴에서 직접 실행하지 않음.
+
+## Task - Channel Info Title Offset Fix
+- [x] `채널정보` 제목 텍스트가 내부 라벨을 침범하지 않도록 전용 오프셋 구조 추가
+- [x] `채널정보` 제목만 소폭 위로 보정하고 초기화 로그 메타데이터 반영
+- [x] 구문 검증 후 Review 기록
+
+## Review - Channel Info Title Offset Fix
+- `trade_page.py`에 `CHANNEL_INFO_TITLE_OFFSET_Y = -4` 상수를 추가하고, 공통 `_draw_titled_panel()`이 패널별 `title_offset_y`를 받을 수 있게 확장함.
+- `채널정보` 패널만 해당 오프셋을 넘기도록 연결해 제목 텍스트를 소폭 위로 올렸고, 내부 라벨과의 시각적 간섭을 줄이도록 조정함.
+- 초기화 로그에 `channel_info_title_offset_y=-4`를 추가해 현재 제목 보정값이 함께 기록되도록 맞춤.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 GUI 배치 확인은 이번 턴에서 직접 실행하지 않음.
+
+## Task - Channel Info Title Bar Height Fix
+- [x] `채널정보` 패널은 제목 텍스트 이동 대신 제목 바 하단선을 올리는 방식으로 교정
+- [x] `채널정보` 전용 title height 적용 및 이전 text offset 제거
+- [x] 구문 검증 후 Review 기록
+
+## Review - Channel Info Title Bar Height Fix
+- `trade_page.py`에서 `채널정보` 패널 전용 `CHANNEL_INFO_TITLE_HEIGHT = 28` 상수를 추가해, 제목 바 하단선이 기존 공통 높이(`34`)보다 위로 올라가도록 조정함.
+- 이전에 넣었던 `CHANNEL_INFO_TITLE_OFFSET_Y` 방식은 제거했고, 공통 `_draw_titled_panel()`은 패널별 `title_height`만 받도록 정리해 `채널정보`에는 제목 바 높이 축소 방식만 적용되게 맞춤.
+- 초기화 로그도 `channel_info_title_height=28`로 갱신해 현재 보정값이 남도록 반영함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 GUI 배치 확인은 이번 턴에서 직접 실행하지 않음.
+
+## Task - Version 5.0.0 Update Build
+- [x] 자동업데이트 관련 버전/메타데이터 경로와 현재 워크트리 상태 확인
+- [x] 버전을 5.0.0으로 올리고 새 런처 파일명 기준으로 업데이트 메타데이터 조정
+- [x] Windows PyInstaller로 런처/업데이터 재빌드 후 루트 exe 반영
+- [x] 실제 exe SHA256을 `version.json`에 반영하고 메타데이터 검증 수행
+- [x] 검증 결과와 review를 문서에 기록
+
+## Review - Version 5.0.0 Update Build
+- 자동업데이트 로직 확인 결과, `main.py`는 `version.json`에서 `min_version`, `updater_url`, `updater_sha256`, `app_url`, `app_sha256`를 읽어 모두 검증한 뒤 업데이트를 진행하므로 이번 릴리스는 메타데이터와 루트 EXE 파일이 반드시 같이 맞아야 했음.
+- `config.py`의 `VERSION`을 `5.0.0`으로 올렸고, `version.json`의 `min_version`과 `app_url`을 `LTS V5.0.0.exe` 기준으로 변경한 뒤 실제 빌드 산출물 SHA256을 반영함.
+- Windows Python 3.10 + PyInstaller 6.17.0으로 `C:/Users/dudfh/AppData/Local/Programs/Python/Python310/python.exe build.py --target all`을 실행해 `dist/LTS V5.0.0.exe`, `dist/LTS-Updater.exe`를 생성했고, 이를 저장소 루트의 `LTS V5.0.0.exe`, `LTS-Updater.exe`로 반영함.
+- 최종 SHA256은 런처 `d1fd35ff944195960bc0008a6b9081021f95f626c296fd8ede91bc80f6cdb444`, 업데이터 `75e877019e40bdbc4d5e3c827c28f5b0d9d281877d958bc6077d80029ccffdf8`이며, `update_security.extract_sha256_from_metadata()`와 `verify_file_sha256()` 기준으로 `version.json` 메타데이터 해석 및 실제 파일 검증을 모두 통과함.
+- 검증: `python3 -m py_compile main.py updater.py build.py update_security.py config.py` 통과. `python3 -m unittest tests.test_update_security` 통과.
