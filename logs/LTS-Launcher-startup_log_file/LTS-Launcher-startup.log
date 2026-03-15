@@ -338,3 +338,27 @@
 [2026-03-15 15:49:53] Program icon applied from tray icon source: C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\logo2.png
 [2026-03-15 15:49:53] Update info: url=https://raw.githubusercontent.com/LeviCrypto99/lts/main/version.json local=4.0.0 required=4.0.0
 [2026-03-15 15:49:53] Preflight OK.
+[2026-03-15 19:26:21] Launcher main entry.
+[2026-03-15 19:26:21] Program icon applied from tray icon source: C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\logo2.png
+[2026-03-15 19:26:22] Update info: url=https://raw.githubusercontent.com/LeviCrypto99/lts/main/version.json local=5.0.0 required=5.0.0
+[2026-03-15 19:26:22] Preflight OK.
+[2026-03-15 19:36:26] Launcher main entry.
+[2026-03-15 19:36:26] Single-instance activation event ready.
+[2026-03-15 19:36:27] Program icon applied from tray icon source: C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\logo2.png
+[2026-03-15 19:36:27] Update info: url=https://raw.githubusercontent.com/LeviCrypto99/lts/main/version.json local=5.0.0 required=5.0.0
+[2026-03-15 19:36:27] Preflight OK.
+[2026-03-15 19:42:05] Launcher main entry.
+[2026-03-15 19:42:05] Existing launcher activation signal sent: success=True
+[2026-03-15 19:42:05] Detected existing launcher instance; restore_requested=True exit_new_launch=True
+[2026-03-15 19:42:05] Single-instance activation signal received; restoring window.
+[2026-03-15 19:43:08] Launcher main entry.
+[2026-03-15 19:43:08] Single-instance activation event ready.
+[2026-03-15 19:43:08] Program icon applied from tray icon source: C:\Users\dudfh\PycharmProjects\LeviaAutoTradeSystem\image\login_page\logo2.png
+[2026-03-15 19:43:09] Update info: url=https://raw.githubusercontent.com/LeviCrypto99/lts/main/version.json local=5.0.0 required=5.0.0
+[2026-03-15 19:43:09] Preflight OK.
+[2026-03-15 19:45:24] Single-instance activation signal received; restoring window.
+[2026-03-15 19:46:00] Launcher main entry.
+[2026-03-15 19:46:00] Single-instance activation event ready.
+[2026-03-15 19:46:01] Program icon applied from tray icon source: C:\Users\dudfh\AppData\Local\Temp\_MEI77642\image\login_page\logo2.png
+[2026-03-15 19:46:01] Update info: url=https://raw.githubusercontent.com/LeviCrypto99/lts/main/version.json local=5.0.0 required=5.0.0
+[2026-03-15 19:46:01] Preflight OK.
