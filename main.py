@@ -72,14 +72,19 @@ HOLD_AFTER_LOGO2_MS = 2000
 FPS = 60
 START_OFFSET = 60
 SINGLE_INSTANCE_MUTEX_NAME = "Local\\LeviaAutoTradeSystem_Launcher"
+SINGLE_INSTANCE_SHOW_EVENT_NAME = "Local\\LeviaAutoTradeSystem_Launcher_Show"
 LOG_PATH = get_log_path("LTS-Launcher-update.log")
 LOCAL_LOG_PATH = get_log_path("LTS-Launcher-startup.log")
 SINGLE_INSTANCE_LOCK_PATH = Path(tempfile.gettempdir()) / "LTS-Launcher.lock"
 UPDATER_DOWNLOAD_RETRY_COUNT = 3
 UPDATER_DOWNLOAD_RETRY_DELAY_SEC = 0.8
+_WAIT_OBJECT_0 = 0x00000000
+_WAIT_TIMEOUT = 0x00000102
+_EVENT_MODIFY_STATE = 0x0002
 
 _SINGLE_INSTANCE_HANDLE = None
 _SINGLE_INSTANCE_LOCKFILE = None
+_SINGLE_INSTANCE_SHOW_EVENT_HANDLE = None
 _TRUTHY_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
 
 
@@ -126,6 +131,66 @@ def _show_already_running_message() -> None:
         pass
 
 
+def _ensure_single_instance_show_event() -> bool:
+    global _SINGLE_INSTANCE_SHOW_EVENT_HANDLE
+    if sys.platform != "win32":
+        return False
+    if _SINGLE_INSTANCE_SHOW_EVENT_HANDLE:
+        return True
+    try:
+        kernel32 = ctypes.windll.kernel32
+        kernel32.CreateEventW.restype = ctypes.c_void_p
+        handle = kernel32.CreateEventW(None, False, False, SINGLE_INSTANCE_SHOW_EVENT_NAME)
+        if not handle:
+            _log_update("Single-instance activation event create failed.")
+            return False
+        _SINGLE_INSTANCE_SHOW_EVENT_HANDLE = handle
+        _log_update("Single-instance activation event ready.")
+        return True
+    except Exception as exc:
+        _log_update(f"Single-instance activation event setup failed: error={exc!r}")
+        return False
+
+
+def _signal_existing_instance_to_show() -> bool:
+    if sys.platform != "win32":
+        return False
+    try:
+        kernel32 = ctypes.windll.kernel32
+        kernel32.OpenEventW.restype = ctypes.c_void_p
+        kernel32.SetEvent.argtypes = [ctypes.c_void_p]
+        kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+        handle = kernel32.OpenEventW(_EVENT_MODIFY_STATE, False, SINGLE_INSTANCE_SHOW_EVENT_NAME)
+        if not handle:
+            _log_update("Existing launcher activation signal skipped: event_missing")
+            return False
+        signaled = bool(kernel32.SetEvent(handle))
+        kernel32.CloseHandle(handle)
+        _log_update(f"Existing launcher activation signal sent: success={signaled}")
+        return signaled
+    except Exception as exc:
+        _log_update(f"Existing launcher activation signal failed: error={exc!r}")
+        return False
+
+
+def _consume_single_instance_show_signal() -> bool:
+    if sys.platform != "win32" or not _SINGLE_INSTANCE_SHOW_EVENT_HANDLE:
+        return False
+    try:
+        kernel32 = ctypes.windll.kernel32
+        kernel32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        kernel32.WaitForSingleObject.restype = ctypes.c_uint32
+        result = kernel32.WaitForSingleObject(_SINGLE_INSTANCE_SHOW_EVENT_HANDLE, 0)
+        if result == _WAIT_OBJECT_0:
+            return True
+        if result not in (_WAIT_TIMEOUT,):
+            _log_update(f"Single-instance activation wait returned unexpected code: result={result}")
+        return False
+    except Exception as exc:
+        _log_update(f"Single-instance activation wait failed: error={exc!r}")
+        return False
+
+
 def _acquire_single_instance_lock() -> bool:
     global _SINGLE_INSTANCE_HANDLE, _SINGLE_INSTANCE_LOCKFILE
     if sys.platform == "win32":
@@ -156,9 +221,15 @@ def _acquire_single_instance_lock() -> bool:
 
 def _ensure_single_instance_or_exit() -> bool:
     if _acquire_single_instance_lock():
+        _ensure_single_instance_show_event()
         return True
-    _log_update("Detected existing launcher instance; exit new launch.")
-    _show_already_running_message()
+    restore_requested = _signal_existing_instance_to_show()
+    _log_update(
+        "Detected existing launcher instance; "
+        f"restore_requested={restore_requested} exit_new_launch=True"
+    )
+    if not restore_requested:
+        _show_already_running_message()
     return False
 
 
@@ -358,7 +429,9 @@ class SplashApp:
         self._latest_version = ""
         self._exit_manager: Optional[ExitManager] = None
         self._window_icon_photo: Optional[tk.PhotoImage] = None
+        self._instance_restore_poll_job: Optional[str] = None
         self.root = tk.Tk()
+        self.root.report_callback_exception = self._report_callback_exception
         self.root.title("LeviaAutoTradeSystem")
         self.root.configure(bg="white")
         self._apply_program_icon()
@@ -373,8 +446,46 @@ class SplashApp:
         self._exit_manager = ExitManager(self.root, app_name="LTS Launcher")
         self.root._exit_manager = self._exit_manager
         self.root.deiconify()
+        self._start_existing_instance_restore_poll()
 
         self._setup_ui()
+
+    def _report_callback_exception(self, exc_type, exc_value, exc_traceback) -> None:
+        details = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+        _log_update("Tk callback error:\n" + details)
+        try:
+            messagebox.showerror(
+                "실행 오류",
+                f"실행 중 오류가 발생했습니다.\n로그: {LOCAL_LOG_PATH}",
+                parent=self.root,
+            )
+        except Exception:
+            pass
+
+    def _start_existing_instance_restore_poll(self) -> None:
+        if not _ensure_single_instance_show_event():
+            return
+
+        def poll() -> None:
+            if not self._should_run:
+                return
+            if _consume_single_instance_show_signal():
+                _log_update("Single-instance activation signal received; restoring window.")
+                self._restore_window_from_activation_signal()
+            self._instance_restore_poll_job = self.root.after(200, poll)
+
+        self._instance_restore_poll_job = self.root.after(200, poll)
+
+    def _restore_window_from_activation_signal(self) -> None:
+        if self._exit_manager is not None:
+            self._exit_manager.show_window()
+            return
+        try:
+            self.root.deiconify()
+            self.root.lift()
+            self.root.focus_force()
+        except tk.TclError:
+            pass
 
     def _apply_program_icon(self) -> None:
         icon_path = Path(__file__).resolve().parent / "image" / "login_page" / "logo2.png"

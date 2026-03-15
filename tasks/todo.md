@@ -360,3 +360,16 @@
 - Windows Python 3.10 + PyInstaller 6.17.0으로 `C:/Users/dudfh/AppData/Local/Programs/Python/Python310/python.exe build.py --target all`을 실행해 `dist/LTS V5.0.0.exe`, `dist/LTS-Updater.exe`를 생성했고, 이를 저장소 루트의 `LTS V5.0.0.exe`, `LTS-Updater.exe`로 반영함.
 - 최종 SHA256은 런처 `d1fd35ff944195960bc0008a6b9081021f95f626c296fd8ede91bc80f6cdb444`, 업데이터 `75e877019e40bdbc4d5e3c827c28f5b0d9d281877d958bc6077d80029ccffdf8`이며, `update_security.extract_sha256_from_metadata()`와 `verify_file_sha256()` 기준으로 `version.json` 메타데이터 해석 및 실제 파일 검증을 모두 통과함.
 - 검증: `python3 -m py_compile main.py updater.py build.py update_security.py config.py` 통과. `python3 -m unittest tests.test_update_security` 통과.
+
+## Task - Existing Instance Restore On Relaunch
+- [x] EXE 무반응처럼 보이는 재실행 증상의 실제 원인과 현재 싱글 인스턴스 동작 확인
+- [x] 두 번째 실행 시 기존 런처 인스턴스를 복구하도록 `main.py` 싱글 인스턴스 흐름 개선
+- [x] 구문 검증과 동작 확인, Review 기록
+
+## Review - Existing Instance Restore On Relaunch
+- 실제 원인은 두 가지였음. 먼저 `powershell Get-Process` 기준으로 이미 `python.exe` 기반 `LTS Launcher v5.0.0` 인스턴스가 살아 있어서, 새 EXE 실행이 싱글 인스턴스 락에 걸려 사용자 입장에서는 무반응처럼 보였음. 동시에 처음 재빌드한 EXE는 전역 Windows Python으로 PyInstaller를 돌려 `Pillow`가 누락된 깨진 산출물이었고, 직접 실행 시 `Pillow 모듈을 찾을 수 없습니다`로 즉시 종료됐음.
+- `main.py`에 `SINGLE_INSTANCE_SHOW_EVENT_NAME` 기반 Windows activation event를 추가해, 두 번째 실행이 기존 인스턴스를 감지하면 경고창 대신 기존 창 복구 신호를 보내도록 바꿈. 실행 중인 인스턴스는 이 신호를 200ms 주기로 polling해서 `ExitManager.show_window()`로 복구하며, 관련 로그(`activation event ready/sent/received`)를 모두 남기게 함.
+- 같은 파일에서 `root.report_callback_exception`을 등록해 Tk callback 예외가 더 이상 조용히 사라지지 않고 `LTS-Launcher-startup.log`에 traceback을 남기고 에러창도 띄우도록 보강함.
+- 빌드는 전역 `Python310`이 아니라 프로젝트 `C:\\Users\\dudfh\\PycharmProjects\\LeviaAutoTradeSystem\\.venv\\Scripts\\python.exe` + PyInstaller 6.18.0으로 다시 수행함. 이 빌드에서는 `hook-PIL.py`, `hook-PIL.Image.py`가 실제로 로드됐고, `build/LTS V5.0.0/PYZ-00.pyz` 안에 `PIL`, `ImageTk` 문자열이 포함된 것을 확인함.
+- 최종 런처 SHA256은 `9119eae5ac935c6213601cc4549636cbebb99aa1b30e443a2f41c0e36bcb7512`이며, `version.json`의 `app_sha256`도 같은 값으로 갱신함.
+- 검증: `python3 -m py_compile main.py updater.py build.py update_security.py config.py` 통과. `python3 -m unittest tests.test_update_security` 통과. 모킹 기반으로 `_ensure_single_instance_or_exit()`가 `restore_requested=True`일 때 경고창 없이 종료하고, `False`일 때만 경고창 fallback을 타는 것도 확인함. 실제 EXE 재실행 로그 기준으로 `2026-03-15 19:42:05 Existing launcher activation signal sent: success=True`, `Single-instance activation signal received; restoring window.`가 기록됨.
