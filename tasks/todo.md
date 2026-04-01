@@ -1,3 +1,86 @@
+## Task - EXE Silent Startup Failure 6.1.1
+- [x] 6.1.1 EXE 무반응 재현 직후 로그와 빌드 경고를 수집
+- [x] packaged-only 실패 원인을 console/debug 빌드 기준으로 직접 포착
+- [x] 최소 수정 후 6.1.1 런처를 재빌드하고 packaged 실행 경로를 재검증
+- [x] Review 기록
+
+## Review - EXE Silent Startup Failure 6.1.1
+- 실제 packaged 런처를 Windows에서 직접 probe한 결과를 기준으로 원인을 확정함. 첫 번째 6.1.1 빌드는 `LTS V6.1.1.exe`가 메인 윈도우 없이 `returncode=1`로 종료됐고, `build/LTS V6.1.1/warn-LTS V6.1.1.txt`에 `missing module named PIL`이 top-level import로 남아 있었음.
+- Windows 빌드 Python 3.10 환경을 점검한 결과 `Pillow`가 아예 설치되어 있지 않았고, `ccxt`, `websocket-client`, `numpy`, `pandas`도 빠져 있었음. 이 상태에서 PyInstaller가 broken launcher를 만든 것이 무반응의 핵심 원인이었음.
+- `/mnt/c/Users/dudfh/AppData/Local/Programs/Python/Python310/python.exe -m pip install -r requirements.txt`로 Windows 빌드 의존성을 설치한 뒤 6.1.1을 다시 빌드했고, 이후 PyInstaller 로그에는 `hook-PIL.py`, `hook-PIL.Image.py`, `hook-tzdata.py`가 정상으로 포함됨.
+- 추가로 `main.py`에 루트 창 visibility sync 로그를 넣고 `state("normal")`, `deiconify()`, `lift()`, `focus_force()`를 단계별로 재적용하도록 보강했음. 이 로그는 packaged 런처가 실제로 `state=normal viewable=True geometry=1328x800+296+140`까지 올라오는지 확인하는 용도이며, 향후 비슷한 숨김 문제를 다시 추적할 수 있게 함.
+- 최종 packaged 검증은 Windows probe로 다시 수행했음. PyInstaller onefile 부모 프로세스는 `PyInstaller Onefile Hidden Window`만 가지지만, 실제 자식 프로세스에는 `LTS Launcher v6.1.1` 창이 `visible=true`로 생성되는 것을 확인함. 즉, 현재 루트 `LTS V6.1.1.exe`는 Windows에서 실제 로그인 창을 띄우는 상태임.
+
+## Task - Version 6.1.1 Update Build
+- [x] 버전 상수와 업데이트 메타데이터를 `6.1.1` 기준으로 갱신
+- [x] Windows PyInstaller로 런처와 업데이터를 재빌드
+- [x] 실제 SHA256 반영과 자동업데이트 검증, Review 기록
+
+## Review - Version 6.1.1 Update Build
+- `config.py`의 `VERSION`을 `6.1.1`로 올려 런처 산출물 이름이 `LTS V6.1.1.exe`가 되도록 맞췄고, `version.json`의 `min_version`, `app_url`, `app_sha256`, `updater_sha256`도 최종 산출물 기준으로 다시 갱신함.
+- Windows Python 3.10 + PyInstaller 6.17.0으로 `/mnt/c/Users/dudfh/AppData/Local/Programs/Python/Python310/python.exe build.py --target all`을 실행해 `dist/LTS V6.1.1.exe`, `dist/LTS-Updater.exe`를 재빌드했고, EXE 무반응 원인 확인 후 의존성 설치 및 런처 재빌드까지 반영해 최종 산출물을 다시 갱신함.
+- 배포 경로와 메타데이터가 어긋나지 않게 `dist/LTS V6.1.1.exe`를 루트 `LTS V6.1.1.exe`로, `dist/LTS-Updater.exe`를 루트 `LTS-Updater.exe`로 복사해 실제 배포 파일을 갱신함.
+- 최종 SHA256은 런처 `56ce98de82c86c26765be307ef9810ccf9de80d97d6938c3fae4f9f8fd6b3ac8`, 업데이터 `440c4f5fea4fab61f68754b6f1688ac525b479f9f2a90d08d256c1f69226c836`임.
+- 검증: `python3 -m py_compile main.py updater.py build.py update_security.py config.py entry_bot.py trade_page.py login_page.py exit.py log_rotation.py runtime_paths.py` 통과. `python3 -m unittest tests.test_update_security tests.test_log_rotation_runtime_paths` 통과. 추가로 `update_security.extract_sha256_from_metadata()`와 `verify_file_sha256()`로 `version.json` 메타데이터가 루트 산출물과 일치하는지 확인했고, Windows packaged probe로 `LTS Launcher v6.1.1` visible window 생성까지 확인함.
+
+## Task - EXE Silent Startup Failure 6.0.0
+- [x] 런처 EXE 무반응 증상과 현재 6.0.0 변경분을 비교해 frozen 전용 초기화 실패 후보를 확정
+- [x] import 단계 실패도 기록되도록 런처 부트스트랩 로그를 보강
+- [x] frozen 실행에서 깨질 수 있는 KST timezone 초기화를 안전하게 수정
+- [x] 구문 검증과 영향 점검 후 Review 기록
+
+## Review - EXE Silent Startup Failure 6.0.0
+- 이번 증상은 `python main.py`는 열리는데 `LTS V6.0.0.exe` 더블클릭만 무반응이고, 최근 diff 중 frozen startup에 직접 영향을 줄 수 있는 import-time 실행 코드를 추적한 결과 `entry_bot.py`의 `_KST_TZ = ZoneInfo("Asia/Seoul")`가 가장 유력한 원인으로 판단했음. 이 코드는 `main.py -> login_page.py -> trade_page.py -> entry_bot.py` import 체인 안에서 실행되므로, PyInstaller onefile/Windows 환경에서 timezone 데이터가 빠지면 런처가 첫 로그를 남기기 전 바로 종료될 수 있었음.
+- `main.py`는 `login_page`를 top-level에서 바로 import하지 않고 `_load_login_page_class()`에서 지연 import하도록 바꿨고, 성공/실패를 모두 `LTS-Launcher-startup.log`와 `LTS-Launcher-update.log`에 남기도록 보강했음. 그래서 앞으로도 같은 종류의 초기 import 실패가 나면 silent exit 대신 traceback이 로그에 남음.
+- `entry_bot.py`는 `ZoneInfo("Asia/Seoul")`를 바로 강제하지 않고, 실패 시 `timezone(timedelta(hours=9), name="KST")`로 fallback 하도록 바꿨음. 그리고 `EntryRelayBot` 초기화 시 실제 timezone source(`zoneinfo` 또는 `fixed_offset_fallback`)를 로그로 남기게 해 frozen 환경에서도 원인 추적이 가능하도록 했음.
+- 검증: `python3 -m py_compile main.py entry_bot.py login_page.py trade_page.py exit.py` 통과. `PYTHONTZPATH=/nonexistent python3 - <<'PY' import entry_bot; print(entry_bot._KST_TZ_SOURCE); print(entry_bot._KST_TZ) PY`로 timezone 데이터가 없는 상황을 강제로 만들어도 `fixed_offset_fallback`으로 import가 살아남는 것을 확인함. `python3 -m unittest tests.test_update_security tests.test_log_rotation_runtime_paths` 통과.
+- 한계: 현재 작업 환경에서는 Windows GUI `.exe`를 직접 실행할 수 없어 실제 더블클릭 재현과 재빌드는 아직 못 했음. 따라서 원인 판단은 코드 경로와 검증 결과에 근거한 강한 추정이며, Windows에서 `build.py --target launcher` 재빌드 후 새 `LTS V6.0.0.exe`로 최종 확인이 필요함.
+
+## Task - Version 6.0.0 Update Build
+- [x] 버전 상수와 업데이트 메타데이터를 `6.0.0` 기준으로 갱신
+- [x] Windows PyInstaller로 런처와 업데이터를 재빌드
+- [x] 실제 SHA256 반영과 자동업데이트 검증, Review 기록
+
+## Review - Version 6.0.0 Update Build
+- `config.py`의 `VERSION`을 `6.0.0`으로 올려 런처 산출물 이름이 `LTS V6.0.0.exe`가 되도록 맞췄고, `version.json`의 `min_version`, `app_url`, `app_sha256`, `updater_sha256`도 새 산출물 기준으로 갱신함.
+- Windows Python 3.10 + PyInstaller 6.17.0으로 `/mnt/c/Users/dudfh/AppData/Local/Programs/Python/Python310/python.exe build.py --target all`을 실행해 `dist/LTS V6.0.0.exe`, `dist/LTS-Updater.exe`를 재빌드함.
+- 배포 경로와 메타데이터가 어긋나지 않게 `dist/LTS V6.0.0.exe`를 루트 `LTS V6.0.0.exe`로, `dist/LTS-Updater.exe`를 루트 `LTS-Updater.exe`로 복사해 실제 배포 파일을 갱신함.
+- 최종 SHA256은 런처 `bd29e8f106de5a6f3df92650c56d2bcccb1964301787f09e814fbe595b5fbacb`, 업데이터 `d54e4c0bd94cda38cb8d3bb83a3671e0dc15ab4029eca8f56eeaf8fa60ef687d`임.
+- 검증: `python3 -m py_compile main.py updater.py build.py update_security.py config.py entry_bot.py trade_page.py login_page.py exit.py log_rotation.py runtime_paths.py` 통과. `python3 -m unittest tests.test_update_security` 통과. 추가로 `update_security.extract_sha256_from_metadata()`와 `verify_file_sha256()`로 `version.json`이 루트 `LTS V6.0.0.exe`, `LTS-Updater.exe`와 각각 일치하는 것을 확인함.
+
+## Task - Entry Funding Text And Negative Block Update
+- [x] 새 `글로벌 거래소 통합 펀딩비` 문구에서 펀딩비 값을 안정적으로 파싱하도록 조정
+- [x] 펀딩비 진입 차단 기준을 `-0.1% 이하`에서 `음수 전체`로 변경
+- [x] 구문/동작 검증 후 Review 기록
+
+## Review - Entry Funding Text And Negative Block Update
+- `entry_bot.py`의 `parse_leading_market_message()`에서 펀딩비 파싱을 완화해, 퍼센트 값만 있으면 성공하도록 바꿨음. 그래서 기존 `펀딩비 : -0.1000% / 01:02:03` 포맷은 그대로 읽고, 새 `🌐글로벌 거래소 통합 펀딩비 : 0.0514%` 포맷도 카운트다운 없이 정상 파싱됨.
+- 새 포맷처럼 시간 정보가 없는 경우 `LeadingSignal.funding_countdown`은 빈 문자열로 유지되며, 이 값은 현재 다른 실행 경로에서 사용되지 않으므로 추가 부작용 없이 호환됨.
+- 공통 필터의 펀딩비 차단 기준은 `funding_rate_pct <= -0.1`에서 `funding_rate_pct < 0`으로 변경했고, 차단 로그 사유도 실제 동작과 맞게 `funding_negative:{value}`로 정리함.
+- 검증: `python3 -m py_compile entry_bot.py` 통과. 샘플 메시지 기준으로 기존 포맷과 새 포맷 모두 `parse_leading_market_message()`가 `ok`를 반환했고, `funding_rate_pct=-0.0001`은 `funding_negative:-0.0001`로 차단, `funding_rate_pct=0.0`은 `filter_pass`로 확인함.
+
+## Task - Version 5.1.0 Update Build
+- [x] 버전 상수와 업데이트 메타데이터 경로를 `5.1.0` 기준으로 갱신
+- [x] Windows PyInstaller로 런처와 업데이터를 재빌드
+- [x] 실제 산출물 SHA256 반영과 자동업데이트 검증, Review 기록
+
+## Review - Version 5.1.0 Update Build
+- `config.py`의 `VERSION`을 `5.1.0`으로 올리고, `version.json`의 `min_version`, `app_url`, `app_sha256`, `updater_sha256`를 새 산출물 기준으로 갱신함.
+- Windows Python 3.10 + PyInstaller 6.17.0으로 `build.py --target all`을 실행해 `dist/LTS V5.1.0.exe`, `dist/LTS-Updater.exe`를 재생성했고, 루트의 `LTS V5.1.0.exe`, `LTS-Updater.exe`도 동일 산출물로 반영함.
+- 최종 SHA256은 런처 `8c30492f9020bfa157417c60890c62d8727d2325a5fd76c6f988d027f29b54ee`, 업데이터 `e14175cae088d7a011c9b9f5e9e5a1144a37690660c965ceefb877561d40b91f`임.
+- 검증: `python3 -m py_compile main.py updater.py build.py update_security.py config.py entry_bot.py trade_page.py` 통과. `python3 -m unittest tests.test_update_security` 통과. 추가로 `update_security.extract_sha256_from_metadata()`와 `verify_file_sha256()`로 `version.json` 메타데이터가 루트 산출물과 일치하는 것을 확인함.
+
+## Task - Wallet Threshold Entry Block
+- [x] 현재 엔트리 경로에서 잔고 상한 차단을 넣을 정확한 지점 확정
+- [x] `650 USDT` 초과 시 다음 신규 진입을 막되, 예외 API 키는 제외하도록 구현
+- [x] 구문 검증과 변경 Review 기록
+
+## Review - Wallet Threshold Entry Block
+- 차단 지점은 `trade_page.py`의 START 버튼이 아니라 `entry_bot.py`의 `_handle_entry_signal()`로 확정함. 이 경로는 매 신호마다 최신 스냅샷을 가져온 뒤 `snapshot.positions`와 엔트리 오픈오더 존재 여부를 먼저 확인하므로, 현재 포지션/주문이 진행 중일 때는 기존 흐름대로 통과시키고 신규 진입만 다음 신호에서 차단할 수 있음.
+- 신규 제한은 `wallet_balance > 650.0`일 때만 작동하도록 넣었고, 사용자가 지정한 예외 계정은 API 키 원문 대신 SHA256 digest 비교로 우회 처리함.
+- 일반 계정이 한도를 넘으면 `reason=wallet_balance_limit_exceeded` 로그와 함께 신규 엔트리를 무시하고, 예외 계정이 한도를 넘으면 `Entry wallet limit bypassed: reason=exempt_api_key` 로그를 남긴 뒤 기존 진입 흐름을 계속 진행함.
+- 검증: `python3 -m py_compile entry_bot.py trade_page.py` 통과. 이름 검색 기준으로 새 제한 상수와 예외 계정 헬퍼는 `entry_bot.py`에만 추가되었고, START 버튼 차단 로직은 건드리지 않음.
+
 ## Task - ExitManager Stale Caller Fix
 - [x] `set_position_checker` 삭제 이후 남아 있던 호출 위치 확인
 - [x] 로그인 페이지의 stale caller 제거로 런타임 예외 복구
@@ -218,6 +301,48 @@
 
 # todo
 
+## Task - Trade Page Execution Alert Container
+- [x] 전략 가이드북 패널 하단 여백 축소 범위와 새 패널 배치 좌표 확정
+- [x] 거래페이지에 `체결알림 서비스` 소형 컨테이너 추가 및 관련 로그 반영
+- [x] 구문 검증 후 Review 기록
+
+## Review - Trade Page Execution Alert Container
+- `trade_page.py`에서 왼쪽 하단 기존 `TABLE_RECT` 영역을 그대로 기준으로 두고, `전략 가이드북` 패널은 하단을 `52px` 줄인 `STRATEGY_GUIDE_PANEL_RECT`로 분리함. 새 `체결알림 서비스` 패널은 그 아래 `10px` 간격을 두고 높이 `52px`의 `EXECUTION_ALERT_PANEL_RECT`로 추가해, 기존 버튼 배치는 유지하면서 하단에 소형 컨테이너를 확보함.
+- 새 컨테이너는 기존 공통 `_draw_titled_panel()`을 재사용해서 제목 바 스타일을 일관되게 맞췄고, 현재는 사용자 요청대로 제목만 있는 소형 패널로 두었음. 초기화 로그에는 `strategy_guide_panel_bottom`, `execution_alert_panel`, `execution_alert_top_gap`, `execution_alert_height`, `execution_alert_title_height`를 추가해 새 레이아웃 값이 기록되도록 함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 Tkinter 화면 수동 확인은 이번 턴에서 실행하지 않음.
+
+## Task - Trade Page Strategy Panel Rebalance
+- [x] 전략 가이드북 패널 하단을 더 올리고 체결알림 서비스 패널 높이 재조정
+- [x] 전략 가이드북 내부 버튼과 라벨을 패널 기준 중앙 재배치
+- [x] correction 기록과 구문 검증 결과 반영
+
+## Review - Trade Page Strategy Panel Rebalance
+- 사용자 피드백 기준으로 `trade_page.py`의 왼쪽 하단 패널 비율을 다시 조정함. `전략 가이드북` 패널 하단은 기존보다 더 위로 올려 `STRATEGY_GUIDE_PANEL_RECT` 하단이 `657`이 되도록 바꿨고, `체결알림 서비스` 패널은 간격 `12px`, 높이 `84px`, 제목 바 `30px`로 키워 존재감이 더 있도록 재조정함.
+- 이전처럼 버튼 Y좌표를 고정하지 않고, `전략 가이드북` 버튼 3개와 라벨을 패널 내부 콘텐츠 영역 기준으로 다시 계산하도록 바꿈. 그래서 패널 높이가 바뀌어도 라벨/버튼 묶음이 가운데 정렬된 상태를 유지함.
+- 초기화 로그에 `strategy_guide_layout=centered_in_panel`을 추가해 이번 배치 방식이 기록되도록 했음.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 Tkinter 수동 화면 확인은 이번 턴에서 실행하지 않음.
+
+## Task - Trade Page Vertical Lift For Execution Alert
+- [x] 레버리지 상단 패널과 전략 가이드북 패널을 크기 유지한 채 위로 이동
+- [x] 위로 확보된 공간만큼 체결알림 서비스 패널 높이 확장 및 로그 반영
+- [x] correction 기록과 구문 검증 결과 반영
+
+## Review - Trade Page Vertical Lift For Execution Alert
+- 사용자 피드백에 맞춰 `레버리지 컨테이너`로 보이는 상단 좌측 패널은 크기를 줄이지 않고 `24px` 위로 이동시켰고, 같은 값으로 `전략 가이드북` 패널도 위로 이동시켜 하단 여유 공간을 더 확보함.
+- `체결알림 서비스`는 기존 기준 높이 `84px`에 위로 이동한 `24px`를 더해 총 `108px` 높이가 되도록 조정했음. 이렇게 해서 상단/중단 패널 크기는 유지하고, 남는 공간만 새 하단 패널에 넘기도록 구성함.
+- 초기화 로그에는 `section_stack_vertical_shift`, `chart_panel_top`, `execution_alert_base_height`, `execution_alert_height`를 추가해 이번 세로 재배치 값이 남도록 했음.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 Tkinter 수동 화면 확인은 이번 턴에서 실행하지 않음.
+
+## Task - Trade Page Vertical Lift Fine Tune
+- [x] 상단/전략 패널 수직 이동량 소폭 추가 상향
+- [x] 추가 확보 공간만큼 체결알림 서비스 높이 재확대
+- [x] correction 기록과 구문 검증 결과 반영
+
+## Review - Trade Page Vertical Lift Fine Tune
+- 추가 사용자 피드백에 맞춰 전체 구조는 유지하고 `SECTION_STACK_VERTICAL_SHIFT`만 `24px -> 32px`로 소폭 상향함. 이로 인해 레버리지 상단 패널과 전략 가이드북 패널이 이전보다 `8px` 더 위로 올라가도록 조정됨.
+- `체결알림 서비스` 패널은 같은 증가분을 그대로 흡수해 높이가 `108px -> 116px`으로 늘어남. 기본 높이 `84px`는 유지하고, 추가로 확보된 세로 공간만 하단 패널에 반영하는 방식은 그대로 유지했음.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 Tkinter 수동 화면 확인은 이번 턴에서 실행하지 않음.
+
 ## Task
 - [x] 로그인 이후 지갑잔고 컨테이너에 현재 구동상태 행 추가
 - [x] 기존 `_trade_state` 값을 사용해 `실행중`/`중단됨` 문구 표시 및 관련 로그 반영
@@ -373,3 +498,121 @@
 - 빌드는 전역 `Python310`이 아니라 프로젝트 `C:\\Users\\dudfh\\PycharmProjects\\LeviaAutoTradeSystem\\.venv\\Scripts\\python.exe` + PyInstaller 6.18.0으로 다시 수행함. 이 빌드에서는 `hook-PIL.py`, `hook-PIL.Image.py`가 실제로 로드됐고, `build/LTS V5.0.0/PYZ-00.pyz` 안에 `PIL`, `ImageTk` 문자열이 포함된 것을 확인함.
 - 최종 런처 SHA256은 `9119eae5ac935c6213601cc4549636cbebb99aa1b30e443a2f41c0e36bcb7512`이며, `version.json`의 `app_sha256`도 같은 값으로 갱신함.
 - 검증: `python3 -m py_compile main.py updater.py build.py update_security.py config.py` 통과. `python3 -m unittest tests.test_update_security` 통과. 모킹 기반으로 `_ensure_single_instance_or_exit()`가 `restore_requested=True`일 때 경고창 없이 종료하고, `False`일 때만 경고창 fallback을 타는 것도 확인함. 실제 EXE 재실행 로그 기준으로 `2026-03-15 19:42:05 Existing launcher activation signal sent: success=True`, `Single-instance activation signal received; restoring window.`가 기록됨.
+
+## Task - Execution Alert Bottom Edge Tune
+- [x] `체결알림 서비스` 패널 밑변을 소폭 아래로 내릴 수 있는 최소 조정값 반영
+- [x] 조정값이 초기화 로그에 남도록 메타데이터 갱신
+- [x] 구문 검증 후 Review 기록
+
+## Review - Execution Alert Bottom Edge Tune
+- `trade_page.py`에 `EXECUTION_ALERT_PANEL_BOTTOM_EXTENSION = 8` 상수를 추가해 `체결알림 서비스` 패널의 상단 시작점은 그대로 두고, 하단만 기존 `TABLE_RECT[3]`보다 `8px` 아래로 내려가도록 조정함.
+- 초기화 로그에 `execution_alert_bottom_extension=8`, `execution_alert_panel_bottom=761`을 추가해 실제 미세 조정값과 최종 하단 좌표가 함께 남도록 반영함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 Tkinter 화면 수동 확인은 이번 턴에서 실행하지 않음.
+
+## Task - Strategy Guide Reclaim Execution Alert Space
+- [x] `체결알림 서비스` 컨테이너 제거 및 관련 로그/코드 정리
+- [x] `전략 가이드북` 밑변을 기존 체결알림 패널 중간 지점까지 확장
+- [x] 내부 요소 중앙 배치 유지 여부 검토 후 구문 검증과 Review 기록
+
+## Review - Strategy Guide Reclaim Execution Alert Space
+- `trade_page.py`에서 `체결알림 서비스` 관련 상수, draw 호출, 초기화 로그 항목을 제거해 하단 별도 컨테이너가 더 이상 그려지지 않도록 정리함.
+- `전략 가이드북`은 새 `STRATEGY_GUIDE_BOTTOM_GAP = 54` 기준으로 하단이 `TABLE_RECT[3] - 54`, 즉 `y=699`까지 내려오도록 조정함. 이 값은 직전 `체결알림 서비스` 패널 범위 `637~761`의 정확한 중간 지점에 해당함.
+- 전략 가이드북 내부 3개 항목은 기존처럼 제목 바 아래 콘텐츠 영역의 `content_top/content_bottom` 기준 중앙값으로 버튼 Y좌표를 다시 계산하게 유지해서, 패널이 커져도 라벨과 버튼 묶음이 자연스럽게 중앙 정렬되도록 함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. `rg -n "EXECUTION_ALERT|execution_alert" trade_page.py` 결과도 0건으로 정리 상태를 확인함. 실제 Tkinter 화면 수동 확인은 이번 턴에서 실행하지 않음.
+
+## Task - Wallet Execution Alert Toggle UI
+- [x] 지갑잔고 패널 내부 4번째 행 배치 기준과 토글 기본 상태를 정의
+- [x] `체결알림 서비스` 라벨과 ON/OFF 스위치 프론트엔드, 클릭 로그를 추가
+- [x] 구문 검증 후 Review 기록
+
+## Review - Wallet Execution Alert Toggle UI
+- `trade_page.py`의 지갑잔고 텍스트 블록을 3개 고정 행 구조에서 가변 행 구조로 바꿔, `현재 구동상태 :` 바로 아래에 `체결알림 서비스 :` 행이 같은 간격 규칙으로 추가되도록 정리함. 기존 `WALLET_TEXT_CENTER_OFFSET_Y` 기준 중앙 정렬은 그대로 유지해서 새 행이 들어가도 전체 묶음이 START/STOP 버튼 위 영역 안에서 함께 정렬되게 맞춤.
+- 새 스위치는 기본값을 `OFF`로 두고, 비활성 상태에서는 빨간 배경 `OFF`, 활성 상태에서는 초록 배경 `ON`이 표시되도록 구현함. 클릭/호버는 기존 canvas tag 바인딩 흐름에 맞춰 `execution_alert_toggle`로 연결했고, 토글 변경 시 `Execution alert service toggled ... ui_only=True` 로그가 남도록 반영함.
+- 초기화 로그에도 `execution_alert_service_enabled`와 `execution_alert_toggle_size`를 추가해 현재 UI 기본 상태와 스위치 크기가 기록되도록 함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 Tkinter 화면에서 간격/시각 배치는 이번 턴에서 직접 확인하지 않음.
+
+## Task - Wallet Execution Alert Toggle Border Cleanup
+- [x] 체결알림 서비스 스위치 외곽선 제거 방식 반영
+- [x] 사용자 correction 패턴을 `tasks/lessons.md`에 기록
+- [x] 구문 검증 후 Review 기록
+
+## Review - Wallet Execution Alert Toggle Border Cleanup
+- `trade_page.py`의 `_draw_inline_toggle_button()`에서 체결알림 서비스 스위치에 주던 검은 외곽선(`outline="#000000"`)과 선 두께를 제거해, 스위치가 배경색만으로 보이도록 정리함.
+- 이번 correction은 `tasks/lessons.md`에 인라인 토글/필 컨트롤은 기본적으로 진한 외곽선을 가정하지 말고, 주변 UI 밀도에 맞춰 borderless 여부를 먼저 판단하라는 규칙으로 추가함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 Tkinter 화면 수동 확인은 이번 턴에서 실행하지 않음.
+
+## Task - Wallet Execution Alert Toggle Render Cleanup
+- [x] 체결알림 서비스 스위치 렌더링 노이즈 원인 축소 방향 정리
+- [x] 캔버스 polygon 대신 더 깨끗한 이미지 기반 토글 배경 렌더링으로 교체
+- [x] correction 기록과 구문 검증 결과 반영
+
+## Review - Wallet Execution Alert Toggle Render Cleanup
+- 작은 체결알림 스위치는 `canvas.create_polygon(... smooth=True)` 기반 곡선 렌더링에서 가장자리 노이즈가 남는다고 판단하고, `trade_page.py`에 `_toggle_image()` 캐시 헬퍼를 추가해 PIL `rounded_rectangle`로 배경 이미지를 만든 뒤 `create_image()`로 배치하도록 변경함.
+- `_draw_inline_toggle_button()`은 같은 크기/색상 조합을 캐시된 이미지로 재사용하고, 이미지/텍스트 좌표도 `round()`로 정수 픽셀에 맞춰 배치해 시각적 번짐을 줄이도록 정리함. 색상과 hover 밝기 변화, ON/OFF 텍스트 동작은 그대로 유지함.
+- 이번 correction은 `tasks/lessons.md`에 작은 rounded toggle은 border 제거만으로 해결되지 않으면 canvas polygon smoothing 대신 PIL 이미지 렌더링으로 전환하라는 규칙으로 추가함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 Tkinter 화면 수동 확인은 이번 턴에서 실행하지 않음.
+
+## Task - Wallet Execution Alert Toggle Confirmation
+- [x] 체결알림 스위치 ON/OFF 전환용 확인 메시지 문구와 흐름 정의
+- [x] `예` 선택 시에만 실제 토글 상태가 바뀌도록 구현 및 로그 반영
+- [x] 구문 검증 후 Review 기록
+
+## Review - Wallet Execution Alert Toggle Confirmation
+- `trade_page.py`에 `_build_execution_alert_toggle_confirmation_message()`를 추가해, OFF 상태에서 누르면 `체결알림 서비스를 활성화 하시겠습니까?`, ON 상태에서 누르면 `체결알림 서비스를 비활성화 하시겠습니까?` 문구가 각각 뜨도록 분기함.
+- `_handle_execution_alert_toggle()`은 즉시 상태를 뒤집지 않고 먼저 `Execution alert toggle confirmation opened` 로그를 남긴 뒤 `askyesno` 확인을 띄우게 바꿈. 사용자가 `아니오`를 누르면 `Execution alert toggle canceled by user` 로그만 남기고 기존 상태를 유지하며, `예`를 눌렀을 때만 실제 ON/OFF 상태를 바꾸고 기존 `Execution alert service toggled ... ui_only=True` 로그를 남기도록 정리함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 Tkinter 메시지박스 동작은 이번 턴에서 직접 클릭 확인하지 않음.
+
+## Task - Execution Alert Setup Flow UI
+- [x] 체결알림 활성화 2단계 안내 흐름과 창 오픈 조건 정의
+- [x] 텔레그램 ID 입력용 새 창 디자인과 임시 저장 UI 구현
+- [x] 배경 토글/창 lifecycle/log 연결 후 구문 검증과 Review 기록
+
+## Review - Execution Alert Setup Flow UI
+- `trade_page.py`의 체결알림 토글 활성화 흐름을 `활성화 확인 -> 체결알림 봇 활성화 여부 확인` 2단계로 확장함. 첫 번째 확인에서 `예`를 누른 뒤 두 번째 `체결알림 봇을 활성화 하셨나요?` 질문에 `예`를 누르면 기존처럼 ON으로 바뀌고, `아니오`를 누르면 토글은 그대로 OFF 상태를 유지한 채 텔레그램 ID 입력용 새 창이 열리도록 분기함.
+- 새 `ExecutionAlertSetupWindow`는 로그인 페이지 `구독자 등록 요청`과 같은 배경 이미지/텔레그램 아이콘 톤을 사용해, 상단 안내 문구 2줄, `텔레그램 ID` 라벨, 동일한 성격의 placeholder 입력칸, `임시 저장`/`닫기` 버튼을 가진 소형 창으로 구성함. `임시 저장`은 입력값을 현재 페이지 메모리(`_execution_alert_telegram_id_draft`)에만 보관하고, 실제 봇 저장/전송은 다음 단계에서 연결된다는 안내 메시지를 띄우도록 처리함.
+- trade page 배경 ON/OFF 전환 시 이 새 창도 같이 배경 표시 상태가 바뀌도록 연결했고, 창 열림/기존 창 focus/임시 저장/닫기 요청에 대한 로그도 모두 추가함.
+- 사용자가 전달한 텔레그램 봇 토큰은 이번 턴에서 코드에 하드코딩하지 않았고, 실제 메시지 발송 백엔드도 아직 연결하지 않음. 이번 변경 범위는 안내 메시지와 입력 창 디자인, 그리고 임시 저장 UI까지로 제한함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 Tkinter 메시지박스와 새 창 상호작용은 이번 턴에서 직접 수동 클릭 확인하지 않음.
+
+## Task - Execution Alert Setup Window Background Removal
+- [x] 체결알림 새 창의 배경 이미지 제거 방식 반영
+- [x] correction 패턴을 `tasks/lessons.md`에 기록
+- [x] 구문 검증 후 Review 기록
+
+## Review - Execution Alert Setup Window Background Removal
+- `trade_page.py`의 `ExecutionAlertSetupWindow`에서 로그인 페이지용 `subscribe_request_bg.jpg` 배경 이미지를 더 이상 로드하지 않도록 정리했고, 창 전체 배경은 단색 rectangle만 쓰도록 바꿨음. 그래서 체결알림 새 창은 장식 배경 없이 텍스트/입력칸/버튼만 보이는 더 단정한 화면이 됨.
+- 배경 토글은 기존처럼 유지하되, 이제는 이미지 show/hide가 아니라 단색 배경 fill만 `CANVAS_BG`/`BACKGROUND_OFF_COLOR` 사이에서 바꾸도록 단순화함.
+- 이번 correction은 `tasks/lessons.md`에 팝업 배경 제거 요청이 오면 배경 이미지를 남겨두고 약하게 처리하지 말고, 장식 이미지를 아예 제거한 단색 modal로 정리하라는 규칙으로 추가함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 Tkinter 새 창 시각 확인은 이번 턴에서 직접 실행하지 않음.
+
+## Task - Execution Alert Setup Copy Tuning
+- [x] 체결알림 새 창 상단 안내 문구를 요청 문안으로 수정
+- [x] 텔레그램 ID 입력 영역에 예시 링크 문구를 가시적으로 추가
+- [x] correction 기록과 구문 검증 결과 반영
+
+## Review - Execution Alert Setup Copy Tuning
+- `trade_page.py`의 체결알림 새 창 상단 안내 문구를 `체결알림 봇을 아직 활성화 하지 않으신 경우` / `봇을 활성화 한 후 텔레그램 ID를 입력해주세요` 2줄로 교체해 사용자 요청 문안에 맞춤.
+- 텔레그램 입력 영역에는 라벨 오른쪽에 `(예시 : https://t.me/crypto_LEVI9)` 보조 문구를 추가해, 사용자가 어떤 형식의 계정을 떠올리면 되는지 바로 보이도록 정리함.
+- 이번 correction은 `tasks/lessons.md`에 팝업 안내 문구 수정 요청이 오면 문장을 최대한 그대로 반영하고, 계정 형식 예시는 placeholder 안이 아니라 라벨 옆의 가시적인 위치에 두라는 규칙으로 추가함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 실제 Tkinter 새 창 문구 배치는 이번 턴에서 직접 확인하지 않음.
+
+## Task - Execution Alert Setup Window Runtime Fix
+- [x] 체결알림 새 창 런타임 오류의 실제 traceback 확인
+- [x] 누락된 색상 상수 정의 보강 및 correction 기록 반영
+- [x] 구문 검증 후 Review 기록
+
+## Review - Execution Alert Setup Window Runtime Fix
+- 실제 오류는 `logs/LTS-Launcher-startup_log_file/LTS-Launcher-startup.log`와 `logs/LTS-Launcher-update_log_file/LTS-Launcher-update.log` 기준 `2026-03-17 18:12:57` 시점 Tk callback traceback으로 확인했고, `ExecutionAlertSetupWindow._draw_static()`에서 `NOTE_COLOR`를 참조했지만 `trade_page.py`에 그 상수가 없어서 `NameError: name 'NOTE_COLOR' is not defined`가 발생하고 있었음.
+- `trade_page.py` 상단 UI 색상 구역에 `NOTE_COLOR = "#d2d8e4"`를 추가해 새 창 보조 문구 렌더링이 정상 동작하도록 바로잡음.
+- 이번 correction은 `tasks/lessons.md`에 다른 페이지에서 가져온 UI 색상/텍스트 상수는 `trade_page.py` 안에 직접 정의하거나 명시적으로 import해야 하며, 다른 파일에만 있는 상수명을 그냥 참조하지 말라는 규칙으로 추가함.
+- 검증: `python3 -m py_compile trade_page.py` 통과. 로그 기반 traceback 원인 확인 완료. 실제 Tkinter 새 창 재오픈 수동 확인은 이번 턴에서 실행하지 않음.
+
+## Task - Execution Alert Rollback
+- [x] `trade_page.py`의 체결알림 UI, 팝업, 상태값, 바인딩 범위를 확인
+- [x] 체결알림 토글/설정창/관련 상수와 렌더링 헬퍼를 다른 기능 영향 없이 제거
+- [x] 작업 기록과 구문 검증 결과 반영
+
+## Review - Execution Alert Rollback
+- 사용자 요청대로 `trade_page.py`에서 체결알림 관련 추가분만 롤백함. 지갑잔고 패널의 `체결알림 서비스` 행, ON/OFF 토글, 활성화 확인 메시지, 텔레그램 ID 입력용 `ExecutionAlertSetupWindow`, 관련 상태값(`_execution_alert_enabled` 등), 바인딩(`execution_alert_toggle`)과 로그 메타데이터를 전부 제거했음.
+- 체결알림 전용으로 추가됐던 입력 필드 스타일 상수, 팝업 버튼 색상 상수, 토글 이미지 캐시/렌더링 헬퍼도 함께 삭제해 죽은 코드가 남지 않도록 정리함. 기존 자동매매 START/STOP, 레버리지 설정, 전략 가이드북, 관리자 연결, 채널정보 패널은 그대로 유지됨.
+- 검증: `rg -n "체결알림|Execution alert|execution_alert|ExecutionAlert|telegram_id|NOTE_COLOR|FORM_FIELD_|MODAL_|EXECUTION_ALERT_" trade_page.py` 결과 0건 확인. `python3 -m py_compile trade_page.py` 통과.

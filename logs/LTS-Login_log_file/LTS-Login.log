@@ -1799,3 +1799,276 @@
 [2026-03-15 19:46:04] secondary guide buttons initialized: product_guidebook, binance_account_guide
 [2026-03-15 19:46:04] help_button_cluster_shift applied: shift_x=60
 [2026-03-15 19:46:05] market_info_fetch_success: symbol=BTC/USDT last=71827.17 percent=1.86 ping_ms=1021
+[2026-03-15 19:48:01] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-15 19:48:01] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-15 19:48:01] help_button_cluster_shift applied: shift_x=60
+[2026-03-15 19:48:02] market_info_fetch_success: symbol=BTC/USDT last=71810.26 percent=1.82 ping_ms=1227
+[2026-03-15 19:48:14] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-15 19:48:14] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-15 19:48:16] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-15 19:48:16] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-15 19:48:16] login_click success: api_key=UXFj***6Nx3
+[2026-03-15 19:48:17] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-15 19:50:22] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-15 19:50:22] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-15 19:50:22] help_button_cluster_shift applied: shift_x=60
+[2026-03-15 19:50:23] market_info_fetch_success: symbol=BTC/USDT last=71810.46 percent=1.82 ping_ms=1007
+[2026-03-15 19:50:26] guide_button_clicked: kind=product_guidebook
+[2026-03-15 19:50:26] product_guidebook_window_layout: grid=3x2 slot_size=250x130 item_width=20 populated_slots=6
+[2026-03-15 19:50:26] product_guidebook_window_opened
+[2026-03-15 19:50:26] product_guidebook_window_created
+[2026-03-15 19:50:32] product_guidebook_option_clicked: option=dca_strategy_guide
+[2026-03-15 19:50:32] product_guidebook_pdf_opened: option=dca_strategy_guide path=C:\Users\dudfh\AppData\Local\Temp\_MEI289922\image\login_page\dca.pdf
+[2026-03-15 19:50:41] product_guidebook_window_closed
+[2026-03-15 19:52:19] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-15 19:52:19] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-15 19:52:19] help_button_cluster_shift applied: shift_x=60
+[2026-03-15 19:52:20] market_info_fetch_success: symbol=BTC/USDT last=71822.99 percent=1.82 ping_ms=1069
+[2026-03-15 19:52:51] market_info_fetch_success: symbol=BTC/USDT last=71808.93 percent=1.78 ping_ms=1004
+[2026-03-16 17:48:56] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-16 17:48:56] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-16 17:48:56] help_button_cluster_shift applied: shift_x=60
+[2026-03-16 17:48:59] market_info_fetch_success: symbol=BTC/USDT last=73066.27 percent=1.96 ping_ms=953
+[2026-03-16 17:49:12] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-16 17:49:12] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-16 17:49:15] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-16 17:49:15] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-16 17:49:15] login_click success: api_key=UXFj***6Nx3
+[2026-03-16 17:49:15] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-16 18:09:21] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-16 18:09:21] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-16 18:09:21] help_button_cluster_shift applied: shift_x=60
+[2026-03-16 18:09:23] market_info_fetch_success: symbol=BTC/USDT last=73125.87 percent=1.72 ping_ms=1021
+[2026-03-16 18:09:54] market_info_fetch_success: symbol=BTC/USDT last=73161.75 percent=1.74 ping_ms=921
+[2026-03-16 18:09:55] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-16 18:09:55] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-16 18:09:58] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-16 18:09:58] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-16 18:09:58] login_click success: api_key=UXFj***6Nx3
+[2026-03-16 18:09:58] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-16 18:13:50] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-16 18:13:50] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-16 18:13:50] help_button_cluster_shift applied: shift_x=60
+[2026-03-16 18:13:52] market_info_fetch_success: symbol=BTC/USDT last=73170.02 percent=1.86 ping_ms=1031
+[2026-03-16 18:13:56] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-16 18:13:56] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-16 18:14:00] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-16 18:14:00] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-16 18:14:00] login_click success: api_key=UXFj***6Nx3
+[2026-03-16 18:14:00] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-16 18:18:48] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-16 18:18:48] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-16 18:18:48] help_button_cluster_shift applied: shift_x=60
+[2026-03-16 18:18:50] market_info_fetch_success: symbol=BTC/USDT last=73194.65 percent=1.81 ping_ms=1010
+[2026-03-16 18:18:54] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-16 18:18:54] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-16 18:18:59] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-16 18:18:59] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-16 18:18:59] login_click success: api_key=UXFj***6Nx3
+[2026-03-16 18:19:00] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 17:18:11] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-17 17:18:11] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-17 17:18:11] help_button_cluster_shift applied: shift_x=60
+[2026-03-17 17:18:14] market_info_fetch_success: symbol=BTC/USDT last=74215.24 percent=1.07 ping_ms=1002
+[2026-03-17 17:18:21] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 17:18:21] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-17 17:18:25] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-17 17:18:25] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-17 17:18:25] login_click success: api_key=UXFj***6Nx3
+[2026-03-17 17:18:26] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 17:19:57] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-17 17:19:57] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-17 17:19:57] help_button_cluster_shift applied: shift_x=60
+[2026-03-17 17:19:59] market_info_fetch_success: symbol=BTC/USDT last=74331.27 percent=1.17 ping_ms=993
+[2026-03-17 17:20:04] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 17:20:04] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-17 17:20:09] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-17 17:20:09] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-17 17:20:09] login_click success: api_key=UXFj***6Nx3
+[2026-03-17 17:20:10] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 17:23:38] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-17 17:23:38] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-17 17:23:38] help_button_cluster_shift applied: shift_x=60
+[2026-03-17 17:23:40] market_info_fetch_success: symbol=BTC/USDT last=74305.05 percent=1.03 ping_ms=937
+[2026-03-17 17:23:45] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 17:23:45] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-17 17:23:49] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-17 17:23:49] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-17 17:23:49] login_click success: api_key=UXFj***6Nx3
+[2026-03-17 17:23:50] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 17:29:30] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-17 17:29:31] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-17 17:29:31] help_button_cluster_shift applied: shift_x=60
+[2026-03-17 17:29:33] market_info_fetch_success: symbol=BTC/USDT last=74306.62 percent=1.28 ping_ms=1035
+[2026-03-17 17:29:38] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 17:29:38] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-17 17:29:41] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-17 17:29:41] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-17 17:29:41] login_click success: api_key=UXFj***6Nx3
+[2026-03-17 17:29:42] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 17:38:58] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-17 17:38:59] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-17 17:38:59] help_button_cluster_shift applied: shift_x=60
+[2026-03-17 17:39:00] market_info_fetch_success: symbol=BTC/USDT last=74199.18 percent=1.28 ping_ms=1024
+[2026-03-17 17:39:07] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 17:39:07] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-17 17:39:10] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-17 17:39:10] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-17 17:39:10] login_click success: api_key=UXFj***6Nx3
+[2026-03-17 17:39:10] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 17:40:42] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-17 17:40:42] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-17 17:40:42] help_button_cluster_shift applied: shift_x=60
+[2026-03-17 17:40:44] market_info_fetch_success: symbol=BTC/USDT last=74231.01 percent=1.30 ping_ms=1112
+[2026-03-17 17:41:08] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-17 17:41:08] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-17 17:41:08] help_button_cluster_shift applied: shift_x=60
+[2026-03-17 17:41:10] market_info_fetch_success: symbol=BTC/USDT last=74377.21 percent=1.61 ping_ms=998
+[2026-03-17 17:41:41] market_info_fetch_success: symbol=BTC/USDT last=74411.95 percent=1.73 ping_ms=961
+[2026-03-17 17:42:12] market_info_fetch_success: symbol=BTC/USDT last=74423.22 percent=1.75 ping_ms=1029
+[2026-03-17 17:42:43] market_info_fetch_success: symbol=BTC/USDT last=74394.40 percent=1.74 ping_ms=956
+[2026-03-17 17:43:14] market_info_fetch_success: symbol=BTC/USDT last=74384.69 percent=1.75 ping_ms=1013
+[2026-03-17 17:43:45] market_info_fetch_success: symbol=BTC/USDT last=74424.38 percent=1.73 ping_ms=1044
+[2026-03-17 17:44:16] market_info_fetch_success: symbol=BTC/USDT last=74424.30 percent=1.73 ping_ms=933
+[2026-03-17 17:44:47] market_info_fetch_success: symbol=BTC/USDT last=74376.01 percent=1.66 ping_ms=952
+[2026-03-17 17:45:18] market_info_fetch_success: symbol=BTC/USDT last=74388.50 percent=1.99 ping_ms=1060
+[2026-03-17 17:45:49] market_info_fetch_success: symbol=BTC/USDT last=74405.29 percent=1.77 ping_ms=1046
+[2026-03-17 17:45:59] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 17:45:59] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-17 17:46:02] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-17 17:46:02] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-17 17:46:02] login_click success: api_key=UXFj***6Nx3
+[2026-03-17 17:46:03] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 17:49:36] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-17 17:49:36] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-17 17:49:36] help_button_cluster_shift applied: shift_x=60
+[2026-03-17 17:49:38] market_info_fetch_success: symbol=BTC/USDT last=74402.20 percent=1.76 ping_ms=944
+[2026-03-17 17:49:42] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 17:49:42] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-17 17:49:44] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-17 17:49:44] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-17 17:49:44] login_click success: api_key=UXFj***6Nx3
+[2026-03-17 17:49:44] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 17:51:57] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-17 17:51:57] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-17 17:51:57] help_button_cluster_shift applied: shift_x=60
+[2026-03-17 17:51:59] market_info_fetch_success: symbol=BTC/USDT last=74364.87 percent=1.97 ping_ms=1024
+[2026-03-17 17:52:02] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 17:52:02] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-17 17:52:06] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-17 17:52:06] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-17 17:52:06] login_click success: api_key=UXFj***6Nx3
+[2026-03-17 17:52:06] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 18:04:00] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-17 18:04:00] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-17 18:04:00] help_button_cluster_shift applied: shift_x=60
+[2026-03-17 18:04:02] market_info_fetch_success: symbol=BTC/USDT last=74122.19 percent=1.38 ping_ms=1035
+[2026-03-17 18:04:07] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 18:04:07] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-17 18:04:10] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-17 18:04:10] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-17 18:04:10] login_click success: api_key=UXFj***6Nx3
+[2026-03-17 18:04:10] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 18:06:41] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-17 18:06:41] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-17 18:06:41] help_button_cluster_shift applied: shift_x=60
+[2026-03-17 18:06:43] market_info_fetch_success: symbol=BTC/USDT last=74052.77 percent=1.30 ping_ms=949
+[2026-03-17 18:06:48] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 18:06:48] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-17 18:06:50] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-17 18:06:50] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-17 18:06:50] login_click success: api_key=UXFj***6Nx3
+[2026-03-17 18:06:50] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 18:12:44] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-17 18:12:44] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-17 18:12:44] help_button_cluster_shift applied: shift_x=60
+[2026-03-17 18:12:46] market_info_fetch_success: symbol=BTC/USDT last=74073.86 percent=1.22 ping_ms=1272
+[2026-03-17 18:12:51] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 18:12:51] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-17 18:12:54] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-17 18:12:54] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-17 18:12:54] login_click success: api_key=UXFj***6Nx3
+[2026-03-17 18:12:54] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 18:14:37] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-17 18:14:37] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-17 18:14:37] help_button_cluster_shift applied: shift_x=60
+[2026-03-17 18:14:38] market_info_fetch_success: symbol=BTC/USDT last=74065.51 percent=1.21 ping_ms=959
+[2026-03-17 18:14:45] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 18:14:45] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-17 18:14:47] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-17 18:14:47] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-17 18:14:47] login_click success: api_key=UXFj***6Nx3
+[2026-03-17 18:14:47] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 18:16:30] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-17 18:16:30] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-17 18:16:30] help_button_cluster_shift applied: shift_x=60
+[2026-03-17 18:16:32] market_info_fetch_success: symbol=BTC/USDT last=74042.87 percent=1.22 ping_ms=1043
+[2026-03-17 18:16:39] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 18:16:39] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-17 18:16:43] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-17 18:16:43] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-17 18:16:43] login_click success: api_key=UXFj***6Nx3
+[2026-03-17 18:16:43] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 18:29:47] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-17 18:29:47] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-17 18:29:47] help_button_cluster_shift applied: shift_x=60
+[2026-03-17 18:29:50] market_info_fetch_success: symbol=BTC/USDT last=74310.44 percent=1.43 ping_ms=990
+[2026-03-17 18:29:55] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-17 18:29:55] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-17 18:29:57] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-17 18:29:57] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-17 18:29:57] login_click success: api_key=UXFj***6Nx3
+[2026-03-17 18:29:57] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-18 13:29:42] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-18 13:29:42] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-18 13:29:42] help_button_cluster_shift applied: shift_x=60
+[2026-03-18 13:29:46] market_info_fetch_success: symbol=BTC/USDT last=74272.92 percent=-0.20 ping_ms=1268
+[2026-03-18 13:29:52] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-18 13:29:52] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-18 13:29:54] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-18 13:29:54] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-18 13:29:54] login_click success: api_key=UXFj***6Nx3
+[2026-03-18 13:29:55] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-18 22:10:47] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-03-18 22:10:47] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-03-18 22:10:47] help_button_cluster_shift applied: shift_x=60
+[2026-03-18 22:10:50] market_info_fetch_success: symbol=BTC/USDT last=72381.99 percent=-1.91 ping_ms=983
+[2026-03-18 22:10:57] login_click submitted: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-03-18 22:10:57] check_server_permission started: api_key=UXFj***6Nx3 timeout=8
+[2026-03-18 22:11:01] check_server_permission completed: api_key=UXFj***6Nx3 result=success
+[2026-03-18 22:11:01] login_click permission_result: api_key=UXFj***6Nx3 result=success
+[2026-03-18 22:11:01] login_click success: api_key=UXFj***6Nx3
+[2026-03-18 22:11:02] trade_page_opened: api_key=UXFj***6Nx3 secret_key_present=True
+[2026-04-01 16:00:50] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-04-01 16:00:50] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-04-01 16:00:50] help_button_cluster_shift applied: shift_x=60
+[2026-04-01 16:00:56] market_info_fetch_success: symbol=BTC/USDT last=69184.64 percent=2.54 ping_ms=1460
+[2026-04-01 16:30:58] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-04-01 16:30:58] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-04-01 16:30:58] help_button_cluster_shift applied: shift_x=60
+[2026-04-01 16:31:01] market_info_fetch_success: symbol=BTC/USDT last=68899.65 percent=2.34 ping_ms=1239
+[2026-04-01 16:45:41] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-04-01 16:45:41] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-04-01 16:45:41] help_button_cluster_shift applied: shift_x=60
+[2026-04-01 16:45:43] market_info_fetch_success: symbol=BTC/USDT last=68858.36 percent=2.26 ping_ms=1060
+[2026-04-01 16:48:36] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-04-01 16:48:36] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-04-01 16:48:36] help_button_cluster_shift applied: shift_x=60
+[2026-04-01 16:48:38] market_info_fetch_success: symbol=BTC/USDT last=68786.50 percent=2.02 ping_ms=1291
+[2026-04-01 16:49:09] market_info_fetch_success: symbol=BTC/USDT last=68748.02 percent=1.99 ping_ms=1085
+[2026-04-01 16:49:35] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-04-01 16:49:35] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-04-01 16:49:35] help_button_cluster_shift applied: shift_x=60
+[2026-04-01 16:49:36] market_info_fetch_success: symbol=BTC/USDT last=68750.93 percent=2.01 ping_ms=1138
+[2026-04-01 16:50:08] market_info_fetch_success: symbol=BTC/USDT last=68748.02 percent=2.00 ping_ms=1147
+[2026-04-01 16:50:39] market_info_fetch_success: symbol=BTC/USDT last=68743.76 percent=2.07 ping_ms=1234
+[2026-04-01 16:51:10] market_info_fetch_success: symbol=BTC/USDT last=68742.08 percent=2.06 ping_ms=1121
+[2026-04-01 16:51:41] market_info_fetch_success: symbol=BTC/USDT last=68758.12 percent=2.08 ping_ms=1126
+[2026-04-01 16:52:12] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-04-01 16:52:12] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-04-01 16:52:12] help_button_cluster_shift applied: shift_x=60
+[2026-04-01 16:52:14] market_info_fetch_success: symbol=BTC/USDT last=68786.95 percent=2.17 ping_ms=1183
+[2026-04-01 16:52:28] title_hint_panel enabled: wrapped api key prompt with translucent panel
+[2026-04-01 16:52:28] secondary guide buttons initialized: product_guidebook, binance_account_guide
+[2026-04-01 16:52:28] help_button_cluster_shift applied: shift_x=60
+[2026-04-01 16:52:30] market_info_fetch_success: symbol=BTC/USDT last=68786.11 percent=2.16 ping_ms=1288

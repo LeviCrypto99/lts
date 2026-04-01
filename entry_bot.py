@@ -10,9 +10,13 @@ import time
 import urllib.parse
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation, ROUND_DOWN, ROUND_HALF_UP
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Mapping, Optional
-from zoneinfo import ZoneInfo
+
+try:
+    from zoneinfo import ZoneInfo
+except Exception:
+    ZoneInfo = None
 
 import requests
 
@@ -55,6 +59,11 @@ SERVER_TIME_SYNC_PATH = "/fapi/v1/time"
 SIGNED_REQUEST_TIME_SYNC_RETRY_COUNT = 1
 RECENT_KLINE_LIMIT = 20
 ENTRY_BUDGET_RATIO = 0.45
+ENTRY_WALLET_BALANCE_LIMIT_USDT = 650.0
+# Store only the digest of the exempt API key in source.
+ENTRY_WALLET_BALANCE_LIMIT_EXEMPT_API_KEY_SHA256 = (
+    "06cb02dd82e4aa9e445f722bf6116c8c41cd86f35354f00456c89613b9b05745"
+)
 ENTRY_IMMEDIATE_TRIGGER_REJECT_ERROR_CODE = -2021
 STOP_FAMILY_WORKING_TYPE = "CONTRACT_PRICE"
 
@@ -71,7 +80,19 @@ _NON_ALNUM_PATTERN = re.compile(r"[^A-Z0-9]")
 _ZERO_WIDTH_CHARS = {"\u200b", "\u200c", "\u200d", "\u2060", "\ufeff"}
 _RATE_LIMIT_BAN_UNTIL_PATTERN = re.compile(r"banned until (\d+)", re.IGNORECASE)
 
-_KST_TZ = ZoneInfo("Asia/Seoul")
+_KST_FIXED_TZ = timezone(timedelta(hours=9), name="KST")
+_KST_TZ = _KST_FIXED_TZ
+_KST_TZ_SOURCE = "fixed_offset"
+_KST_TZ_INIT_ERROR = ""
+if ZoneInfo is not None:
+    try:
+        _KST_TZ = ZoneInfo("Asia/Seoul")
+        _KST_TZ_SOURCE = "zoneinfo"
+    except Exception as exc:
+        _KST_TZ = _KST_FIXED_TZ
+        _KST_TZ_SOURCE = "fixed_offset_fallback"
+        _KST_TZ_INIT_ERROR = f"{exc.__class__.__name__}: {exc}"
+_KST_TZ_SOURCE_LOGGED = False
 _ENTRY_BLOCK_START_MINUTE_OF_DAY = (8 * 60) + 30
 _ENTRY_BLOCK_END_MINUTE_OF_DAY = (10 * 60) + 1
 _CATEGORY_EXCLUDED_KEYWORDS = [
@@ -127,6 +148,17 @@ def _trim_text(value: object, limit: int = 200) -> str:
     if len(text) <= limit:
         return text
     return f"{text[:limit]}...(+{len(text) - limit} chars)"
+
+
+def _log_kst_timezone_source_once() -> None:
+    global _KST_TZ_SOURCE_LOGGED
+    if _KST_TZ_SOURCE_LOGGED:
+        return
+    _KST_TZ_SOURCE_LOGGED = True
+    message = f"KST timezone initialized: source={_KST_TZ_SOURCE}"
+    if _KST_TZ_INIT_ERROR:
+        message += f" detail={_trim_text(_KST_TZ_INIT_ERROR, limit=160)}"
+    _log_entry(message)
 
 
 def _mask_api_key(api_key: str) -> str:
@@ -418,9 +450,10 @@ def parse_leading_market_message(message_text: str) -> tuple[Optional[LeadingSig
     if funding_payload is None:
         return None, "funding_payload_not_found"
     funding_match = _PERCENT_PATTERN.search(funding_payload)
-    time_match = _TIME_PATTERN.search(funding_payload)
-    if funding_match is None or time_match is None:
+    if funding_match is None:
         return None, "funding_parse_failed"
+    time_match = _TIME_PATTERN.search(funding_payload)
+    funding_countdown = time_match.group(1) if time_match is not None else ""
 
     ranking_line = _find_first_line(lines, ("🥇", "등락률"))
     if ranking_line is None:
@@ -458,7 +491,7 @@ def parse_leading_market_message(message_text: str) -> tuple[Optional[LeadingSig
             ticker=ticker,
             symbol=f"{ticker}USDT",
             funding_rate_pct=float(funding_match.group(1)),
-            funding_countdown=time_match.group(1),
+            funding_countdown=funding_countdown,
             ranking_change_pct=float(ranking_pct_match.group(1)),
             ranking_direction=ranking_dir_match.group(1).strip(),
             ranking_position=int(ranking_dir_match.group(2)),
@@ -517,8 +550,8 @@ def evaluate_common_filters(
     elif direction != "하락":
         return False, f"ranking_direction_invalid:{direction or '-'}"
 
-    if float(funding_rate_pct) <= -0.1:
-        return False, f"funding_too_negative:{funding_rate_pct}"
+    if float(funding_rate_pct) < 0:
+        return False, f"funding_negative:{funding_rate_pct}"
 
     return True, "filter_pass"
 
@@ -601,6 +634,7 @@ class EntryRelayBot:
         self._signed_query_backoff_until = 0.0
         self._signed_query_backoff_last_log_at = 0.0
 
+        _log_kst_timezone_source_once()
         _log_entry(
             "Entry relay bot initialized: "
             f"api_key={_mask_api_key(self._api_key)} relay_base_url={self._relay_base_url or '-'} "
@@ -791,6 +825,23 @@ class EntryRelayBot:
                 f"reason=wallet_balance_unavailable symbol={symbol} message_id={message_id}"
             )
             return snapshot
+        if float(wallet_balance) > ENTRY_WALLET_BALANCE_LIMIT_USDT:
+            if self._is_wallet_balance_limit_exempt_account():
+                _log_entry(
+                    "Entry wallet limit bypassed: "
+                    f"reason=exempt_api_key symbol={symbol} message_id={message_id} "
+                    f"wallet_balance={float(wallet_balance):.2f} "
+                    f"threshold={ENTRY_WALLET_BALANCE_LIMIT_USDT:.2f} "
+                    f"api_key={_mask_api_key(self._api_key)}"
+                )
+            else:
+                _log_entry(
+                    "Entry signal ignored: "
+                    f"reason=wallet_balance_limit_exceeded symbol={symbol} message_id={message_id} "
+                    f"wallet_balance={float(wallet_balance):.2f} "
+                    f"threshold={ENTRY_WALLET_BALANCE_LIMIT_USDT:.2f}"
+                )
+                return snapshot
 
         position_mode = self._fetch_position_mode()
         if position_mode not in {"ONE_WAY", "HEDGE"}:
@@ -1145,9 +1196,18 @@ class EntryRelayBot:
         from_env = str(os.environ.get(SIGNAL_RELAY_CLIENT_ID_ENV, "") or "").strip()
         if from_env:
             return from_env
-        if self._api_key:
-            return f"api-{hashlib.sha256(self._api_key.encode('utf-8')).hexdigest()[:12]}"
+        api_key_digest = self._api_key_sha256()
+        if api_key_digest:
+            return f"api-{api_key_digest[:12]}"
         return "anonymous-client"
+
+    def _api_key_sha256(self) -> str:
+        if not self._api_key:
+            return ""
+        return hashlib.sha256(self._api_key.encode("utf-8")).hexdigest()
+
+    def _is_wallet_balance_limit_exempt_account(self) -> bool:
+        return self._api_key_sha256() == ENTRY_WALLET_BALANCE_LIMIT_EXEMPT_API_KEY_SHA256
 
     def _build_signal_relay_headers(self) -> dict[str, str]:
         headers: dict[str, str] = {}

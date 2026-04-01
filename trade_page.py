@@ -64,8 +64,22 @@ WALLET_VALUE_COLOR = "#00ff7f"
 WALLET_WARNING_COLOR = "#ff4d4f"
 WALLET_WARNING_TEXT = "API를 재확인하십시오"
 
-CHART_RECT = (49, 112, 770, 446)
+CHART_BASE_RECT = (49, 112, 770, 446)
 TABLE_RECT = (47, 466, 765, 753)
+SECTION_STACK_VERTICAL_SHIFT = 32
+CHART_RECT = (
+    CHART_BASE_RECT[0],
+    CHART_BASE_RECT[1] - SECTION_STACK_VERTICAL_SHIFT,
+    CHART_BASE_RECT[2],
+    CHART_BASE_RECT[3] - SECTION_STACK_VERTICAL_SHIFT,
+)
+STRATEGY_GUIDE_BOTTOM_GAP = 54
+STRATEGY_GUIDE_PANEL_RECT = (
+    TABLE_RECT[0],
+    TABLE_RECT[1] - SECTION_STACK_VERTICAL_SHIFT,
+    TABLE_RECT[2],
+    TABLE_RECT[3] - STRATEGY_GUIDE_BOTTOM_GAP,
+)
 WALLET_BASE_RECT = (819, 263, 1292, 590)
 START_BUTTON_BASE_RECT = (872, 503, 1042, 555)
 STOP_BUTTON_BASE_RECT = (1090, 503, 1260, 555)
@@ -198,6 +212,10 @@ STRATEGY_GUIDE_ITEMS = (
     ("guide_short", "📉숏포지션 전략 가이드북"),
     ("guide_dca", "🔄DCA 전략지표 가이드문서"),
 )
+STRATEGY_GUIDE_BUTTON_HEIGHT = 54
+STRATEGY_GUIDE_LABEL_OFFSET = 22
+STRATEGY_GUIDE_CONTENT_TOP_PADDING = 22
+STRATEGY_GUIDE_CONTENT_BOTTOM_PADDING = 22
 
 LEVERAGE_LABEL_RECT = (260, 262, 560, 294)
 LEVERAGE_DROPDOWN_RECT = (260, 302, 560, 334)
@@ -428,6 +446,12 @@ class TradePage(tk.Frame):
             f"secret_key_present={self._secret_key_present} "
             f"trade_state={self._trade_state} trade_state_label={self._trade_state_display_text()} "
             "strategy_panel=strategy_guides "
+            f"section_stack_vertical_shift={SECTION_STACK_VERTICAL_SHIFT} "
+            f"chart_panel_top={CHART_RECT[1]} "
+            f"strategy_guide_panel_bottom={STRATEGY_GUIDE_PANEL_RECT[3]} "
+            f"strategy_guide_bottom_gap={STRATEGY_GUIDE_BOTTOM_GAP} "
+            f"strategy_guide_panel_height={STRATEGY_GUIDE_PANEL_RECT[3] - STRATEGY_GUIDE_PANEL_RECT[1]} "
+            "strategy_guide_layout=centered_in_panel "
             f"manager_connection_panel=contacts manager_connection_item_count={len(MANAGER_CONNECTION_ITEMS)} "
             f"channel_info_panel=telegram_channels channel_info_item_count={len(CHANNEL_INFO_ITEMS)} "
             "channel_info_layout=2x2 "
@@ -1141,19 +1165,31 @@ class TradePage(tk.Frame):
 
     def _draw_strategy_guides_panel(self, scale: float, pad_x: float, pad_y: float) -> None:
         self._draw_titled_panel(
-            panel_key="table",
-            rect=TABLE_RECT,
+            panel_key="strategy_guides",
+            rect=STRATEGY_GUIDE_PANEL_RECT,
             title=STRATEGY_GUIDE_TITLE,
             scale=scale,
             pad_x=pad_x,
             pad_y=pad_y,
         )
+        content_top = (
+            STRATEGY_GUIDE_PANEL_RECT[1]
+            + SECTION_TITLE_HEIGHT
+            + STRATEGY_GUIDE_CONTENT_TOP_PADDING
+        )
+        content_bottom = STRATEGY_GUIDE_PANEL_RECT[3] - STRATEGY_GUIDE_CONTENT_BOTTOM_PADDING
+        content_center_y = (content_top + content_bottom) / 2
+        button_y1 = int(
+            round(content_center_y - ((STRATEGY_GUIDE_BUTTON_HEIGHT - STRATEGY_GUIDE_LABEL_OFFSET) / 2))
+        )
+        button_y2 = button_y1 + STRATEGY_GUIDE_BUTTON_HEIGHT
         for tag, label in STRATEGY_GUIDE_ITEMS:
-            rect = STRATEGY_GUIDE_BUTTON_RECTS[tag]
+            base_rect = STRATEGY_GUIDE_BUTTON_RECTS[tag]
+            rect = (base_rect[0], button_y1, base_rect[2], button_y2)
             bx1, by1, bx2, _ = self._scale_rect(rect, scale, pad_x, pad_y)
             self.canvas.create_text(
                 (bx1 + bx2) / 2,
-                by1 - (22 * scale),
+                by1 - (STRATEGY_GUIDE_LABEL_OFFSET * scale),
                 text=label,
                 font=self.fonts["table_header"],
                 fill=UI_TEXT_COLOR,
@@ -1309,26 +1345,34 @@ class TradePage(tk.Frame):
         suffix_w = self.fonts["wallet"].measure(suffix)
         total_w = label_w + value_w + suffix_w
         settings = self._current_filter_settings()
-        lines = [
-            ("레버리지 :", settings.get("leverage") or "-"),
-            ("현재 구동상태 :", self._trade_state_display_text()),
-        ]
         line_font = self.fonts["wallet"]
         value_font = self.fonts["wallet_value"]
         line_height = max(line_font.metrics("linespace"), value_font.metrics("linespace"))
         line_gap = WALLET_SETTINGS_LINE_GAP * scale
+        rows = [
+            {
+                "label": "레버리지 :",
+                "value": settings.get("leverage") or "-",
+                "height": float(line_height),
+            },
+            {
+                "label": "현재 구동상태 :",
+                "value": self._trade_state_display_text(),
+                "height": float(line_height),
+            },
+        ]
         start_button_y1 = self._scale_rect(START_BUTTON_RECT, scale, pad_x, pad_y)[1]
         stop_button_y1 = self._scale_rect(STOP_BUTTON_RECT, scale, pad_x, pad_y)[1]
         text_area_top = y1
         text_area_bottom = min(start_button_y1, stop_button_y1)
-        total_line_count = 1 + len(lines)
-        text_block_height = total_line_count * line_height + max(0, total_line_count - 1) * line_gap
-        text_y = (
+        wallet_row_height = float(line_height)
+        text_block_height = wallet_row_height + sum(row["height"] for row in rows) + len(rows) * line_gap
+        row_top = (
             text_area_top
             + max(0.0, (text_area_bottom - text_area_top - text_block_height) / 2)
-            + line_height / 2
             + WALLET_TEXT_CENTER_OFFSET_Y * scale
         )
+        text_y = row_top + wallet_row_height / 2
         start_x = center_x - total_w / 2
 
         self.canvas.create_text(
@@ -1359,16 +1403,19 @@ class TradePage(tk.Frame):
             tags="ui",
         )
 
-        cursor_y = text_y + line_height + line_gap
+        row_top += wallet_row_height + line_gap
 
-        for label_text, value_text in lines:
+        for row in rows:
+            center_y = row_top + row["height"] / 2
+            label_text = str(row["label"])
+            value_text = str(row["value"])
             label_w = line_font.measure(label_text + " ")
             value_w = value_font.measure(value_text)
             total_w = label_w + value_w
             start_x = center_x - total_w / 2
             self.canvas.create_text(
                 start_x + label_w / 2,
-                cursor_y,
+                center_y,
                 text=label_text,
                 font=line_font,
                 fill=UI_TEXT_COLOR,
@@ -1377,14 +1424,14 @@ class TradePage(tk.Frame):
             )
             self.canvas.create_text(
                 start_x + label_w + value_w / 2,
-                cursor_y,
+                center_y,
                 text=value_text,
                 font=value_font,
                 fill=UI_TEXT_COLOR,
                 anchor="center",
                 tags="ui",
             )
-            cursor_y += line_height + line_gap
+            row_top += row["height"] + line_gap
 
         self._draw_trade_buttons(scale, pad_x, pad_y)
 

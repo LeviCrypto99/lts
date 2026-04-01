@@ -1,5 +1,6 @@
 # Lessons
 
+- When a user points to behavior seen in live logs or prior runs, do not conclude from the current working tree alone; check the relevant git history before saying the feature is gone.
 - When a guide or strategy button may not have a backing PDF yet, confirm whether the user wants a real file link or a UI-only placeholder before wiring the click behavior.
 - When entry orders start failing after a refactor, check live trade logs for the exact exchange reject payload before blaming the broader flow change; request serialization bugs can look like logic regressions.
 - When reducing entry-bot polling, do not stop the relay consumer immediately after order submit if downstream risk-cancel signals still need to be honored.
@@ -11,3 +12,15 @@
 - After moving a titled panel, verify that all child controls still remain inside the panel bounds; fixing title overlap by pushing controls downward can create a new bottom overflow.
 - When only one panel title visually collides with nearby content, use a panel-specific title offset instead of shifting unrelated controls and creating new layout regressions.
 - First distinguish whether the user wants the title text moved or the title bar itself resized; for titled-panel overlap, changing the bar height is often the correct fix.
+- When shrinking a parent panel to make room for a new section, do not leave child controls on absolute Y coordinates; recalculate their layout from the resized panel so the group stays visually centered.
+- When a new bottom panel still feels too small, first reclaim vertical space by lifting the upstream stack without shrinking requested containers; only compress sibling panels if the user explicitly asks for size reduction.
+- When the user asks to push a layout "a little more," prefer a small numeric increment on the existing spacing constant instead of introducing a fresh layout strategy.
+- When a user decides a newly added panel should be removed, stop nudging that panel and recompute the neighboring container bounds from the requested visual target so the layout is rebalanced cleanly.
+- When adding a new inline toggle or pill control, do not assume it needs a dark outline; first match the surrounding UI density and prefer a borderless fill if a stroke makes the control look noisy.
+- When a small rounded toggle still looks noisy after border cleanup, stop relying on Canvas polygon smoothing and switch that control to PIL rounded-rectangle image rendering for cleaner edges.
+- When a user asks to remove a popup background, remove the decorative image entirely instead of merely dimming it; keep the modal on a plain solid background so the content reads cleaner.
+- When a user rewrites popup guidance text, mirror the requested phrasing closely and place any example account format visibly next to the field label rather than burying it in placeholder-only text.
+- When copying UI colors or text styles from another page into `trade_page.py`, define the needed constants locally or import them explicitly; do not reference a constant name that only exists in `login_page.py`.
+- When a feature direction changes and the user asks for a rollback, remove the entire feature slice cleanly, including state, bindings, helper widgets, render caches, and log metadata, instead of leaving dormant UI residue behind.
+- When relay message wording changes, keep parsers tolerant of optional segments such as countdown text and lock entry filters to the latest explicit user threshold instead of older hard-coded cutoffs.
+- When a packaged EXE bug is reported as still reproducing after a likely fix, stop relying on source-level reasoning alone and capture the failure from an actual packaged debug/console build before declaring the issue resolved.

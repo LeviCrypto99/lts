@@ -58,8 +58,6 @@ def _ensure_sta_thread() -> None:
 
 _ensure_sta_thread()
 
-from login_page import LoginPage
-
 BASE_WIDTH = 1328
 BASE_HEIGHT = 800
 
@@ -119,6 +117,17 @@ def _log_update(message: str) -> None:
                 pass
     except Exception:
         pass
+
+
+def _load_login_page_class():
+    try:
+        from login_page import LoginPage
+
+        _log_update("LoginPage import succeeded.")
+        return LoginPage
+    except Exception:
+        _log_update("LoginPage import failed:\n" + traceback.format_exc())
+        raise
 
 
 def _show_already_running_message() -> None:
@@ -430,6 +439,7 @@ class SplashApp:
         self._exit_manager: Optional[ExitManager] = None
         self._window_icon_photo: Optional[tk.PhotoImage] = None
         self._instance_restore_poll_job: Optional[str] = None
+        self._login_page_class = None
         self.root = tk.Tk()
         self.root.report_callback_exception = self._report_callback_exception
         self.root.title("LeviaAutoTradeSystem")
@@ -445,7 +455,7 @@ class SplashApp:
             return
         self._exit_manager = ExitManager(self.root, app_name="LTS Launcher")
         self.root._exit_manager = self._exit_manager
-        self.root.deiconify()
+        self._ensure_root_window_visible(reason="post_init")
         self._start_existing_instance_restore_poll()
 
         self._setup_ui()
@@ -480,12 +490,51 @@ class SplashApp:
         if self._exit_manager is not None:
             self._exit_manager.show_window()
             return
+        self._ensure_root_window_visible(reason="activation_signal")
+
+    def _ensure_root_window_visible(self, *, reason: str) -> None:
+        try:
+            self.root.update_idletasks()
+        except tk.TclError:
+            return
+        try:
+            self.root.state("normal")
+        except tk.TclError:
+            pass
         try:
             self.root.deiconify()
+        except tk.TclError:
+            pass
+        try:
             self.root.lift()
+        except tk.TclError:
+            pass
+        try:
             self.root.focus_force()
         except tk.TclError:
             pass
+        try:
+            state = self.root.state()
+        except tk.TclError:
+            state = "error"
+        try:
+            viewable = bool(self.root.winfo_viewable())
+        except tk.TclError:
+            viewable = False
+        try:
+            geometry = self.root.winfo_geometry()
+        except tk.TclError:
+            geometry = "error"
+        alpha = "unknown"
+        try:
+            alpha = self.root.attributes("-alpha")
+        except tk.TclError:
+            pass
+        _log_update(
+            "Root window visibility sync: "
+            f"reason={reason} state={state} viewable={viewable} "
+            f"geometry={geometry} alpha={alpha}"
+        )
 
     def _apply_program_icon(self) -> None:
         icon_path = Path(__file__).resolve().parent / "image" / "login_page" / "logo2.png"
@@ -520,6 +569,7 @@ class SplashApp:
         self.logos = [self.logo1, self.logo2]
 
         self.canvas.bind("<Configure>", self._on_resize)
+        self._ensure_root_window_visible(reason="after_setup_ui")
         self.root.after(0, self.start_sequence)
 
     def _layout(self) -> None:
@@ -558,6 +608,7 @@ class SplashApp:
         self._layout()
 
     def start_sequence(self) -> None:
+        self._ensure_root_window_visible(reason="start_sequence")
         self.logo1.alpha = 0.0
         self.logo1.offset = START_OFFSET
         self.logo2.alpha = 0.0
@@ -571,9 +622,18 @@ class SplashApp:
     def _show_login_page(self) -> None:
         self.canvas.destroy()
         self.root.title(f"LTS Launcher v{config.VERSION}")
-        login_page = LoginPage(self.root, current_version=config.VERSION, latest_version=self._latest_version)
+        self._ensure_root_window_visible(reason="before_login_page")
+        if self._login_page_class is None:
+            self._login_page_class = _load_login_page_class()
+        login_page = self._login_page_class(
+            self.root,
+            current_version=config.VERSION,
+            latest_version=self._latest_version,
+        )
         login_page.pack(fill="both", expand=True)
+        self._ensure_root_window_visible(reason="after_login_page_pack")
         login_page.animate_in()
+        self.root.after(200, lambda: self._ensure_root_window_visible(reason="post_login_page_200ms"))
 
     def run(self) -> None:
         if self._should_run:
