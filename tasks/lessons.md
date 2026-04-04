@@ -23,4 +23,5 @@
 - When copying UI colors or text styles from another page into `trade_page.py`, define the needed constants locally or import them explicitly; do not reference a constant name that only exists in `login_page.py`.
 - When a feature direction changes and the user asks for a rollback, remove the entire feature slice cleanly, including state, bindings, helper widgets, render caches, and log metadata, instead of leaving dormant UI residue behind.
 - When relay message wording changes, keep parsers tolerant of optional segments such as countdown text and lock entry filters to the latest explicit user threshold instead of older hard-coded cutoffs.
+- When the leading-market message already carries authoritative `✅/❌` judgments per filter item, treat those markers as the source of truth for entry gating instead of re-deriving the old numeric/category rules from raw text.
 - When a packaged EXE bug is reported as still reproducing after a likely fix, stop relying on source-level reasoning alone and capture the failure from an actual packaged debug/console build before declaring the issue resolved.

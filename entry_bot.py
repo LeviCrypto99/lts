@@ -10,7 +10,7 @@ import time
 import urllib.parse
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation, ROUND_DOWN, ROUND_HALF_UP
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta, timezone
 from typing import Any, Callable, Mapping, Optional
 
 try:
@@ -72,9 +72,6 @@ ENTRY_CLIENT_ID_PREFIXES = ("LTS-E1-", "LTS-E2-")
 ALGO_ORDER_TYPES = {"STOP_MARKET", "TAKE_PROFIT_MARKET", "STOP", "TAKE_PROFIT", "TRAILING_STOP_MARKET"}
 
 _TITLE_TICKER_PATTERN = re.compile(r"\(([^()]+)\)")
-_PERCENT_PATTERN = re.compile(r"([+-]?\d+(?:\.\d+)?)\s*%")
-_TIME_PATTERN = re.compile(r"/\s*([0-9]{1,2}:[0-9]{2}:[0-9]{2})")
-_DIRECTION_RANK_PATTERN = re.compile(r"\(([^()]+)\)\s*상위\s*(\d+)\s*위")
 _RISK_SYMBOL_PATTERN = re.compile(r"Binance\s*[:：]\s*([^\s]+)", re.IGNORECASE)
 _NON_ALNUM_PATTERN = re.compile(r"[^A-Z0-9]")
 _ZERO_WIDTH_CHARS = {"\u200b", "\u200c", "\u200d", "\u2060", "\ufeff"}
@@ -93,17 +90,16 @@ if ZoneInfo is not None:
         _KST_TZ_SOURCE = "fixed_offset_fallback"
         _KST_TZ_INIT_ERROR = f"{exc.__class__.__name__}: {exc}"
 _KST_TZ_SOURCE_LOGGED = False
-_ENTRY_BLOCK_START_MINUTE_OF_DAY = (8 * 60) + 30
-_ENTRY_BLOCK_END_MINUTE_OF_DAY = (10 * 60) + 1
-_CATEGORY_EXCLUDED_KEYWORDS = [
-    "meme",
-    "defi",
-    "pump.fun",
-    "dex",
-    "탈중앙화 거래소",
-    "binance alpha spotlight",
-]
-_LONG_DIRECTION_ALIASES = {"롱", "long", "매수", "상방"}
+_LEADING_MARKET_REQUIRED_CHECK_SPECS = (
+    ("funding_check_passed", "funding", ("🌐", "글로벌 거래소 통합 펀딩비")),
+    ("ranking_check_passed", "ranking", ("🥇", "지난 24H 등락률 및 순위", "등락률")),
+    ("category_check_passed", "category", ("🏷", "카테고리")),
+    ("retail_ratio_check_passed", "retail_ratio", ("🐜", "개미 롱/숏 비율")),
+    ("whale_accounts_check_passed", "whale_accounts", ("🦈", "고래 동향")),
+    ("smart_money_check_passed", "smart_money", ("⚖", "스마트머니 포지션")),
+)
+_CHECKMARK_PASS = "✅"
+_CHECKMARK_FAIL = "❌"
 
 
 def _log_entry(message: str) -> None:
@@ -148,6 +144,10 @@ def _trim_text(value: object, limit: int = 200) -> str:
     if len(text) <= limit:
         return text
     return f"{text[:limit]}...(+{len(text) - limit} chars)"
+
+
+def _format_pass_fail(value: bool) -> str:
+    return "pass" if bool(value) else "fail"
 
 
 def _log_kst_timezone_source_once() -> None:
@@ -202,6 +202,17 @@ def _split_label_payload(line: str) -> Optional[str]:
     return parts[1].strip()
 
 
+def _extract_check_status_from_line(line: str) -> tuple[Optional[bool], str]:
+    text = str(line or "")
+    pass_index = text.rfind(_CHECKMARK_PASS)
+    fail_index = text.rfind(_CHECKMARK_FAIL)
+    if pass_index < 0 and fail_index < 0:
+        return None, "check_status_missing"
+    if pass_index > fail_index:
+        return True, "ok"
+    return False, "ok"
+
+
 def _sanitize_symbol_token(value: str) -> str:
     text = str(value or "").strip()
     cleaned: list[str] = []
@@ -222,35 +233,6 @@ def _normalize_alnum_token(value: str) -> tuple[Optional[str], Optional[str]]:
     if _NON_ALNUM_PATTERN.search(normalized):
         return None, "INVALID_CHARACTERS"
     return normalized, None
-
-
-def _normalize_market_direction_token(value: str) -> str:
-    return "".join(str(value or "").strip().lower().split())
-
-
-def _is_long_market_direction(value: str) -> bool:
-    normalized = _normalize_market_direction_token(value)
-    if not normalized:
-        return False
-    for alias in _LONG_DIRECTION_ALIASES:
-        if normalized == alias or normalized.startswith(alias):
-            return True
-    return False
-
-
-def _match_excluded_keyword(category: str) -> Optional[str]:
-    lowered = str(category or "").strip().lower()
-    for keyword in _CATEGORY_EXCLUDED_KEYWORDS:
-        if keyword in lowered:
-            return keyword
-    return None
-
-
-def _resolve_signal_time_kst(signal_received_at_local: Optional[int]) -> datetime:
-    epoch_seconds = _safe_int(signal_received_at_local)
-    if epoch_seconds <= 0:
-        epoch_seconds = int(time.time())
-    return datetime.fromtimestamp(epoch_seconds, tz=_KST_TZ)
 
 
 def _round_price_by_tick_size(price: float, tick_size: float) -> Optional[float]:
@@ -397,13 +379,12 @@ def _is_entry_order_row(row: Mapping[str, Any]) -> bool:
 class LeadingSignal:
     ticker: str
     symbol: str
-    funding_rate_pct: float
-    funding_countdown: str
-    ranking_change_pct: float
-    ranking_direction: str
-    ranking_position: int
-    category: str
-    market_direction: str
+    funding_check_passed: bool
+    ranking_check_passed: bool
+    category_check_passed: bool
+    retail_ratio_check_passed: bool
+    whale_accounts_check_passed: bool
+    smart_money_check_passed: bool
 
 
 @dataclass(frozen=True)
@@ -442,61 +423,26 @@ def parse_leading_market_message(message_text: str) -> tuple[Optional[LeadingSig
     ticker, ticker_failure = _normalize_alnum_token(title_match.group(1))
     if ticker is None:
         return None, f"ticker_normalize_failed:{ticker_failure}"
-
-    funding_line = _find_first_line(lines, ("⏱", "펀딩비"))
-    if funding_line is None:
-        return None, "funding_line_not_found"
-    funding_payload = _split_label_payload(funding_line)
-    if funding_payload is None:
-        return None, "funding_payload_not_found"
-    funding_match = _PERCENT_PATTERN.search(funding_payload)
-    if funding_match is None:
-        return None, "funding_parse_failed"
-    time_match = _TIME_PATTERN.search(funding_payload)
-    funding_countdown = time_match.group(1) if time_match is not None else ""
-
-    ranking_line = _find_first_line(lines, ("🥇", "등락률"))
-    if ranking_line is None:
-        return None, "ranking_line_not_found"
-    ranking_payload = _split_label_payload(ranking_line)
-    if ranking_payload is None:
-        return None, "ranking_payload_not_found"
-    ranking_pct_match = _PERCENT_PATTERN.search(ranking_payload)
-    ranking_dir_match = _DIRECTION_RANK_PATTERN.search(ranking_payload)
-    if ranking_pct_match is None or ranking_dir_match is None:
-        return None, "ranking_parse_failed"
-
-    category_line = _find_first_line(lines, ("🏷", "카테고리"))
-    if category_line is None:
-        return None, "category_line_not_found"
-    category_payload = _split_label_payload(category_line)
-    if category_payload is None:
-        return None, "category_payload_not_found"
-    category = category_payload.strip()
-    if not category:
-        return None, "category_empty"
-
-    market_direction = ""
-    direction_line = _find_first_line(lines, ("🧭", "방향"))
-    if direction_line is not None:
-        direction_payload = _split_label_payload(direction_line)
-        if direction_payload is None:
-            return None, "direction_payload_not_found"
-        market_direction = direction_payload.strip()
-        if not market_direction:
-            return None, "direction_empty"
+    check_values: dict[str, bool] = {}
+    for field_name, reason_token, markers in _LEADING_MARKET_REQUIRED_CHECK_SPECS:
+        status_line = _find_first_line(lines, markers)
+        if status_line is None:
+            return None, f"{reason_token}_line_not_found"
+        status_value, status_reason = _extract_check_status_from_line(status_line)
+        if status_value is None:
+            return None, f"{reason_token}_{status_reason}"
+        check_values[field_name] = status_value
 
     return (
         LeadingSignal(
             ticker=ticker,
             symbol=f"{ticker}USDT",
-            funding_rate_pct=float(funding_match.group(1)),
-            funding_countdown=funding_countdown,
-            ranking_change_pct=float(ranking_pct_match.group(1)),
-            ranking_direction=ranking_dir_match.group(1).strip(),
-            ranking_position=int(ranking_dir_match.group(2)),
-            category=category,
-            market_direction=market_direction,
+            funding_check_passed=check_values["funding_check_passed"],
+            ranking_check_passed=check_values["ranking_check_passed"],
+            category_check_passed=check_values["category_check_passed"],
+            retail_ratio_check_passed=check_values["retail_ratio_check_passed"],
+            whale_accounts_check_passed=check_values["whale_accounts_check_passed"],
+            smart_money_check_passed=check_values["smart_money_check_passed"],
         ),
         "ok",
     )
@@ -520,38 +466,24 @@ def parse_risk_management_message(message_text: str) -> tuple[Optional[RiskSigna
 
 def evaluate_common_filters(
     *,
-    category: str,
-    ranking_direction: str,
-    ranking_position: int,
-    funding_rate_pct: float,
-    market_direction: str,
-    signal_received_at_local: Optional[int],
+    funding_check_passed: bool,
+    ranking_check_passed: bool,
+    category_check_passed: bool,
+    retail_ratio_check_passed: bool,
+    whale_accounts_check_passed: bool,
+    smart_money_check_passed: bool,
 ) -> tuple[bool, str]:
-    signal_time_kst = _resolve_signal_time_kst(signal_received_at_local)
-    minute_of_day = signal_time_kst.hour * 60 + signal_time_kst.minute
-    if _ENTRY_BLOCK_START_MINUTE_OF_DAY <= minute_of_day < _ENTRY_BLOCK_END_MINUTE_OF_DAY:
-        return False, f"kst_morning_entry_block:{signal_time_kst.strftime('%H:%M:%S')}"
-
-    if _is_long_market_direction(market_direction):
-        return False, f"long_direction_block:{market_direction}"
-
-    matched_keyword = _match_excluded_keyword(category)
-    if matched_keyword is not None:
-        return False, f"category_excluded_keyword:{matched_keyword}"
-
-    normalized_category_compact = "".join(str(category or "").strip().lower().split())
-    if normalized_category_compact == "정보없음":
-        return False, "category_unknown"
-
-    direction = str(ranking_direction or "").strip()
-    if direction == "상승":
-        if 1 <= int(ranking_position) <= 5:
-            return False, "ranking_top5_rise"
-    elif direction != "하락":
-        return False, f"ranking_direction_invalid:{direction or '-'}"
-
-    if float(funding_rate_pct) < 0:
-        return False, f"funding_negative:{funding_rate_pct}"
+    required_checks = (
+        ("funding", funding_check_passed),
+        ("ranking", ranking_check_passed),
+        ("category", category_check_passed),
+        ("retail_ratio", retail_ratio_check_passed),
+        ("whale_accounts", whale_accounts_check_passed),
+        ("smart_money", smart_money_check_passed),
+    )
+    failed_checks = [name for name, passed in required_checks if not passed]
+    if failed_checks:
+        return False, f"required_check_failed:{','.join(failed_checks)}"
 
     return True, "filter_pass"
 
@@ -765,13 +697,24 @@ class EntryRelayBot:
             )
             return snapshot
 
+        _log_entry(
+            "Leading market checkmarks parsed: "
+            f"symbol={symbol} message_id={message_id} "
+            f"funding={_format_pass_fail(leading_signal.funding_check_passed)} "
+            f"ranking={_format_pass_fail(leading_signal.ranking_check_passed)} "
+            f"category={_format_pass_fail(leading_signal.category_check_passed)} "
+            f"retail_ratio={_format_pass_fail(leading_signal.retail_ratio_check_passed)} "
+            f"whale_accounts={_format_pass_fail(leading_signal.whale_accounts_check_passed)} "
+            f"smart_money={_format_pass_fail(leading_signal.smart_money_check_passed)}"
+        )
+
         passed, filter_reason = evaluate_common_filters(
-            category=leading_signal.category,
-            ranking_direction=leading_signal.ranking_direction,
-            ranking_position=leading_signal.ranking_position,
-            funding_rate_pct=leading_signal.funding_rate_pct,
-            market_direction=leading_signal.market_direction,
-            signal_received_at_local=received_at_local,
+            funding_check_passed=leading_signal.funding_check_passed,
+            ranking_check_passed=leading_signal.ranking_check_passed,
+            category_check_passed=leading_signal.category_check_passed,
+            retail_ratio_check_passed=leading_signal.retail_ratio_check_passed,
+            whale_accounts_check_passed=leading_signal.whale_accounts_check_passed,
+            smart_money_check_passed=leading_signal.smart_money_check_passed,
         )
         if not passed:
             _log_entry(

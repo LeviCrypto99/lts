@@ -1,3 +1,26 @@
+## Task - Version 6.1.2 Update Build
+- [x] 버전 상수와 업데이트 메타데이터 경로를 `6.1.2` 기준으로 갱신
+- [x] Windows PyInstaller로 런처와 업데이터를 재빌드
+- [x] 실제 SHA256 반영과 자동업데이트 검증, Review 기록
+
+## Review - Version 6.1.2 Update Build
+- `config.py`의 `VERSION`을 `6.1.2`로 올렸고, `version.json`의 `min_version`과 `app_url`도 `LTS V6.1.2.exe` 기준으로 갱신함.
+- Windows Python 3.10.11 + PyInstaller 6.17.0으로 `build.py --target all`을 실제 실행해 `dist/LTS V6.1.2.exe`, `dist/LTS-Updater.exe`를 재빌드함.
+- 배포 메타데이터와 실제 GitHub raw 경로가 어긋나지 않도록 `dist/LTS V6.1.2.exe`를 루트 `LTS V6.1.2.exe`로, `dist/LTS-Updater.exe`를 루트 `LTS-Updater.exe`로 복사해 최종 배포 파일을 갱신함.
+- 최종 SHA256은 런처 `1a765cf7d34fdc3eadebc6b7dd53042fcbe03414860b9a1c3547b01a5b436f3c`, 업데이터 `6d88b30488a830e6bff6dc9956cae8ae5850d982d319edef876c66de6d834e5f`이며, `version.json`에 반영함.
+- 검증: `python3 -m py_compile main.py updater.py build.py update_security.py config.py entry_bot.py trade_page.py login_page.py exit.py log_rotation.py runtime_paths.py` 통과. `python3 -m unittest tests.test_entry_bot_leading_market tests.test_update_security tests.test_log_rotation_runtime_paths` 통과. 추가로 `update_security.extract_sha256_from_metadata()`와 `verify_file_sha256()`로 `version.json` 메타데이터가 루트 `LTS V6.1.2.exe`, `LTS-Updater.exe`와 각각 일치하는 것을 확인함.
+
+## Task - Leading Market Checkmark Filter Switch
+- [x] 현재 주도마켓 메시지 포맷과 체크/X 기반 진입 조건을 기록
+- [x] `entry_bot.py` 파서와 공통 필터를 `✅/❌` 기준으로 단계적으로 전환
+- [x] 샘플 메시지와 구문 검증 결과를 Review에 기록
+
+## Review - Leading Market Checkmark Filter Switch
+- `entry_bot.py`의 `parse_leading_market_message()`는 이제 티커와 6개 필수 항목(`글로벌 거래소 통합 펀딩비`, `지난 24H 등락률 및 순위`, `카테고리`, `개미 롱/숏 비율`, `고래 동향`, `스마트머니 포지션`)의 `✅/❌`만 파싱함. 각 줄이 없거나 체크 마커가 없으면 parse failure로 처리해 신규 진입을 막음.
+- `evaluate_common_filters()`는 더 이상 펀딩 수치, 등락 방향/순위, 카테고리 키워드, 롱 방향, KST 시간대를 로컬에서 재판단하지 않고, 위 6개 항목이 전부 `✅`인지 여부만 판단함. 하나라도 `❌`면 `required_check_failed:<항목>` 사유로 거절함.
+- 실신호 추적을 위해 `_handle_entry_signal()`에 `Leading market checkmarks parsed` 로그를 추가해 각 항목이 `pass/fail`로 어떻게 읽혔는지 남기도록 함.
+- 검증: `python3 -m py_compile entry_bot.py tests/test_entry_bot_leading_market.py` 통과. `python3 -m unittest tests.test_entry_bot_leading_market tests.test_update_security tests.test_log_rotation_runtime_paths` 통과.
+
 ## Task - EXE Silent Startup Failure 6.1.1
 - [x] 6.1.1 EXE 무반응 재현 직후 로그와 빌드 경고를 수집
 - [x] packaged-only 실패 원인을 console/debug 빌드 기준으로 직접 포착
